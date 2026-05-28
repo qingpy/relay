@@ -1,4 +1,4 @@
-import { db, getAppConfig, newId, updateAppConfig } from './db';
+import { db, ensureDefaultConnection, newId } from './db';
 import type {
   Connection,
   ConnectionType,
@@ -120,19 +120,28 @@ export function getFolder(id: string): Promise<Folder | undefined> {
   return db.folders.get(id);
 }
 
+/** Guarantee at least one preset exists and that no chat is loose; returns the
+ *  preset to drop new top-level chats into. */
+export async function ensureDefaultPreset(): Promise<string> {
+  await ensureDefaultConnection();
+  const folders = await listFolders();
+  const preset = folders[0] ?? (await createFolder('General'));
+  const loose = (await db.sessions.toArray()).filter((s) => !s.folderId);
+  if (loose.length) {
+    await db.transaction('rw', db.sessions, async () => {
+      for (const s of loose) await db.sessions.update(s.id, { folderId: preset.id });
+    });
+  }
+  return preset.id;
+}
+
 export async function createFolder(
   name = 'New preset',
   parentId: string | null = null,
 ): Promise<Folder> {
-  // Seed the preset with the default connection and its first model.
-  const [config, connections] = await Promise.all([
-    getAppConfig(),
-    listConnections(),
-  ]);
-  const conn =
-    (config.defaultConnectionId &&
-      connections.find((c) => c.id === config.defaultConnectionId)) ||
-    connections[0];
+  // Seed the preset with the first enabled connection and its first model.
+  const connections = await listConnections();
+  const conn = connections.find((c) => c.enabled !== false) ?? connections[0];
   const folder: Folder = {
     id: newId(),
     name,
@@ -159,17 +168,15 @@ export async function updateFolderConfig(
   await db.folders.update(id, patch);
 }
 
-/** Delete a folder, promoting its sessions and subfolders to the root. */
+/** Delete a preset, moving its chats into another preset (chats are never
+ *  loose). If it was the last preset, a fresh "General" preset is created. */
 export async function deleteFolder(id: string): Promise<void> {
+  const others = (await listFolders()).filter((f) => f.id !== id);
+  let targetId = others[0]?.id ?? null;
+  if (!targetId) targetId = (await createFolder('General')).id;
   await db.transaction('rw', db.folders, db.sessions, async () => {
-    await db.sessions
-      .where('folderId')
-      .equals(id)
-      .modify({ folderId: null });
-    await db.folders
-      .where('parentId')
-      .equals(id)
-      .modify({ parentId: null });
+    await db.sessions.where('folderId').equals(id).modify({ folderId: targetId });
+    await db.folders.where('parentId').equals(id).modify({ parentId: null });
     await db.folders.delete(id);
   });
 }
@@ -186,7 +193,6 @@ export async function persistFolderOrder(
 
 const CONNECTION_TYPE_NAME: Record<ConnectionType, string> = {
   openai: 'OpenAI-compatible',
-  gemini: 'Gemini',
   vertex: 'Vertex AI',
 };
 
@@ -214,14 +220,11 @@ export async function createConnection(input: {
     baseUrl,
     apiKey: input.apiKey,
     models: seedModelsFor(input.type, baseUrl),
+    enabled: true,
     order: (last?.order ?? -1) + 1,
     createdAt: Date.now(),
   };
   await db.connections.add(conn);
-  const cfg = await getAppConfig();
-  if (!cfg.defaultConnectionId) {
-    await updateAppConfig({ defaultConnectionId: conn.id });
-  }
   return conn;
 }
 
@@ -241,11 +244,6 @@ export async function setConnectionModels(
 
 export async function deleteConnection(id: string): Promise<void> {
   await db.connections.delete(id);
-  const cfg = await getAppConfig();
-  if (cfg.defaultConnectionId === id) {
-    const next = await db.connections.orderBy('order').first();
-    await updateAppConfig({ defaultConnectionId: next?.id });
-  }
 }
 
 export async function persistConnectionOrder(

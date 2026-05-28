@@ -9,11 +9,14 @@ import {
 } from '@/components/ui/popover';
 import {
   getSession,
+  listConnections,
   listFolders,
   moveSessionToFolder,
   setSessionSystemPrompt,
+  updateFolderConfig,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
+import { decodeModelChoice, encodeModelChoice, modelGroups } from '@/lib/models';
 import { useResolvedConfig } from '@/lib/useResolved';
 
 const selectClass =
@@ -22,8 +25,22 @@ const selectClass =
 export function SessionControls({ sessionId }: { sessionId: string }) {
   const session = useLiveQuery(() => getSession(sessionId), [sessionId]);
   const folders = useLiveQuery(() => listFolders(), [], []);
+  const connections = useLiveQuery(() => listConnections(), [], []);
   const resolved = useResolvedConfig(sessionId);
   if (!session) return null;
+
+  const groups = modelGroups(connections);
+  const current = resolved?.connection?.id ?? '';
+  // Switching the model in the header applies to the whole preset.
+  const onModel = (value: string) => {
+    const next = decodeModelChoice(value);
+    if (session.folderId) {
+      void updateFolderConfig(session.folderId, {
+        connectionId: next.connectionId || null,
+        model: next.model,
+      });
+    }
+  };
 
   return (
     <div className="flex min-w-0 items-center gap-2">
@@ -33,9 +50,8 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
           void moveSessionToFolder(sessionId, e.target.value || null)
         }
         className={selectClass}
-        title="Preset (sets the model & settings)"
+        title="Preset"
       >
-        <option value="">No preset</option>
         {folders.map((f) => (
           <option key={f.id} value={f.id}>
             {f.name}
@@ -43,16 +59,30 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
         ))}
       </select>
 
-      <span
-        className="min-w-0 truncate text-sm text-muted-foreground"
-        title={
-          resolved?.connection
-            ? `${resolved.connection.name} · ${resolved.model || 'no model'}`
-            : 'No connection — add one in Settings'
-        }
+      <select
+        value={encodeModelChoice(current, resolved?.model ?? '')}
+        onChange={(e) => onModel(e.target.value)}
+        disabled={!session.folderId}
+        className={selectClass}
+        title="Model (applies to the whole preset)"
       >
-        {resolved?.model || 'No model'}
-      </span>
+        {resolved?.model &&
+          !resolved.connection?.models.some((m) => m.id === resolved.model) && (
+            <option value={encodeModelChoice(current, resolved.model)}>
+              {resolved.model}
+            </option>
+          )}
+        {groups.length === 0 && <option value="">No models</option>}
+        {groups.map((c) => (
+          <optgroup key={c.id} label={c.name}>
+            {c.models.map((m) => (
+              <option key={m.id} value={encodeModelChoice(c.id, m.id)}>
+                {m.label || m.id}
+              </option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
 
       <ChatPromptPopover key={session.id} session={session} />
     </div>

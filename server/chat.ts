@@ -5,9 +5,9 @@ import { getAccessToken, loadServiceAccount } from './vertex-auth.ts';
  * Chat passthrough routes. The client builds the provider payload; the proxy
  * attaches auth and streams the upstream SSE straight back.
  *
- *  - OpenAI-compatible (OpenRouter / OpenAI / any base URL): key from the
- *    `x-api-key` header, or `OPENROUTER_KEY` / `OPENAI_KEY` env as fallback.
- *  - Gemini AI Studio: key from `x-api-key`, or `GEMINI_KEY` env.
+ *  - OpenAI-compatible (OpenRouter / OpenAI / Gemini's OpenAI endpoint / any
+ *    base URL): key from the `x-api-key` header, or `OPENROUTER_KEY` /
+ *    `OPENAI_KEY` env as fallback.
  *  - Vertex AI: server-minted OAuth token from a service-account JSON
  *    (`GOOGLE_VERTEX_CREDENTIALS`), never exposed to the browser.
  *
@@ -116,41 +116,6 @@ chat.post('/vertex', async (c) => {
         'content-type': 'application/json',
         authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(payload),
-      signal: c.req.raw.signal,
-    });
-  } catch (err) {
-    return errorResponse(`Upstream request failed: ${String(err)}`, 502);
-  }
-
-  if (!upstream.ok || !upstream.body) {
-    const text = await upstream.text().catch(() => '');
-    return errorResponse(text || upstream.statusText, upstream.status);
-  }
-  return new Response(upstream.body, { headers: SSE_HEADERS });
-});
-
-chat.post('/gemini', async (c) => {
-  const { model, payload } = await c.req
-    .json<{ model?: string; payload?: unknown }>()
-    .catch(() => ({ model: undefined, payload: undefined }));
-
-  if (!model || !payload) {
-    return errorResponse('Missing model or payload.', 400);
-  }
-
-  const key = c.req.header('x-api-key') || process.env.GEMINI_KEY;
-  if (!key) return errorResponse('No API key provided.', 401);
-
-  const endpoint =
-    `https://generativelanguage.googleapis.com/v1beta/models/` +
-    `${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
-
-  let upstream: Response;
-  try {
-    upstream = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify(payload),
       signal: c.req.raw.signal,
     });

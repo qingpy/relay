@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { getAppConfig } from '@/db/db';
 import {
   addMessage,
   getFolder,
@@ -79,11 +78,8 @@ export const useChatStore = create<ChatState>((set, get) => {
   ) => {
     const sessionId = session.id;
     const folder = session.folderId ? await getFolder(session.folderId) : undefined;
-    const [connections, config] = await Promise.all([
-      listConnections(),
-      getAppConfig(),
-    ]);
-    const resolved = resolveConfig(session, folder, connections, config);
+    const connections = await listConnections();
+    const resolved = resolveConfig(session, folder, connections);
     const chatMessages = await buildChatMessages(history);
 
     const assistant = await addMessage({ sessionId, parentId, role: 'assistant' });

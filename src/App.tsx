@@ -3,15 +3,15 @@ import { ChatPane } from '@/components/layout/ChatPane';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { ConfirmDialog } from '@/components/ui/confirm';
-import { ensureDefaultConnection } from '@/db/db';
+import { ensureDefaultPreset } from '@/db/repo';
 import { useUiStore } from '@/store/ui';
 
 export default function App() {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
 
-  // Guarantee a connection exists on first run so chats have a model to use.
+  // Guarantee a connection and a preset exist (chats always live in a preset).
   useEffect(() => {
-    void ensureDefaultConnection();
+    void ensureDefaultPreset();
   }, []);
 
   return (

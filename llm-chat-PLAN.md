@@ -108,10 +108,11 @@ with a curated, user-editable fallback list.
 ## 4. Data Model (Dexie / IndexedDB)
 
 ```
-connections { id, name, type: openai|gemini|vertex,   // user-defined upstream
+connections { id, name, type: openai|vertex,          // user-defined upstream
               baseUrl?, apiKey?,                       // key lives in IndexedDB
               models: SavedModel[],                    // { id, label?, capabilities }
               project?, region?,                       // vertex (auth JSON is server-side)
+              enabled?,                                // off = hidden from model pickers
               order, createdAt }
 folders   { id, name, parentId|null, order, createdAt,  // a "Preset" in the UI
             connectionId?, model?,                    // fixes the model for its chats
@@ -134,7 +135,7 @@ messages  { id, sessionId, parentId|null,   // tree edge -> enables branching
             usage?, createdAt }
 files     { id, sessionId, messageId, name, mimeType, size, blob, createdAt }
 prompts   { id, title, content, order }      // quick prompts
-appConfig { id:'singleton', theme, defaultConnectionId?,
+appConfig { id:'singleton', theme,
             exportIncludeThinking?,                   // include reasoning in exports
             titleConnectionId?, titleModel?, titlePrompt?,   // auto-titling
             webdav: { url, user, pass, path, enabled }, ... }
@@ -270,9 +271,22 @@ Resolved:
   user-defined **connections** (multiple per protocol, custom name/URL/key, saved model catalog with
   per-model capabilities); folders became **Presets** that fix the model/settings/system-prompt for
   their chats (**workspace-only model** — a chat adds only an extra system prompt + web-search
-  toggle). Loose chats fall back to the default connection. The old global "default model" setting is
-  gone. **Vertex**: framework only (server-side service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`;
-  client sends project/region/model). **Auto-title** uses a configurable connection/model + prompt.
+  toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
+  service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
+  **Auto-title** uses a configurable connection/model + prompt.
+- **Connections round 3** (user request, 2026-05-28): **two connection types** — `openai`
+  (OpenAI-compatible; covers OpenRouter/OpenAI/Groq/local and Gemini via its OpenAI endpoint) and
+  `vertex` (the incompatible one). Native Gemini AI Studio is reached through the OpenAI-compatible
+  Google endpoint (v5 migration converts old `gemini` connections). Connections are edited as a
+  structured form (name/type/baseUrl/masked key; vertex: project/region). **No default connection** —
+  each has an **On/Off** toggle and every On connection's models appear together (grouped) in the
+  preset/header model picker. **Select/unselect all** in the branch map and the detect picker.
+- **Redesign refinements** (user request, 2026-05-28): **presets-only** — no folders/loose chats;
+  every chat lives in a preset (v4 migration adopts loose chats; deleting a preset rehomes its chats;
+  the chat header switches the model, which updates the whole preset). **Connections** are edited as
+  **raw JSON** (name/type/baseUrl/apiKey/project/region) for flexibility. **Detect** opens a
+  searchable picker to save a *subset* of the (possibly 100+) available models, not all of them.
+  **Timestamps** are absolute (date + time). The **tree map** can delete any message/branch.
 - **Branching model**: messages form a tree via `parentId`; the session's `currentLeafId` selects
   the visible path. Regenerate / edit / fork create siblings (non-destructive); a tree overview map
   navigates between branches. Implementation choices (M6):

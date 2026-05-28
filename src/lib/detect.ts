@@ -2,7 +2,6 @@ import type { Connection } from '@/db/types';
 
 const ENDPOINT: Record<Connection['type'], string> = {
   openai: '/api/models/openai',
-  gemini: '/api/models/gemini',
   vertex: '/api/models/vertex',
 };
 
