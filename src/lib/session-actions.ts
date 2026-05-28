@@ -4,11 +4,14 @@ import type { Session } from '@/db/types';
 import { useUiStore } from '@/store/ui';
 
 /** Create a session from the configured defaults and make it active. */
-export async function startNewSession(): Promise<Session> {
+export async function startNewSession(
+  folderId: string | null = null,
+): Promise<Session> {
   const config = await getAppConfig();
   const session = await createSession({
     provider: config.defaultProvider,
     model: config.defaultModel,
+    folderId,
   });
   useUiStore.getState().setActiveSession(session.id);
   return session;

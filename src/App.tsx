@@ -1,6 +1,7 @@
 import { ChatPane } from '@/components/layout/ChatPane';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsDialog } from '@/components/settings/SettingsDialog';
+import { ConfirmDialog } from '@/components/ui/confirm';
 import { useUiStore } from '@/store/ui';
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
       {sidebarOpen && <Sidebar />}
       <ChatPane />
       <SettingsDialog />
+      <ConfirmDialog />
     </div>
   );
 }
