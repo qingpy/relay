@@ -27,6 +27,7 @@ import type {
 import { detectModels } from '@/lib/detect';
 import { toSavedModel } from '@/lib/models';
 import { cn } from '@/lib/utils';
+import { ModelPicker } from './ModelPicker';
 
 const labelClass =
   'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
@@ -36,6 +37,9 @@ const TYPE_LABEL: Record<ConnectionType, string> = {
   gemini: 'Gemini',
   vertex: 'Vertex AI',
 };
+
+/** Connection fields safe to edit as raw JSON (creds + endpoint). */
+const EDITABLE_KEYS = ['name', 'type', 'baseUrl', 'apiKey', 'project', 'region'] as const;
 
 export function ConnectionsManager() {
   const connections = useLiveQuery(() => listConnections(), [], []);
@@ -89,6 +93,14 @@ export function ConnectionsManager() {
   );
 }
 
+function connectionJson(conn: Connection): string {
+  const subset: Record<string, unknown> = {};
+  for (const k of EDITABLE_KEYS) {
+    if (conn[k] !== undefined) subset[k] = conn[k];
+  }
+  return JSON.stringify(subset, null, 2);
+}
+
 function ConnectionCard({
   conn,
   isDefault,
@@ -100,26 +112,45 @@ function ConnectionCard({
   open: boolean;
   onToggle: () => void;
 }) {
+  const [json, setJson] = useState(() => connectionJson(conn));
+  const [jsonError, setJsonError] = useState<string | null>(null);
   const [newModel, setNewModel] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
+  const [picker, setPicker] = useState<string[] | null>(null);
 
-  const patch = (p: Partial<Connection>) => void updateConnection(conn.id, p);
   const setModels = (models: SavedModel[]) =>
     void setConnectionModels(conn.id, models);
+
+  const saveJson = () => {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(json);
+    } catch (e) {
+      setJsonError(e instanceof Error ? e.message : 'Invalid JSON');
+      return;
+    }
+    if (
+      parsed.type !== 'openai' &&
+      parsed.type !== 'gemini' &&
+      parsed.type !== 'vertex'
+    ) {
+      setJsonError('type must be "openai", "gemini", or "vertex".');
+      return;
+    }
+    setJsonError(null);
+    const patch: Partial<Connection> = {};
+    for (const k of EDITABLE_KEYS) {
+      patch[k] = (parsed[k] as never) ?? undefined;
+    }
+    void updateConnection(conn.id, patch);
+  };
 
   const detect = async () => {
     setDetecting(true);
     setDetectError(null);
     try {
-      const ids = await detectModels(conn);
-      const existing = new Map(conn.models.map((m) => [m.id, m]));
-      const merged = ids.map(
-        (id) => existing.get(id) ?? toSavedModel(id, conn.type),
-      );
-      // Keep any manually-added models the listing didn't return.
-      for (const m of conn.models) if (!ids.includes(m.id)) merged.push(m);
-      setModels(merged);
+      setPicker(await detectModels(conn));
     } catch (e) {
       setDetectError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -171,68 +202,35 @@ function ConnectionCard({
       {open && (
         <div className="flex flex-col gap-3 border-t border-border px-2.5 py-3">
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-medium">Name</label>
-            <Input
-              value={conn.name}
-              onChange={(e) => patch({ name: e.target.value })}
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Connection (JSON)</label>
+              <Button variant="secondary" size="sm" onClick={saveJson}>
+                Save
+              </Button>
+            </div>
+            <textarea
+              value={json}
+              spellCheck={false}
+              onChange={(e) => setJson(e.target.value)}
+              onBlur={saveJson}
+              rows={Math.min(10, json.split('\n').length + 1)}
+              className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-          </div>
-
-          {conn.type === 'openai' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium">Base URL</label>
-              <Input
-                spellCheck={false}
-                placeholder="https://api.example.com/v1"
-                value={conn.baseUrl ?? ''}
-                onChange={(e) => patch({ baseUrl: e.target.value })}
-              />
-            </div>
-          )}
-
-          {conn.type !== 'vertex' && (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium">API key</label>
-              <Input
-                type="password"
-                autoComplete="off"
-                placeholder="API key"
-                value={conn.apiKey ?? ''}
-                onChange={(e) => patch({ apiKey: e.target.value })}
-              />
-            </div>
-          )}
-
-          {conn.type === 'vertex' && (
-            <>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium">GCP project id</label>
-                <Input
-                  spellCheck={false}
-                  placeholder="my-project-123"
-                  value={conn.project ?? ''}
-                  onChange={(e) => patch({ project: e.target.value })}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium">Region</label>
-                <Input
-                  spellCheck={false}
-                  placeholder="us-central1"
-                  value={conn.region ?? ''}
-                  onChange={(e) => patch({ region: e.target.value })}
-                />
-              </div>
+            {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
+            {conn.type === 'vertex' && (
               <p className="rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-                Auth uses a service-account JSON set on the server
-                (<code>GOOGLE_VERTEX_CREDENTIALS</code>). No key is stored here.
+                Vertex auth uses a service-account JSON on the server
+                (<code>GOOGLE_VERTEX_CREDENTIALS</code>) — set <code>project</code>
+                and <code>region</code> here.
               </p>
-            </>
-          )}
+            )}
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <label className="text-xs font-medium">Models</label>
+              <label className="text-xs font-medium">
+                Models ({conn.models.length})
+              </label>
               {conn.type !== 'vertex' && (
                 <Button
                   variant="ghost"
@@ -249,7 +247,7 @@ function ConnectionCard({
             {detectError && (
               <p className="text-xs text-destructive">{detectError}</p>
             )}
-            <div className="flex flex-col divide-y divide-border rounded-md border border-border">
+            <div className="flex max-h-56 flex-col divide-y divide-border overflow-y-auto rounded-md border border-border">
               {conn.models.length === 0 && (
                 <p className="px-2 py-2 text-xs text-muted-foreground">
                   No models. Detect or add one below.
@@ -313,6 +311,19 @@ function ConnectionCard({
             </Button>
           </div>
         </div>
+      )}
+
+      {picker && (
+        <ModelPicker
+          open={picker !== null}
+          onOpenChange={(v) => !v && setPicker(null)}
+          available={picker}
+          saved={conn.models}
+          onConfirm={(ids) => {
+            const existing = new Map(conn.models.map((m) => [m.id, m]));
+            setModels(ids.map((id) => existing.get(id) ?? toSavedModel(id, conn.type)));
+          }}
+        />
       )}
     </div>
   );

@@ -1,4 +1,10 @@
-import { db, getAppConfig, newId, updateAppConfig } from './db';
+import {
+  db,
+  ensureDefaultConnection,
+  getAppConfig,
+  newId,
+  updateAppConfig,
+} from './db';
 import type {
   Connection,
   ConnectionType,
@@ -120,6 +126,21 @@ export function getFolder(id: string): Promise<Folder | undefined> {
   return db.folders.get(id);
 }
 
+/** Guarantee at least one preset exists and that no chat is loose; returns the
+ *  preset to drop new top-level chats into. */
+export async function ensureDefaultPreset(): Promise<string> {
+  await ensureDefaultConnection();
+  const folders = await listFolders();
+  const preset = folders[0] ?? (await createFolder('General'));
+  const loose = (await db.sessions.toArray()).filter((s) => !s.folderId);
+  if (loose.length) {
+    await db.transaction('rw', db.sessions, async () => {
+      for (const s of loose) await db.sessions.update(s.id, { folderId: preset.id });
+    });
+  }
+  return preset.id;
+}
+
 export async function createFolder(
   name = 'New preset',
   parentId: string | null = null,
@@ -159,17 +180,15 @@ export async function updateFolderConfig(
   await db.folders.update(id, patch);
 }
 
-/** Delete a folder, promoting its sessions and subfolders to the root. */
+/** Delete a preset, moving its chats into another preset (chats are never
+ *  loose). If it was the last preset, a fresh "General" preset is created. */
 export async function deleteFolder(id: string): Promise<void> {
+  const others = (await listFolders()).filter((f) => f.id !== id);
+  let targetId = others[0]?.id ?? null;
+  if (!targetId) targetId = (await createFolder('General')).id;
   await db.transaction('rw', db.folders, db.sessions, async () => {
-    await db.sessions
-      .where('folderId')
-      .equals(id)
-      .modify({ folderId: null });
-    await db.folders
-      .where('parentId')
-      .equals(id)
-      .modify({ parentId: null });
+    await db.sessions.where('folderId').equals(id).modify({ folderId: targetId });
+    await db.folders.where('parentId').equals(id).modify({ parentId: null });
     await db.folders.delete(id);
   });
 }

@@ -68,6 +68,11 @@ class RelayDB extends Dexie {
       .upgrade(async (tx) => {
         await migrateToConnections(tx);
       });
+    // v4: presets-only. Every chat lives in a preset — create a default one and
+    // adopt any loose (folder-less) chats into it.
+    this.version(4).upgrade(async (tx) => {
+      await migrateToPresets(tx);
+    });
   }
 }
 
@@ -153,6 +158,37 @@ async function migrateToConnections(tx: Transaction): Promise<void> {
       model: undefined,
       settings: undefined,
     });
+  }
+}
+
+/** v4 upgrade: ensure a default preset and move loose chats into it. */
+async function migrateToPresets(tx: Transaction): Promise<void> {
+  const folders = (await tx.table('folders').toArray()) as Folder[];
+  let presetId = folders[0]?.id;
+  if (!presetId) {
+    const cfg = (await tx.table('appConfig').get('singleton')) as
+      | { defaultConnectionId?: string }
+      | undefined;
+    const conn = cfg?.defaultConnectionId
+      ? ((await tx.table('connections').get(cfg.defaultConnectionId)) as
+          | Connection
+          | undefined)
+      : undefined;
+    presetId = crypto.randomUUID();
+    await tx.table('folders').add({
+      id: presetId,
+      name: 'General',
+      parentId: null,
+      order: 0,
+      createdAt: Date.now(),
+      connectionId: conn?.id ?? null,
+      model: conn?.models[0]?.id ?? '',
+      settings: {},
+    });
+  }
+  const sessions = (await tx.table('sessions').toArray()) as Session[];
+  for (const s of sessions) {
+    if (!s.folderId) await tx.table('sessions').update(s.id, { folderId: presetId });
   }
 }
 

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { deleteSession, duplicateSession, renameSession } from '@/db/repo';
 import type { Session } from '@/db/types';
-import { formatDateTime, formatRelative } from '@/lib/time';
+import { formatDateTime, formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
@@ -88,9 +88,9 @@ export function SessionRow({
           <time
             dateTime={new Date(session.updatedAt).toISOString()}
             title={formatDateTime(session.updatedAt)}
-            className="text-[10px] tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0"
+            className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0"
           >
-            {formatRelative(session.updatedAt)}
+            {formatStamp(session.updatedAt)}
           </time>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

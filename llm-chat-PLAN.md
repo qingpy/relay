@@ -270,9 +270,15 @@ Resolved:
   user-defined **connections** (multiple per protocol, custom name/URL/key, saved model catalog with
   per-model capabilities); folders became **Presets** that fix the model/settings/system-prompt for
   their chats (**workspace-only model** — a chat adds only an extra system prompt + web-search
-  toggle). Loose chats fall back to the default connection. The old global "default model" setting is
-  gone. **Vertex**: framework only (server-side service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`;
-  client sends project/region/model). **Auto-title** uses a configurable connection/model + prompt.
+  toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
+  service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
+  **Auto-title** uses a configurable connection/model + prompt.
+- **Redesign refinements** (user request, 2026-05-28): **presets-only** — no folders/loose chats;
+  every chat lives in a preset (v4 migration adopts loose chats; deleting a preset rehomes its chats;
+  the chat header switches the model, which updates the whole preset). **Connections** are edited as
+  **raw JSON** (name/type/baseUrl/apiKey/project/region) for flexibility. **Detect** opens a
+  searchable picker to save a *subset* of the (possibly 100+) available models, not all of them.
+  **Timestamps** are absolute (date + time). The **tree map** can delete any message/branch.
 - **Branching model**: messages form a tree via `parentId`; the session's `currentLeafId` selects
   the visible path. Regenerate / edit / fork create siblings (non-destructive); a tree overview map
   navigates between branches. Implementation choices (M6):

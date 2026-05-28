@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import type { Message } from '@/db/types';
 import { spliceMessage, textPart, updateMessage } from '@/db/repo';
 import { partsText } from '@/lib/conversation';
-import { formatRelative, formatDateTime } from '@/lib/time';
+import { formatStamp, formatDateTime } from '@/lib/time';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
 import { Markdown } from './Markdown';
@@ -88,7 +88,7 @@ export const MessageItem = memo(function MessageItem({
             title={formatDateTime(message.createdAt)}
             className="text-[11px] text-muted-foreground"
           >
-            {formatRelative(message.createdAt)}
+            {formatStamp(message.createdAt)}
           </time>
         </div>
       </div>
@@ -138,7 +138,7 @@ export const MessageItem = memo(function MessageItem({
               dateTime={new Date(message.createdAt).toISOString()}
               title={formatDateTime(message.createdAt)}
             >
-              {formatRelative(message.createdAt)}
+              {formatStamp(message.createdAt)}
             </time>
           </div>
         </div>

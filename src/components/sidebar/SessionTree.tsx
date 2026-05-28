@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   closestCenter,
@@ -8,7 +8,6 @@ import {
   DragOverlay,
   KeyboardSensor,
   PointerSensor,
-  useDroppable,
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
@@ -25,12 +24,9 @@ import {
   persistSessionOrder,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
-import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { FolderRow } from './FolderRow';
 import { SessionRow } from './SessionRow';
-
-const ROOT = 'ROOT';
 
 export function SessionTree() {
   const folders = useLiveQuery(() => listFolders(), [], []);
@@ -46,7 +42,6 @@ export function SessionTree() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const rootSessions = sessions.filter((s) => !s.folderId);
   const inFolder = (fid: string) => sessions.filter((s) => s.folderId === fid);
 
   const onDragStart = (e: DragStartEvent) => {
@@ -68,7 +63,7 @@ export function SessionTree() {
     const oid = String(over.id);
     if (aid === oid) return;
 
-    // Folder reorder.
+    // Preset reorder.
     if (aid.startsWith('F:')) {
       if (!oid.startsWith('F:')) return;
       const oldI = folders.findIndex((f) => `F:${f.id}` === aid);
@@ -79,37 +74,31 @@ export function SessionTree() {
       return;
     }
 
-    // Session move / reorder.
+    // Chat move / reorder — always lands in some preset.
     const sid = aid.slice(2);
     const session = sessions.find((s) => s.id === sid);
     if (!session) return;
 
-    let targetFolderId: string | null;
+    let targetFolderId: string;
     let targetList: Session[];
     let insertIndex: number;
 
-    if (oid === ROOT) {
-      targetFolderId = null;
-      targetList = rootSessions;
-      insertIndex = targetList.length;
-    } else if (oid.startsWith('F:')) {
+    if (oid.startsWith('F:')) {
       targetFolderId = oid.slice(2);
       targetList = inFolder(targetFolderId);
       insertIndex = targetList.length;
     } else if (oid.startsWith('S:')) {
       const overSession = sessions.find((s) => s.id === oid.slice(2));
-      if (!overSession) return;
-      targetFolderId = overSession.folderId ?? null;
-      targetList = targetFolderId ? inFolder(targetFolderId) : rootSessions;
+      if (!overSession?.folderId) return;
+      targetFolderId = overSession.folderId;
+      targetList = inFolder(targetFolderId);
       insertIndex = targetList.findIndex((s) => s.id === overSession.id);
       if (insertIndex < 0) insertIndex = targetList.length;
     } else {
       return;
     }
 
-    const sourceFolderId = session.folderId ?? null;
-
-    if (sourceFolderId === targetFolderId) {
+    if (session.folderId === targetFolderId) {
       const oldIndex = targetList.findIndex((s) => s.id === sid);
       if (oldIndex < 0 || oldIndex === insertIndex) return;
       const next = arrayMove(targetList, oldIndex, insertIndex);
@@ -125,10 +114,10 @@ export function SessionTree() {
     }
   };
 
-  if (folders.length === 0 && sessions.length === 0) {
+  if (folders.length === 0) {
     return (
       <p className="px-1 py-8 text-center text-xs text-muted-foreground">
-        No conversations yet.
+        No presets yet.
       </p>
     );
   }
@@ -164,17 +153,6 @@ export function SessionTree() {
             </div>
           ))}
         </SortableContext>
-
-        <RootZone hasFolders={folders.length > 0}>
-          <SortableContext
-            items={rootSessions.map((s) => `S:${s.id}`)}
-            strategy={verticalListSortingStrategy}
-          >
-            {rootSessions.map((s) => (
-              <SessionRow key={s.id} session={s} />
-            ))}
-          </SortableContext>
-        </RootZone>
       </div>
 
       <DragOverlay dropAnimation={null}>
@@ -185,34 +163,5 @@ export function SessionTree() {
         )}
       </DragOverlay>
     </DndContext>
-  );
-}
-
-function RootZone({
-  hasFolders,
-  children,
-}: {
-  hasFolders: boolean;
-  children: ReactNode;
-}) {
-  const { setNodeRef, isOver, active } = useDroppable({ id: ROOT });
-  const sessionOver = isOver && String(active?.id ?? '').startsWith('S:');
-
-  return (
-    <div ref={setNodeRef} className="mt-0.5 flex flex-col gap-0.5">
-      {hasFolders && (
-        <p className="px-2 pb-0.5 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
-          Chats
-        </p>
-      )}
-      <div
-        className={cn(
-          'flex min-h-2 flex-col gap-0.5 rounded-md',
-          sessionOver && 'bg-primary/5 ring-1 ring-inset ring-primary/30',
-        )}
-      >
-        {children}
-      </div>
-    </div>
   );
 }

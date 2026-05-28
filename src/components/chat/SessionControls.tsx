@@ -12,6 +12,7 @@ import {
   listFolders,
   moveSessionToFolder,
   setSessionSystemPrompt,
+  updateFolderConfig,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
 import { useResolvedConfig } from '@/lib/useResolved';
@@ -25,6 +26,12 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
   const resolved = useResolvedConfig(sessionId);
   if (!session) return null;
 
+  const models = resolved?.connection?.models ?? [];
+  // Switching the model in the header applies to the whole preset.
+  const onModel = (model: string) => {
+    if (session.folderId) void updateFolderConfig(session.folderId, { model });
+  };
+
   return (
     <div className="flex min-w-0 items-center gap-2">
       <select
@@ -33,9 +40,8 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
           void moveSessionToFolder(sessionId, e.target.value || null)
         }
         className={selectClass}
-        title="Preset (sets the model & settings)"
+        title="Preset"
       >
-        <option value="">No preset</option>
         {folders.map((f) => (
           <option key={f.id} value={f.id}>
             {f.name}
@@ -43,16 +49,23 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
         ))}
       </select>
 
-      <span
-        className="min-w-0 truncate text-sm text-muted-foreground"
-        title={
-          resolved?.connection
-            ? `${resolved.connection.name} · ${resolved.model || 'no model'}`
-            : 'No connection — add one in Settings'
-        }
+      <select
+        value={resolved?.model ?? ''}
+        onChange={(e) => onModel(e.target.value)}
+        disabled={!session.folderId}
+        className={selectClass}
+        title="Model (applies to the whole preset)"
       >
-        {resolved?.model || 'No model'}
-      </span>
+        {resolved?.model && !models.some((m) => m.id === resolved.model) && (
+          <option value={resolved.model}>{resolved.model}</option>
+        )}
+        {models.length === 0 && <option value="">No models</option>}
+        {models.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label || m.id}
+          </option>
+        ))}
+      </select>
 
       <ChatPromptPopover key={session.id} session={session} />
     </div>
