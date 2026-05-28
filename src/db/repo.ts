@@ -4,9 +4,11 @@ import type {
   Message,
   MessageRole,
   Part,
+  Prompt,
   ProviderId,
   Session,
   SessionSettings,
+  StoredFile,
 } from './types';
 
 export const DEFAULT_SESSION_SETTINGS: SessionSettings = {
@@ -66,6 +68,16 @@ export async function configureSession(
   patch: Partial<Omit<Session, 'id' | 'updatedAt'>>,
 ): Promise<void> {
   await db.sessions.update(id, patch);
+}
+
+/** Merge a patch into a session's settings (no `updatedAt` bump). */
+export async function updateSessionSettings(
+  id: string,
+  patch: Partial<SessionSettings>,
+): Promise<void> {
+  const session = await db.sessions.get(id);
+  if (!session) return;
+  await db.sessions.update(id, { settings: { ...session.settings, ...patch } });
 }
 
 export async function deleteSession(id: string): Promise<void> {
@@ -147,6 +159,36 @@ export async function persistFolderOrder(
   });
 }
 
+// --- Quick prompts ---------------------------------------------------------
+
+export function listPrompts(): Promise<Prompt[]> {
+  return db.prompts.orderBy('order').toArray();
+}
+
+export async function createPrompt(
+  input: { title?: string; content?: string } = {},
+): Promise<Prompt> {
+  const prompt: Prompt = {
+    id: newId(),
+    title: input.title ?? 'New prompt',
+    content: input.content ?? '',
+    order: Date.now(),
+  };
+  await db.prompts.add(prompt);
+  return prompt;
+}
+
+export async function updatePrompt(
+  id: string,
+  patch: Partial<Omit<Prompt, 'id'>>,
+): Promise<void> {
+  await db.prompts.update(id, patch);
+}
+
+export async function deletePrompt(id: string): Promise<void> {
+  await db.prompts.delete(id);
+}
+
 export function getMessages(sessionId: string): Promise<Message[]> {
   return db.messages
     .where('sessionId')
@@ -183,6 +225,45 @@ export async function deleteMessage(id: string): Promise<void> {
   await db.messages.delete(id);
 }
 
+/** Insert a context divider — messages before it are kept on the page but
+ *  excluded from what's sent to the model (plan §4/§7). */
+export async function clearContext(sessionId: string): Promise<void> {
+  await addMessage({ sessionId, role: 'divider' });
+}
+
 export function textPart(text: string): Part {
   return { type: 'text', text };
+}
+
+// --- Files / attachments ---------------------------------------------------
+
+/** Store uploaded files as blobs linked to a message; returns their ids. */
+export async function saveAttachments(
+  sessionId: string,
+  messageId: string,
+  files: File[],
+): Promise<string[]> {
+  const ids: string[] = [];
+  await db.transaction('rw', db.files, async () => {
+    for (const f of files) {
+      const id = newId();
+      await db.files.add({
+        id,
+        sessionId,
+        messageId,
+        name: f.name,
+        mimeType: f.type || 'application/octet-stream',
+        size: f.size,
+        blob: f,
+        createdAt: Date.now(),
+      });
+      ids.push(id);
+    }
+  });
+  return ids;
+}
+
+export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
+  const res = await db.files.bulkGet(ids);
+  return res.filter((f): f is StoredFile => !!f);
 }

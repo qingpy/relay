@@ -2,6 +2,7 @@ import { MessageSquareText, PanelLeftOpen, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Composer } from '@/components/chat/Composer';
 import { MessageList } from '@/components/chat/MessageList';
+import { ModelSettings } from '@/components/chat/ModelSettings';
 import { SessionControls } from '@/components/chat/SessionControls';
 import { useUiStore } from '@/store/ui';
 
@@ -46,16 +47,18 @@ export function ChatPane() {
         ) : (
           <span className="text-sm font-medium text-muted-foreground">Relay</span>
         )}
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="ml-auto"
-          onClick={() => setSettingsOpen(true)}
-          title="Settings"
-          aria-label="Settings"
-        >
-          <Settings />
-        </Button>
+        <div className="ml-auto flex items-center gap-0.5">
+          {activeId && <ModelSettings sessionId={activeId} />}
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <Settings />
+          </Button>
+        </div>
       </header>
 
       {activeId ? <MessageList sessionId={activeId} /> : <EmptyState />}

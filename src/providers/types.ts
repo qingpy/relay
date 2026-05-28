@@ -6,11 +6,20 @@ import type {
   Usage,
 } from '@/db/types';
 
-/** A message as sent to a provider. Content is plain text in M1; multimodal
- *  parts (images/files) are layered in later. */
+/** A binary/text attachment resolved to inline data, ready to send. */
+export interface Attachment {
+  kind: 'image' | 'pdf' | 'text';
+  name: string;
+  mimeType: string;
+  /** base64 (no data: prefix) for image/pdf; UTF-8 text for `text`. */
+  data: string;
+}
+
+/** A message as sent to a provider. */
 export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   text: string;
+  attachments?: Attachment[];
 }
 
 export interface Capabilities {
