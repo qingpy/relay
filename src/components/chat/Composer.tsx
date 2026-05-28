@@ -79,6 +79,26 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
     if (incoming.length) setFiles((prev) => [...prev, ...incoming]);
   };
 
+  // Attach images pasted from the clipboard (e.g. screenshots), letting plain
+  // text paste through untouched.
+  const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const images = Array.from(e.clipboardData.items)
+      .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => !!f)
+      .map((f) =>
+        f.name
+          ? f
+          : new File([f], `pasted-${Date.now()}.${f.type.split('/')[1] || 'png'}`, {
+              type: f.type,
+            }),
+      );
+    if (images.length) {
+      e.preventDefault();
+      addFiles(images);
+    }
+  };
+
   const onChange = (next: string) => {
     setValue(next);
     setActiveIndex(0);
@@ -177,6 +197,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onPaste={onPaste}
           placeholder="Message Relay…  (/ for prompts)"
           className="block max-h-60 min-h-9 w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />
