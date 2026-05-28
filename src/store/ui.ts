@@ -19,6 +19,10 @@ interface UiState {
   activeSessionId: string | null;
   setActiveSession: (id: string | null) => void;
 
+  /** Preset that new top-level chats are created in. */
+  activePresetId: string | null;
+  setActivePreset: (id: string | null) => void;
+
   /** Multi-select mode for assistant messages (bulk copy/export/delete). */
   selectionMode: boolean;
   selected: Record<string, true>;
@@ -53,6 +57,9 @@ export const useUiStore = create<UiState>((set) => ({
   activeSessionId: null,
   setActiveSession: (id) =>
     set({ activeSessionId: id, selectionMode: false, selected: {} }),
+
+  activePresetId: null,
+  setActivePreset: (id) => set({ activePresetId: id }),
 
   selectionMode: false,
   selected: {},

@@ -137,7 +137,11 @@ export function SessionTree() {
         >
           {folders.map((f) => (
             <div key={f.id} className="flex flex-col gap-0.5">
-              <FolderRow folder={f} count={inFolder(f.id).length} />
+              <FolderRow
+                folder={f}
+                count={inFolder(f.id).length}
+                topChatId={inFolder(f.id)[0]?.id}
+              />
               {!collapsed[f.id] && (
                 <SortableContext
                   items={inFolder(f.id).map((s) => `S:${s.id}`)}

@@ -274,6 +274,11 @@ Resolved:
   toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
   service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
   **Auto-title** uses a configurable connection/model + prompt.
+- **Round 7 tweaks** (user request, 2026-05-28): clicking a **preset** activates it and jumps to its
+  top chat (chevron still toggles collapse); the top-level **New chat** targets the **active preset**.
+  Preset settings moved into the chat header's gear, **combined** with the chat's own system prompt
+  (one dialog). Removed the redundant per-preset "New chat" menu item and the sidebar's bottom
+  Settings button (the header Settings remains).
 - **Round 6 tweaks** (user request, 2026-05-28): sidebar **chat multi-select** (toggle in the sidebar
   header) with select/deselect-all and bulk **delete** / **move to preset**. The Connections **Test**
   lets you pick which saved model to test.

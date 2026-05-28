@@ -35,6 +35,7 @@ export function SessionRow({
 }) {
   const activeId = useUiStore((s) => s.activeSessionId);
   const setActive = useUiStore((s) => s.setActiveSession);
+  const setActivePreset = useUiStore((s) => s.setActivePreset);
   const folders = useLiveQuery(() => listFolders(), [], []);
   const [editing, setEditing] = useState(false);
 
@@ -66,8 +67,12 @@ export function SessionRow({
 
   const onRowClick = () => {
     if (editing) return;
-    if (selecting) setChatSelected(session.id, !checked);
-    else setActive(session.id);
+    if (selecting) {
+      setChatSelected(session.id, !checked);
+    } else {
+      setActivePreset(session.folderId);
+      setActive(session.id);
+    }
   };
 
   return (

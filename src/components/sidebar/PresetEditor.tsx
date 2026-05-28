@@ -12,9 +12,10 @@ import { Slider } from '@/components/ui/slider';
 import {
   listConnections,
   renameFolder,
+  setSessionSystemPrompt,
   updateFolderConfig,
 } from '@/db/repo';
-import type { Folder, ModelSettings } from '@/db/types';
+import type { Folder, ModelSettings, Session } from '@/db/types';
 import { decodeModelChoice, encodeModelChoice, modelGroups } from '@/lib/models';
 
 const SECTION = 'flex flex-col gap-1.5';
@@ -23,10 +24,12 @@ const labelClass = 'text-sm font-medium';
 
 export function PresetEditor({
   folder,
+  session,
   open,
   onOpenChange,
 }: {
   folder: Folder;
+  session?: Session;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -34,27 +37,28 @@ export function PresetEditor({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-md flex-col">
         <DialogHeader>
-          <DialogTitle>Preset</DialogTitle>
+          <DialogTitle>Preset · {folder.name}</DialogTitle>
           <DialogDescription>
-            Sets the model, settings, and system prompt shared by every chat in
-            this preset.
+            Model, settings, and system prompt shared by every chat in this
+            preset.
           </DialogDescription>
         </DialogHeader>
         <div className="-mr-2 overflow-y-auto pr-2">
-          <Form key={folder.id} folder={folder} />
+          <Form key={folder.id} folder={folder} session={session} />
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function Form({ folder }: { folder: Folder }) {
+function Form({ folder, session }: { folder: Folder; session?: Session }) {
   const connections = useLiveQuery(() => listConnections(), [], []);
   const [name, setName] = useState(folder.name);
   const [connectionId, setConnectionId] = useState(folder.connectionId ?? '');
   const [model, setModel] = useState(folder.model ?? '');
   const [settings, setSettings] = useState<ModelSettings>(folder.settings ?? {});
   const [systemPrompt, setSystemPrompt] = useState(folder.systemPrompt ?? '');
+  const [chatPrompt, setChatPrompt] = useState(session?.systemPrompt ?? '');
 
   const conn = connections.find((c) => c.id === connectionId);
   const groups = modelGroups(connections);
@@ -215,6 +219,22 @@ function Form({ folder }: { folder: Folder }) {
           className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
         />
       </div>
+
+      {session && (
+        <div className={SECTION}>
+          <label className={labelClass}>Chat system prompt (this chat only)</label>
+          <textarea
+            value={chatPrompt}
+            onChange={(e) => {
+              setChatPrompt(e.target.value);
+              void setSessionSystemPrompt(session.id, e.target.value);
+            }}
+            rows={3}
+            placeholder="Appended to the preset's system prompt for this chat…"
+            className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+      )}
     </div>
   );
 }

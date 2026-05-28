@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Folder as FolderIcon,
   FolderOpen,
-  MessageSquarePlus,
   MoreHorizontal,
   Pencil,
   Settings2,
@@ -21,15 +20,25 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { deleteFolder, renameFolder } from '@/db/repo';
 import type { Folder } from '@/db/types';
-import { startNewSession } from '@/lib/session-actions';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
 import { PresetEditor } from './PresetEditor';
 
-export function FolderRow({ folder, count }: { folder: Folder; count: number }) {
+export function FolderRow({
+  folder,
+  count,
+  topChatId,
+}: {
+  folder: Folder;
+  count: number;
+  topChatId?: string;
+}) {
   const collapsed = useUiStore((s) => !!s.collapsedFolders[folder.id]);
   const toggleFolder = useUiStore((s) => s.toggleFolder);
+  const setActivePreset = useUiStore((s) => s.setActivePreset);
+  const setActive = useUiStore((s) => s.setActiveSession);
+  const isActivePreset = useUiStore((s) => s.activePresetId === folder.id);
   const [editing, setEditing] = useState(false);
   const [configuring, setConfiguring] = useState(false);
 
@@ -47,9 +56,12 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
   // Highlight as a drop target only when a session (not another folder) hovers.
   const sessionOver = isOver && String(active?.id ?? '').startsWith('S:');
 
-  const onNewChat = async () => {
+  // Click a preset to make it active and jump to its top chat (expanding it).
+  const onActivate = () => {
+    if (editing) return;
+    setActivePreset(folder.id);
     if (collapsed) toggleFolder(folder.id);
-    await startNewSession(folder.id);
+    if (topChatId) setActive(topChatId);
   };
 
   const onDelete = async () => {
@@ -73,22 +85,32 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
       {...listeners}
       role="button"
       tabIndex={0}
-      onClick={() => !editing && toggleFolder(folder.id)}
-      onKeyDown={(e) => e.key === 'Enter' && !editing && toggleFolder(folder.id)}
+      onClick={onActivate}
+      onKeyDown={(e) => e.key === 'Enter' && onActivate()}
       className={cn(
         'group flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none transition-colors',
         isDragging && 'opacity-50',
         sessionOver
           ? 'bg-primary/10 ring-1 ring-inset ring-primary/40'
-          : 'text-foreground/90 hover:bg-sidebar-accent/60',
+          : isActivePreset
+            ? 'bg-sidebar-accent/70 text-foreground'
+            : 'text-foreground/90 hover:bg-sidebar-accent/60',
       )}
     >
-      <ChevronRight
-        className={cn(
-          'size-3.5 shrink-0 text-muted-foreground transition-transform',
-          !collapsed && 'rotate-90',
-        )}
-      />
+      <button
+        type="button"
+        title={collapsed ? 'Expand' : 'Collapse'}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleFolder(folder.id);
+        }}
+        className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+      >
+        <ChevronRight
+          className={cn('size-3.5 transition-transform', !collapsed && 'rotate-90')}
+        />
+      </button>
       {collapsed ? (
         <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
       ) : (
@@ -126,10 +148,6 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => void onNewChat()}>
-              <MessageSquarePlus />
-              New chat
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setTimeout(() => setConfiguring(true), 0)}>
               <Settings2 />
               Preset settings
