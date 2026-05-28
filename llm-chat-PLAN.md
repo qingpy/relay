@@ -213,8 +213,11 @@ GET  /api/models/:provider # optional: proxy model lists
 ```
 - Streams provider SSE straight back to the client.
 - Single source file ~150–250 lines. No state, no DB.
-- Env: `OPENROUTER_KEY?`, `GEMINI_KEY?`, `GOOGLE_APPLICATION_CREDENTIALS` (or inline JSON),
-  `VERTEX_PROJECT`, `VERTEX_LOCATION`, `WEBDAV_URL/USER/PASS`.
+- Env (all optional; UI-entered keys take precedence): `API_PORT`; `OPENROUTER_KEY` / `OPENAI_KEY`
+  (fallback for OpenAI-compatible connections + model listing); `GOOGLE_VERTEX_CREDENTIALS` (inline
+  service-account JSON) or `GOOGLE_VERTEX_CREDENTIALS_FILE` / `GOOGLE_APPLICATION_CREDENTIALS` (path)
+  — fallback when a Vertex connection has no client_email/private_key; `RELAY_BACKUP_DIR`
+  (default `./backups`).
 
 ---
 
@@ -234,25 +237,54 @@ Identical SPA + proxy for all targets. Pick later.
 
 ## 8. Milestones (suggested build order)
 
-- **M0 — Scaffold**: Vite + React + TS + Tailwind + shadcn/ui; Hono proxy; dev proxy wiring; base
+- **M0 — Scaffold** ✅: Vite + React + TS + Tailwind + shadcn/ui; Hono proxy; dev proxy wiring; base
   layout (sidebar + chat pane); Dexie schema.
-- **M1 — Core chat**: provider abstraction (OpenAI-compat + Gemini); streaming; markdown/code/math
-  render; persist messages.
-- **M2 — Sessions & folders**: sidebar tree CRUD, rename/move/delete, ordering, persistence.
-- **M3 — Rich rendering**: foldable thinking; foldable tool calls; citations.
-- **M4 — Composer & UX**: file upload (drag+click); quick prompts; model-settings panel; web-search
+- **M1 — Core chat** ✅: provider abstraction; streaming; markdown/code/math render; persist messages.
+- **M2 — Sessions & folders** ✅: sidebar tree CRUD, rename/move/delete, ordering, persistence.
+- **M3 — Rich rendering** ✅: foldable thinking; foldable tool calls; citations.
+- **M4 — Composer & UX** ✅: file upload (drag+click+paste); quick prompts; model settings; web-search
   toggle; context divider; long-chat navigation shortcuts.
-- **M5 — Export & copy**: session + single-message markdown export; copy whole message as markdown;
+- **M5 — Export & copy** ✅: session + single-message markdown export; copy whole message as markdown;
   copy selected lines with LaTeX-aware copy (KaTeX `copy-tex`).
-- **M6 — Message actions & branching** ✅: regenerate, edit-input-and-resend, delete (subtree), fork;
-  message tree (`parentId` + session `currentLeafId`); sibling switcher; session **overview map**
-  (Branch map dialog) to jump to any branch; duplicate whole session. (Replaces the old WebDAV-sync M6.)
-- **M7 — Polish & deploy**: light theme (+ optional dark), empty states, error handling, keyboard
-  shortcuts, bundle code-splitting, then deploy to VPS (Caddy) or Cloudflare.
-- **Deferred — WebDAV sync**: last-write-wins sync via the proxy + backups + settings UI (see §5.15
-  / §6). Postponed at the user's request; revisit after M7.
+- **M6 — Message actions & branching** ✅: regenerate, edit, delete (subtree), fork; message tree
+  (`parentId` + session `currentLeafId`); sibling switcher; Branch-map dialog; duplicate session.
+- **M6.5 — Connections / presets / backup redesign** ✅ (post-M6, rounds 1–8): user-defined
+  connections (Custom OpenAI-style + Vertex) with per-model capabilities & test; presets (model +
+  settings + system prompt) with active-preset switching; backup & restore (file + local server +
+  scheduled); auto-title; multi-select (messages, branch map, sidebar chats). See §9 decisions.
+- **M7 — UI/design polish & deploy** ⏳ (next): visual/design pass, empty states, error/loading
+  states, keyboard shortcuts, bundle **code-splitting** (currently one ~1.1 MB chunk), then deploy
+  to VPS (Caddy) or Cloudflare.
+- **Deferred — WebDAV sync**: largely superseded by local backup/restore; revisit if cross-device
+  sync is wanted.
 
-A usable daily driver exists after **M4**; M5–M7 are quality-of-life.
+The functional build is complete through **M6.5** and verified by the user; **M7** (design + deploy)
+is the remaining stage.
+
+### Status & handoff (2026-05-28)
+
+**State:** functionally complete; user has verified behavior. `tsc --noEmit` and `vite build` are
+clean. Verified in-session via fake-indexeddb tests (Dexie migrations v2–v5, config resolution,
+backup round-trip) and server smokes (chat proxy, Vertex token mint, model listing, backup CRUD).
+Working tree clean; all work pushed to `origin/main`.
+
+**Next session — M7 (UI/design, then final polish):**
+- Visual/design pass toward the Linear/Vercel north star; empty states; responsive layout; theme
+  (light/dark) polish.
+- Error/loading affordances (toasts, skeletons, retry).
+- **Code-splitting**: the bundle is one ~1.1 MB chunk — lazy-load KaTeX / markdown / highlight and
+  the dialogs to cut it down.
+- Keyboard-shortcut pass and accessibility.
+- Deploy (target still open: VPS+Caddy vs Cloudflare).
+
+**Carry-over notes / caveats:**
+- Backups contain API keys in plaintext (gitignored); on a VPS protect the backup dir and put the
+  proxy behind auth — the proxy currently has **no auth** (fine for local only).
+- Scheduled backups run only while a tab is open (data lives in the browser).
+- An empty preset is configured after it has a chat (header gear); new presets auto-seed the first
+  enabled connection's first model.
+- Native Gemini AI Studio is reached via its OpenAI-compatible endpoint
+  (`https://generativelanguage.googleapis.com/v1beta/openai`), not a dedicated type.
 
 ---
 
