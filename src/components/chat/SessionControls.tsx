@@ -9,12 +9,14 @@ import {
 } from '@/components/ui/popover';
 import {
   getSession,
+  listConnections,
   listFolders,
   moveSessionToFolder,
   setSessionSystemPrompt,
   updateFolderConfig,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
+import { decodeModelChoice, encodeModelChoice, modelGroups } from '@/lib/models';
 import { useResolvedConfig } from '@/lib/useResolved';
 
 const selectClass =
@@ -23,13 +25,21 @@ const selectClass =
 export function SessionControls({ sessionId }: { sessionId: string }) {
   const session = useLiveQuery(() => getSession(sessionId), [sessionId]);
   const folders = useLiveQuery(() => listFolders(), [], []);
+  const connections = useLiveQuery(() => listConnections(), [], []);
   const resolved = useResolvedConfig(sessionId);
   if (!session) return null;
 
-  const models = resolved?.connection?.models ?? [];
+  const groups = modelGroups(connections);
+  const current = resolved?.connection?.id ?? '';
   // Switching the model in the header applies to the whole preset.
-  const onModel = (model: string) => {
-    if (session.folderId) void updateFolderConfig(session.folderId, { model });
+  const onModel = (value: string) => {
+    const next = decodeModelChoice(value);
+    if (session.folderId) {
+      void updateFolderConfig(session.folderId, {
+        connectionId: next.connectionId || null,
+        model: next.model,
+      });
+    }
   };
 
   return (
@@ -50,20 +60,27 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
       </select>
 
       <select
-        value={resolved?.model ?? ''}
+        value={encodeModelChoice(current, resolved?.model ?? '')}
         onChange={(e) => onModel(e.target.value)}
         disabled={!session.folderId}
         className={selectClass}
         title="Model (applies to the whole preset)"
       >
-        {resolved?.model && !models.some((m) => m.id === resolved.model) && (
-          <option value={resolved.model}>{resolved.model}</option>
-        )}
-        {models.length === 0 && <option value="">No models</option>}
-        {models.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label || m.id}
-          </option>
+        {resolved?.model &&
+          !resolved.connection?.models.some((m) => m.id === resolved.model) && (
+            <option value={encodeModelChoice(current, resolved.model)}>
+              {resolved.model}
+            </option>
+          )}
+        {groups.length === 0 && <option value="">No models</option>}
+        {groups.map((c) => (
+          <optgroup key={c.id} label={c.name}>
+            {c.models.map((m) => (
+              <option key={m.id} value={encodeModelChoice(c.id, m.id)}>
+                {m.label || m.id}
+              </option>
+            ))}
+          </optgroup>
         ))}
       </select>
 

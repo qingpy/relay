@@ -1,10 +1,4 @@
-import {
-  db,
-  ensureDefaultConnection,
-  getAppConfig,
-  newId,
-  updateAppConfig,
-} from './db';
+import { db, ensureDefaultConnection, newId } from './db';
 import type {
   Connection,
   ConnectionType,
@@ -145,15 +139,9 @@ export async function createFolder(
   name = 'New preset',
   parentId: string | null = null,
 ): Promise<Folder> {
-  // Seed the preset with the default connection and its first model.
-  const [config, connections] = await Promise.all([
-    getAppConfig(),
-    listConnections(),
-  ]);
-  const conn =
-    (config.defaultConnectionId &&
-      connections.find((c) => c.id === config.defaultConnectionId)) ||
-    connections[0];
+  // Seed the preset with the first enabled connection and its first model.
+  const connections = await listConnections();
+  const conn = connections.find((c) => c.enabled !== false) ?? connections[0];
   const folder: Folder = {
     id: newId(),
     name,
@@ -205,7 +193,6 @@ export async function persistFolderOrder(
 
 const CONNECTION_TYPE_NAME: Record<ConnectionType, string> = {
   openai: 'OpenAI-compatible',
-  gemini: 'Gemini',
   vertex: 'Vertex AI',
 };
 
@@ -233,14 +220,11 @@ export async function createConnection(input: {
     baseUrl,
     apiKey: input.apiKey,
     models: seedModelsFor(input.type, baseUrl),
+    enabled: true,
     order: (last?.order ?? -1) + 1,
     createdAt: Date.now(),
   };
   await db.connections.add(conn);
-  const cfg = await getAppConfig();
-  if (!cfg.defaultConnectionId) {
-    await updateAppConfig({ defaultConnectionId: conn.id });
-  }
   return conn;
 }
 
@@ -260,11 +244,6 @@ export async function setConnectionModels(
 
 export async function deleteConnection(id: string): Promise<void> {
   await db.connections.delete(id);
-  const cfg = await getAppConfig();
-  if (cfg.defaultConnectionId === id) {
-    const next = await db.connections.orderBy('order').first();
-    await updateAppConfig({ defaultConnectionId: next?.id });
-  }
 }
 
 export async function persistConnectionOrder(

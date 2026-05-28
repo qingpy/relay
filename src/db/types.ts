@@ -5,8 +5,12 @@
  * offline and synced without a server assigning keys.
  */
 
-/** Wire protocol a connection speaks. OpenRouter/OpenAI/etc. are all `openai`. */
-export type ConnectionType = 'openai' | 'gemini' | 'vertex';
+/**
+ * Wire protocol a connection speaks. Nearly everything (OpenAI, OpenRouter,
+ * Groq, DeepSeek, local, even Gemini's OpenAI-compatible endpoint) is `openai`;
+ * `vertex` is the one incompatible upstream (Gemini body + service-account auth).
+ */
+export type ConnectionType = 'openai' | 'vertex';
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'divider';
 
@@ -77,6 +81,8 @@ export interface Connection {
   project?: string;
   /** Vertex region, e.g. `us-central1`. */
   region?: string;
+  /** When false, the connection's models are hidden from pickers. */
+  enabled?: boolean;
   order: number;
   createdAt: number;
 }
@@ -187,8 +193,6 @@ export interface WebDavConfig {
 export interface AppConfig {
   id: 'singleton';
   theme: 'light' | 'dark' | 'system';
-  /** Connection used for loose chats and as the default for new presets. */
-  defaultConnectionId?: string;
   /** Include the model's "thinking" in markdown export/download (default off). */
   exportIncludeThinking?: boolean;
   /** Auto-titling: which connection/model and the instruction prompt. */

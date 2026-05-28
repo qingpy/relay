@@ -46,6 +46,15 @@ export function ModelPicker({
     id.toLowerCase().includes(query.toLowerCase()),
   );
   const count = all.filter((id) => checked[id]).length;
+  const allFilteredChecked =
+    filtered.length > 0 && filtered.every((id) => checked[id]);
+
+  const toggleAll = () =>
+    setChecked((c) => {
+      const next = { ...c };
+      for (const id of filtered) next[id] = !allFilteredChecked;
+      return next;
+    });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,15 +67,25 @@ export function ModelPicker({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex items-center gap-2 rounded-md border border-input px-2.5">
-          <Search className="size-3.5 shrink-0 text-muted-foreground" />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Filter models…"
-            className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-2 rounded-md border border-input px-2.5">
+            <Search className="size-3.5 shrink-0 text-muted-foreground" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Filter models…"
+              className="h-9 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleAll}
+            disabled={filtered.length === 0}
+          >
+            {allFilteredChecked ? 'None' : 'All'}
+          </Button>
         </div>
 
         <div className="-mr-2 min-h-0 flex-1 overflow-y-auto pr-2">

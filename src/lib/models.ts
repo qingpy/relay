@@ -5,11 +5,10 @@ import type {
   SavedModel,
 } from '@/db/types';
 
-export type Flavor = 'openrouter' | 'openai' | 'gemini' | 'vertex';
+export type Flavor = 'openrouter' | 'openai' | 'vertex';
 
 /** Distinguish OpenRouter (web plugin, `reasoning.effort`) from plain OpenAI. */
 export function flavorOf(type: ConnectionType, baseUrl?: string): Flavor {
-  if (type === 'gemini') return 'gemini';
   if (type === 'vertex') return 'vertex';
   return baseUrl && /openrouter\.ai/i.test(baseUrl) ? 'openrouter' : 'openai';
 }
@@ -30,11 +29,9 @@ export function inferCapabilities(
       s,
     );
   const pdf =
-    type === 'gemini' || type === 'vertex' || /(claude|gemini)/.test(s)
-      ? vision
-      : false;
+    type === 'vertex' || /(claude|gemini)/.test(s) ? vision : false;
   const toolUse = !/(embed|whisper|tts|image|dall|moderation|rerank)/.test(s);
-  return { vision, pdf, reasoning, webSearch: type !== 'openai' ? true : false, toolUse };
+  return { vision, pdf, reasoning, webSearch: type !== 'openai', toolUse };
 }
 
 export function toSavedModel(id: string, type: ConnectionType): SavedModel {
@@ -52,7 +49,6 @@ export const SEED_MODELS: Record<Flavor, string[]> = {
     'deepseek/deepseek-chat',
   ],
   openai: ['gpt-4o-mini', 'gpt-4o', 'o3-mini', 'o1'],
-  gemini: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash'],
   vertex: ['gemini-2.0-flash', 'gemini-2.5-pro'],
 };
 
@@ -69,4 +65,26 @@ export function seedModelsFor(type: ConnectionType, baseUrl?: string): SavedMode
 /** Find a model in a connection's catalog (or synthesize one if missing). */
 export function findModel(conn: Connection, id: string): SavedModel {
   return conn.models.find((m) => m.id === id) ?? toSavedModel(id, conn.type);
+}
+
+const CHOICE_SEP = '␟';
+
+/** Encode a (connection, model) pair for a single <select> value. */
+export function encodeModelChoice(connectionId: string, model: string): string {
+  return `${connectionId}${CHOICE_SEP}${model}`;
+}
+
+export function decodeModelChoice(value: string): {
+  connectionId: string;
+  model: string;
+} {
+  const i = value.indexOf(CHOICE_SEP);
+  return i < 0
+    ? { connectionId: '', model: value }
+    : { connectionId: value.slice(0, i), model: value.slice(i + 1) };
+}
+
+/** Enabled connections that have at least one saved model. */
+export function modelGroups(connections: Connection[]): Connection[] {
+  return connections.filter((c) => c.enabled !== false && c.models.length > 0);
 }

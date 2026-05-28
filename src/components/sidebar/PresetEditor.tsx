@@ -15,6 +15,7 @@ import {
   updateFolderConfig,
 } from '@/db/repo';
 import type { Folder, ModelSettings } from '@/db/types';
+import { decodeModelChoice, encodeModelChoice, modelGroups } from '@/lib/models';
 
 const SECTION = 'flex flex-col gap-1.5';
 const ROW = 'flex items-center justify-between text-sm';
@@ -56,6 +57,7 @@ function Form({ folder }: { folder: Folder }) {
   const [systemPrompt, setSystemPrompt] = useState(folder.systemPrompt ?? '');
 
   const conn = connections.find((c) => c.id === connectionId);
+  const groups = modelGroups(connections);
   const temperature = settings.temperature ?? 1;
   const topP = settings.topP ?? 1;
 
@@ -79,45 +81,36 @@ function Form({ folder }: { folder: Folder }) {
       </div>
 
       <div className={SECTION}>
-        <label className={labelClass}>Connection</label>
+        <label className={labelClass}>Model</label>
         <select
-          value={connectionId}
+          value={encodeModelChoice(connectionId, model)}
           onChange={(e) => {
-            const id = e.target.value;
-            const c = connections.find((x) => x.id === id);
-            const m = c?.models[0]?.id ?? '';
-            setConnectionId(id);
-            setModel(m);
-            void updateFolderConfig(folder.id, { connectionId: id || null, model: m });
+            const next = decodeModelChoice(e.target.value);
+            setConnectionId(next.connectionId);
+            setModel(next.model);
+            void updateFolderConfig(folder.id, {
+              connectionId: next.connectionId || null,
+              model: next.model,
+            });
           }}
           className="h-9 rounded-md border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="">Default connection</option>
-          {connections.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+          {model && !conn?.models.some((m) => m.id === model) && (
+            <option value={encodeModelChoice(connectionId, model)}>
+              {model} (current)
             </option>
+          )}
+          {groups.length === 0 && <option value="">No models — add a connection</option>}
+          {groups.map((c) => (
+            <optgroup key={c.id} label={c.name}>
+              {c.models.map((m) => (
+                <option key={m.id} value={encodeModelChoice(c.id, m.id)}>
+                  {m.label || m.id}
+                </option>
+              ))}
+            </optgroup>
           ))}
         </select>
-      </div>
-
-      <div className={SECTION}>
-        <label className={labelClass}>Model</label>
-        <Input
-          list={`preset-models-${folder.id}`}
-          value={model}
-          spellCheck={false}
-          placeholder="model id"
-          onChange={(e) => {
-            setModel(e.target.value);
-            void updateFolderConfig(folder.id, { model: e.target.value });
-          }}
-        />
-        <datalist id={`preset-models-${folder.id}`}>
-          {(conn?.models ?? []).map((m) => (
-            <option key={m.id} value={m.id} />
-          ))}
-        </datalist>
       </div>
 
       <div className={SECTION}>
@@ -167,7 +160,7 @@ function Form({ folder }: { folder: Folder }) {
         />
       </div>
 
-      {conn?.type === 'gemini' || conn?.type === 'vertex' ? (
+      {conn?.type === 'vertex' ? (
         <div className={SECTION}>
           <label className={labelClass}>Thinking budget (tokens)</label>
           <Input

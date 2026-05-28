@@ -41,31 +41,6 @@ models.post('/openai', async (c) => {
   return c.json({ models: ids });
 });
 
-models.post('/gemini', async (c) => {
-  const key = c.req.header('x-api-key') || process.env.GEMINI_KEY;
-  if (!key) return errorResponse('No API key provided.', 401);
-
-  let res: Response;
-  try {
-    res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`,
-    );
-  } catch (err) {
-    return errorResponse(`Model list failed: ${String(err)}`, 502);
-  }
-  if (!res.ok) {
-    return errorResponse(await res.text().catch(() => res.statusText), res.status);
-  }
-  const json = (await res.json().catch(() => null)) as {
-    models?: { name?: string; supportedGenerationMethods?: string[] }[];
-  } | null;
-  const ids = (json?.models ?? [])
-    .filter((m) => m.supportedGenerationMethods?.includes('generateContent'))
-    .map((m) => (m.name ?? '').replace(/^models\//, ''))
-    .filter((id) => !!id);
-  return c.json({ models: ids });
-});
-
 models.post('/vertex', (c) =>
   c.json(
     { error: 'Vertex model listing is not supported; add models manually.' },

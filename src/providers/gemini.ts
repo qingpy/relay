@@ -1,10 +1,4 @@
-import type {
-  BuildInput,
-  ChatMessage,
-  Delta,
-  Provider,
-  ProxyRequest,
-} from './types';
+import type { BuildInput, ChatMessage, Delta } from './types';
 
 /** Build Gemini content parts: text (+ inlined text files) then inlineData
  *  parts for images/PDFs. */
@@ -134,25 +128,4 @@ export function parseGeminiChunk(data: string): Delta[] {
   }
 
   return deltas;
-}
-
-/** Gemini AI Studio (`generativelanguage.googleapis.com`, key auth). */
-export class GeminiProvider implements Provider {
-  readonly type = 'gemini' as const;
-
-  buildRequest({ model, messages, settings, apiKey }: BuildInput): ProxyRequest {
-    const headers: Record<string, string> = {
-      'content-type': 'application/json',
-    };
-    if (apiKey) headers['x-api-key'] = apiKey;
-    return {
-      url: '/api/chat/gemini',
-      headers,
-      body: { model, payload: geminiPayload({ messages, settings }) },
-    };
-  }
-
-  parseStreamChunk(data: string): Delta[] {
-    return parseGeminiChunk(data);
-  }
 }

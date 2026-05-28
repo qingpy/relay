@@ -73,8 +73,24 @@ class RelayDB extends Dexie {
     this.version(4).upgrade(async (tx) => {
       await migrateToPresets(tx);
     });
+    // v5: collapse connection types to openai|vertex. Convert Gemini AI Studio
+    // connections to the OpenAI-compatible Google endpoint.
+    this.version(5).upgrade(async (tx) => {
+      const conns = (await tx.table('connections').toArray()) as Connection[];
+      for (const c of conns) {
+        if ((c.type as string) === 'gemini') {
+          await tx.table('connections').update(c.id, {
+            type: 'openai',
+            baseUrl: c.baseUrl || GOOGLE_OPENAI_BASE_URL,
+          });
+        }
+      }
+    });
   }
 }
+
+const GOOGLE_OPENAI_BASE_URL =
+  'https://generativelanguage.googleapis.com/v1beta/openai';
 
 const PROVIDER_META: Record<
   string,
@@ -82,8 +98,7 @@ const PROVIDER_META: Record<
 > = {
   openrouter: { name: 'OpenRouter', type: 'openai', baseUrl: DEFAULT_BASE_URL.openrouter },
   openai: { name: 'OpenAI', type: 'openai', baseUrl: DEFAULT_BASE_URL.openai },
-  gemini: { name: 'Gemini', type: 'gemini' },
-  vertex: { name: 'Vertex AI', type: 'vertex' },
+  gemini: { name: 'Gemini', type: 'openai', baseUrl: GOOGLE_OPENAI_BASE_URL },
 };
 
 /** v3 upgrade: build connections from old provider keys; seed preset/chat config. */
@@ -95,19 +110,19 @@ async function migrateToConnections(tx: Transaction): Promise<void> {
   };
   const keys = cfg.providerKeys ?? {};
 
-  // Create a connection for every provider that had a key, plus the default
-  // provider even if unkeyed; if none, seed a blank OpenRouter connection.
+  // Create a connection for every provider that had a key, plus the previous
+  // default provider even if unkeyed; if none, seed a blank OpenRouter one.
   const wanted = new Set<string>();
   for (const [id, k] of Object.entries(keys)) if (k?.apiKey) wanted.add(id);
   if (cfg.defaultProvider) wanted.add(cfg.defaultProvider);
   if (wanted.size === 0) wanted.add('openrouter');
 
   let order = 0;
-  let defaultConnectionId: string | undefined;
+  let seedConnectionId: string | undefined;
   const providers = Object.keys(PROVIDER_META).filter((p) => wanted.has(p));
   for (const provider of providers) {
     const meta = PROVIDER_META[provider];
-    if (!meta || meta.type === 'vertex') continue; // vertex needs server creds
+    if (!meta) continue;
     const id = crypto.randomUUID();
     const baseUrl = keys[provider]?.baseUrl || meta.baseUrl;
     await tx.table('connections').add({
@@ -117,27 +132,26 @@ async function migrateToConnections(tx: Transaction): Promise<void> {
       baseUrl,
       apiKey: keys[provider]?.apiKey,
       models: seedModelsFor(meta.type, baseUrl),
+      enabled: true,
       order: order++,
       createdAt: Date.now(),
     });
-    if (provider === (cfg.defaultProvider ?? 'openrouter') || !defaultConnectionId) {
-      defaultConnectionId = id;
+    if (provider === (cfg.defaultProvider ?? 'openrouter') || !seedConnectionId) {
+      seedConnectionId = id;
     }
   }
 
-  await tx.table('appConfig').update('singleton', { defaultConnectionId });
-
-  // Seed each preset (folder) with the default connection + a sensible model.
-  const def = defaultConnectionId
-    ? ((await tx.table('connections').get(defaultConnectionId)) as Connection | undefined)
+  // Seed each preset (folder) with a connection + a sensible model.
+  const seed = seedConnectionId
+    ? ((await tx.table('connections').get(seedConnectionId)) as Connection | undefined)
     : undefined;
-  const defModel = cfg.defaultModel || def?.models[0]?.id || '';
+  const seedModel = cfg.defaultModel || seed?.models[0]?.id || '';
   const folders = (await tx.table('folders').toArray()) as Folder[];
   for (const f of folders) {
     if (f.connectionId === undefined) {
       await tx.table('folders').update(f.id, {
-        connectionId: defaultConnectionId ?? null,
-        model: defModel,
+        connectionId: seedConnectionId ?? null,
+        model: seedModel,
         settings: {},
       });
     }
@@ -166,14 +180,8 @@ async function migrateToPresets(tx: Transaction): Promise<void> {
   const folders = (await tx.table('folders').toArray()) as Folder[];
   let presetId = folders[0]?.id;
   if (!presetId) {
-    const cfg = (await tx.table('appConfig').get('singleton')) as
-      | { defaultConnectionId?: string }
-      | undefined;
-    const conn = cfg?.defaultConnectionId
-      ? ((await tx.table('connections').get(cfg.defaultConnectionId)) as
-          | Connection
-          | undefined)
-      : undefined;
+    const conns = (await tx.table('connections').toArray()) as Connection[];
+    const conn = conns.sort((a, b) => a.order - b.order)[0];
     presetId = crypto.randomUUID();
     await tx.table('folders').add({
       id: presetId,
@@ -224,28 +232,20 @@ export async function updateAppConfig(
   return next;
 }
 
-/** Ensure at least one connection exists; returns the default connection id. */
-export async function ensureDefaultConnection(): Promise<string | undefined> {
+/** Ensure at least one connection exists so chats have a model to resolve to. */
+export async function ensureDefaultConnection(): Promise<void> {
   const count = await db.connections.count();
-  if (count === 0) {
-    const id = crypto.randomUUID();
-    await db.connections.add({
-      id,
-      name: 'OpenRouter',
-      type: 'openai',
-      baseUrl: DEFAULT_BASE_URL.openrouter,
-      models: seedModelsFor('openai', DEFAULT_BASE_URL.openrouter),
-      order: 0,
-      createdAt: Date.now(),
-    });
-    await updateAppConfig({ defaultConnectionId: id });
-    return id;
-  }
-  const cfg = await getAppConfig();
-  if (cfg.defaultConnectionId) return cfg.defaultConnectionId;
-  const first = await db.connections.orderBy('order').first();
-  if (first) await updateAppConfig({ defaultConnectionId: first.id });
-  return first?.id;
+  if (count > 0) return;
+  await db.connections.add({
+    id: crypto.randomUUID(),
+    name: 'OpenRouter',
+    type: 'openai',
+    baseUrl: DEFAULT_BASE_URL.openrouter,
+    models: seedModelsFor('openai', DEFAULT_BASE_URL.openrouter),
+    enabled: true,
+    order: 0,
+    createdAt: Date.now(),
+  });
 }
 
 export function newId(): string {
