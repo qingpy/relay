@@ -8,16 +8,26 @@ import {
   updateMessage,
   updateSession,
 } from '@/db/repo';
-import type { Usage } from '@/db/types';
+import type { Citation, ToolCall, Usage } from '@/db/types';
 import { deriveTitle, toChatMessages } from '@/lib/conversation';
 import { readSSE } from '@/lib/sse';
 import { getProvider } from '@/providers/registry';
 import { NEW_SESSION_TITLE } from '@/db/repo';
 
-interface StreamBuffer {
+export interface StreamBuffer {
   text: string;
   reasoning: string;
+  toolCalls: ToolCall[];
+  citations: Citation[];
+  reasoningMs?: number;
 }
+
+const EMPTY_BUFFER: StreamBuffer = {
+  text: '',
+  reasoning: '',
+  toolCalls: [],
+  citations: [],
+};
 
 interface ChatState {
   /** In-progress assistant output, keyed by assistant message id. */
@@ -79,17 +89,22 @@ export const useChatStore = create<ChatState>((set, get) => {
       const assistant = await addMessage({ sessionId, role: 'assistant' });
       const messageId = assistant.id;
       set((s) => ({
-        streams: { ...s.streams, [messageId]: { text: '', reasoning: '' } },
+        streams: { ...s.streams, [messageId]: EMPTY_BUFFER },
         activeBySession: { ...s.activeBySession, [sessionId]: messageId },
       }));
 
       const controller = new AbortController();
       controllers.set(sessionId, controller);
 
-      let buf: StreamBuffer = { text: '', reasoning: '' };
+      let buf: StreamBuffer = EMPTY_BUFFER;
       let usage: Usage | undefined;
       let lastPersist = 0;
       let errored: string | null = null;
+
+      // Tool-call argument fragments, accumulated by index (OpenAI streams them
+      // piecemeal); reasoning start time for the "thought for Ns" readout.
+      const toolArgs: string[] = [];
+      let reasoningStart = 0;
 
       // Coalesce visual updates to one per frame: re-parsing markdown on every
       // token is expensive and makes the stream stutter. Tokens still arrive at
@@ -109,6 +124,9 @@ export const useChatStore = create<ChatState>((set, get) => {
         await updateMessage(messageId, {
           content: buf.text ? [textPart(buf.text)] : [],
           ...(buf.reasoning ? { reasoning: buf.reasoning } : {}),
+          ...(buf.reasoningMs != null ? { reasoningMs: buf.reasoningMs } : {}),
+          ...(buf.toolCalls.length ? { toolCalls: buf.toolCalls } : {}),
+          ...(buf.citations.length ? { citations: buf.citations } : {}),
           ...(final && usage ? { usage } : {}),
         });
       };
@@ -140,10 +158,39 @@ export const useChatStore = create<ChatState>((set, get) => {
 
         for await (const data of readSSE(res.body, controller.signal)) {
           for (const delta of provider.parseStreamChunk(data)) {
-            if (delta.kind === 'text') buf = { ...buf, text: buf.text + delta.text };
-            else if (delta.kind === 'reasoning')
+            if (delta.kind === 'text') {
+              if (reasoningStart && buf.reasoningMs == null) {
+                buf = { ...buf, reasoningMs: Date.now() - reasoningStart };
+              }
+              buf = { ...buf, text: buf.text + delta.text };
+            } else if (delta.kind === 'reasoning') {
+              if (!reasoningStart) reasoningStart = Date.now();
               buf = { ...buf, reasoning: buf.reasoning + delta.text };
-            else if (delta.kind === 'usage') usage = delta.usage;
+            } else if (delta.kind === 'toolCallDelta') {
+              const calls = buf.toolCalls.slice();
+              const cur = calls[delta.index] ?? {
+                id: delta.id ?? `tool-${delta.index}`,
+                name: '',
+                args: '',
+              };
+              toolArgs[delta.index] =
+                (toolArgs[delta.index] ?? '') + (delta.argsDelta ?? '');
+              calls[delta.index] = {
+                ...cur,
+                ...(delta.id ? { id: delta.id } : {}),
+                name: cur.name + (delta.name ?? ''),
+                args: toolArgs[delta.index],
+                pending: true,
+              };
+              buf = { ...buf, toolCalls: calls };
+            } else if (delta.kind === 'toolCall') {
+              buf = { ...buf, toolCalls: [...buf.toolCalls, delta.call] };
+            } else if (delta.kind === 'citation') {
+              const seen = new Set(buf.citations.map((c) => c.url));
+              const fresh = delta.citations.filter((c) => !seen.has(c.url));
+              if (fresh.length)
+                buf = { ...buf, citations: [...buf.citations, ...fresh] };
+            } else if (delta.kind === 'usage') usage = delta.usage;
             else if (delta.kind === 'error') errored = delta.message;
           }
           scheduleFlush();
@@ -159,6 +206,12 @@ export const useChatStore = create<ChatState>((set, get) => {
           errored = err instanceof Error ? err.message : String(err);
         }
       } finally {
+        if (buf.toolCalls.some((c) => c.pending)) {
+          buf = {
+            ...buf,
+            toolCalls: buf.toolCalls.map((c) => ({ ...c, pending: false })),
+          };
+        }
         await persist(true);
         if (errored) await updateMessage(messageId, { error: errored });
         controllers.delete(sessionId);

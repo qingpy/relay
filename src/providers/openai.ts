@@ -7,9 +7,31 @@ import type {
   ProxyRequest,
 } from './types';
 
+interface OpenAIAnnotation {
+  type?: string;
+  url_citation?: {
+    url?: string;
+    title?: string;
+    content?: string;
+    start_index?: number;
+    end_index?: number;
+  };
+}
+
+interface OpenAIToolCallDelta {
+  index: number;
+  id?: string;
+  function?: { name?: string; arguments?: string };
+}
+
 interface OpenAIChunk {
   choices?: {
-    delta?: { content?: string | null; reasoning?: string | null };
+    delta?: {
+      content?: string | null;
+      reasoning?: string | null;
+      tool_calls?: OpenAIToolCallDelta[];
+      annotations?: OpenAIAnnotation[];
+    };
     finish_reason?: string | null;
   }[];
   usage?: {
@@ -100,6 +122,27 @@ export class OpenAICompatProvider implements Provider {
     if (reasoning) deltas.push({ kind: 'reasoning', text: reasoning });
     const content = choice?.delta?.content;
     if (content) deltas.push({ kind: 'text', text: content });
+
+    for (const tc of choice?.delta?.tool_calls ?? []) {
+      deltas.push({
+        kind: 'toolCallDelta',
+        index: tc.index,
+        id: tc.id,
+        name: tc.function?.name,
+        argsDelta: tc.function?.arguments,
+      });
+    }
+
+    const citations = (choice?.delta?.annotations ?? [])
+      .filter((a) => a.type === 'url_citation' && a.url_citation?.url)
+      .map((a) => ({
+        url: a.url_citation!.url!,
+        title: a.url_citation!.title,
+        snippet: a.url_citation!.content,
+        start: a.url_citation!.start_index,
+        end: a.url_citation!.end_index,
+      }));
+    if (citations.length) deltas.push({ kind: 'citation', citations });
 
     if (chunk.usage) {
       deltas.push({

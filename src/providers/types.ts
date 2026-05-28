@@ -1,4 +1,10 @@
-import type { ProviderId, SessionSettings, Usage } from '@/db/types';
+import type {
+  Citation,
+  ProviderId,
+  SessionSettings,
+  ToolCall,
+  Usage,
+} from '@/db/types';
 
 /** A message as sent to a provider. Content is plain text in M1; multimodal
  *  parts (images/files) are layered in later. */
@@ -19,6 +25,11 @@ export interface Capabilities {
 export type Delta =
   | { kind: 'text'; text: string }
   | { kind: 'reasoning'; text: string }
+  /** OpenAI-style fragmented tool call (arguments stream in pieces). */
+  | { kind: 'toolCallDelta'; index: number; id?: string; name?: string; argsDelta?: string }
+  /** A complete tool call delivered in one piece (Gemini functionCall). */
+  | { kind: 'toolCall'; call: ToolCall }
+  | { kind: 'citation'; citations: Citation[] }
   | { kind: 'usage'; usage: Usage }
   | { kind: 'error'; message: string };
 
