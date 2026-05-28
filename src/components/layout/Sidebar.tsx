@@ -1,14 +1,17 @@
-import { FolderPlus, PanelLeftClose, Plus, Settings } from 'lucide-react';
+import { FolderPlus, ListChecks, PanelLeftClose, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createFolder } from '@/db/repo';
 import { startNewSession } from '@/lib/session-actions';
+import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
+import { ChatSelectionBar } from '@/components/sidebar/ChatSelectionBar';
 import { SessionTree } from '@/components/sidebar/SessionTree';
 import { ThemeToggle } from './ThemeToggle';
 
 export function Sidebar() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
-  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  const chatSelectMode = useUiStore((s) => s.chatSelectMode);
+  const toggleChatSelectMode = useUiStore((s) => s.toggleChatSelectMode);
 
   return (
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
@@ -48,23 +51,30 @@ export function Sidebar() {
         >
           <FolderPlus />
         </Button>
+        <Button
+          variant="secondary"
+          size="icon"
+          onClick={toggleChatSelectMode}
+          title="Select chats"
+          aria-label="Select chats"
+          aria-pressed={chatSelectMode}
+          className={cn(
+            chatSelectMode &&
+              'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+          )}
+        >
+          <ListChecks />
+        </Button>
       </div>
+
+      {chatSelectMode && <ChatSelectionBar />}
 
       <nav className="flex-1 overflow-y-auto px-2 py-1">
         <SessionTree />
       </nav>
 
-      <div className="flex items-center justify-between border-t border-sidebar-border px-3 py-2">
+      <div className="flex items-center border-t border-sidebar-border px-3 py-2">
         <ThemeToggle />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => setSettingsOpen(true)}
-          title="Settings"
-          aria-label="Settings"
-        >
-          <Settings />
-        </Button>
       </div>
     </aside>
   );

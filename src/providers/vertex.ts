@@ -16,6 +16,8 @@ export class VertexProvider implements Provider {
     settings,
     project,
     region,
+    clientEmail,
+    privateKey,
   }: BuildInput): ProxyRequest {
     return {
       url: '/api/chat/vertex',
@@ -23,6 +25,8 @@ export class VertexProvider implements Provider {
       body: {
         project,
         region: region || 'us-central1',
+        clientEmail,
+        privateKey,
         model,
         payload: geminiPayload({ messages, settings }),
       },

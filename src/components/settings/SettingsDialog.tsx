@@ -12,7 +12,7 @@ import { useUiStore } from '@/store/ui';
 import { AutoTitleSettings } from './AutoTitleSettings';
 import { BackupSettings } from './BackupSettings';
 import { ConnectionsManager } from './ConnectionsManager';
-import { PromptsManager } from './PromptsManager';
+import { PromptsDialog } from './PromptsDialog';
 
 const labelClass =
   'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
@@ -35,7 +35,7 @@ export function SettingsDialog() {
           <ConnectionsManager />
           <AutoTitleSettings />
           <ExportSettings />
-          <PromptsManager />
+          <PromptsDialog />
           <BackupSettings />
         </div>
       </DialogContent>

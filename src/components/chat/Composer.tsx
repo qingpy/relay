@@ -4,6 +4,8 @@ import {
   ArrowUp,
   FileText,
   Globe,
+  Maximize2,
+  Minimize2,
   Paperclip,
   Scissors,
   Square,
@@ -39,6 +41,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   const [dragOver, setDragOver] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -70,9 +73,14 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    if (expanded) {
+      // Fixed tall editor (~half the viewport), regardless of content length.
+      el.style.height = `${Math.round(window.innerHeight * 0.5)}px`;
+      return;
+    }
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
-  }, [value]);
+  }, [value, expanded]);
 
   const addFiles = (list: FileList | File[]) => {
     const incoming = [...list].filter((f) => isAllowed(f.type, f.name, caps));
@@ -199,7 +207,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder="Message Relay…  (/ for prompts)"
-          className="block max-h-60 min-h-9 w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+          className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
         />
 
         <div className="mt-1 flex items-center gap-1">
@@ -221,6 +229,15 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
             title="Attach files"
           >
             <Paperclip />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => setExpanded((v) => !v)}
+            title={expanded ? 'Shrink input' : 'Expand input'}
+            aria-pressed={expanded}
+          >
+            {expanded ? <Minimize2 /> : <Maximize2 />}
           </Button>
           {sessionId && (
             <>

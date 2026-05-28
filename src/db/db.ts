@@ -241,7 +241,7 @@ export async function ensureDefaultConnection(): Promise<void> {
     name: 'OpenRouter',
     type: 'openai',
     baseUrl: DEFAULT_BASE_URL.openrouter,
-    models: seedModelsFor('openai', DEFAULT_BASE_URL.openrouter),
+    models: [],
     enabled: true,
     order: 0,
     createdAt: Date.now(),

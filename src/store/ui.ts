@@ -19,6 +19,10 @@ interface UiState {
   activeSessionId: string | null;
   setActiveSession: (id: string | null) => void;
 
+  /** Preset that new top-level chats are created in. */
+  activePresetId: string | null;
+  setActivePreset: (id: string | null) => void;
+
   /** Multi-select mode for assistant messages (bulk copy/export/delete). */
   selectionMode: boolean;
   selected: Record<string, true>;
@@ -26,6 +30,14 @@ interface UiState {
   setMessageSelected: (id: string, on: boolean) => void;
   setSelection: (ids: string[]) => void;
   clearSelection: () => void;
+
+  /** Multi-select mode for sidebar chats (bulk delete / move to preset). */
+  chatSelectMode: boolean;
+  selectedChats: Record<string, true>;
+  toggleChatSelectMode: () => void;
+  setChatSelected: (id: string, on: boolean) => void;
+  setChatSelection: (ids: string[]) => void;
+  clearChatSelection: () => void;
 
   sidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -46,6 +58,9 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveSession: (id) =>
     set({ activeSessionId: id, selectionMode: false, selected: {} }),
 
+  activePresetId: null,
+  setActivePreset: (id) => set({ activePresetId: id }),
+
   selectionMode: false,
   selected: {},
   toggleSelectionMode: () =>
@@ -60,6 +75,21 @@ export const useUiStore = create<UiState>((set) => ({
   setSelection: (ids) =>
     set({ selected: Object.fromEntries(ids.map((id) => [id, true])) }),
   clearSelection: () => set({ selected: {} }),
+
+  chatSelectMode: false,
+  selectedChats: {},
+  toggleChatSelectMode: () =>
+    set((s) => ({ chatSelectMode: !s.chatSelectMode, selectedChats: {} })),
+  setChatSelected: (id, on) =>
+    set((s) => {
+      const selectedChats = { ...s.selectedChats };
+      if (on) selectedChats[id] = true;
+      else delete selectedChats[id];
+      return { selectedChats };
+    }),
+  setChatSelection: (ids) =>
+    set({ selectedChats: Object.fromEntries(ids.map((id) => [id, true])) }),
+  clearChatSelection: () => set({ selectedChats: {} }),
 
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),

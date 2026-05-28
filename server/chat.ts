@@ -80,18 +80,29 @@ chat.post('/openai', async (c) => {
 });
 
 chat.post('/vertex', async (c) => {
-  const { project, region, model, payload } = await c.req
-    .json<{ project?: string; region?: string; model?: string; payload?: unknown }>()
-    .catch(() => ({ project: undefined, region: undefined, model: undefined, payload: undefined }));
+  const { project, region, model, payload, clientEmail, privateKey } = await c.req
+    .json<{
+      project?: string;
+      region?: string;
+      model?: string;
+      payload?: unknown;
+      clientEmail?: string;
+      privateKey?: string;
+    }>()
+    .catch(() => ({}) as Record<string, undefined>);
 
   if (!project || !region || !model || !payload) {
     return errorResponse('Missing project, region, model, or payload.', 400);
   }
 
-  const sa = loadServiceAccount();
+  // Prefer the connection's service-account creds; fall back to a server JSON.
+  const sa =
+    clientEmail && privateKey
+      ? { client_email: clientEmail, private_key: privateKey }
+      : loadServiceAccount();
   if (!sa) {
     return errorResponse(
-      'Vertex is not configured: set GOOGLE_VERTEX_CREDENTIALS (the service-account JSON) on the server.',
+      'Vertex is not configured: add the service-account client_email + private_key to the connection (or set GOOGLE_VERTEX_CREDENTIALS on the server).',
       501,
     );
   }
@@ -103,8 +114,13 @@ chat.post('/vertex', async (c) => {
     return errorResponse(`Vertex auth failed: ${String(err)}`, 502);
   }
 
+  // The `global` location uses the un-prefixed host; regions are prefixed.
+  const host =
+    region === 'global'
+      ? 'aiplatform.googleapis.com'
+      : `${region}-aiplatform.googleapis.com`;
   const endpoint =
-    `https://${region}-aiplatform.googleapis.com/v1/projects/${project}` +
+    `https://${host}/v1/projects/${project}` +
     `/locations/${region}/publishers/google/models/` +
     `${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
 

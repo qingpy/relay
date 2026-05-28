@@ -54,6 +54,8 @@ export async function maybeAutoTitle(sessionId: string): Promise<void> {
       baseUrl: connection.baseUrl,
       project: connection.project,
       region: connection.region,
+      clientEmail: connection.clientEmail,
+      privateKey: connection.privateKey,
     });
     const res = await fetch(req.url, {
       method: 'POST',

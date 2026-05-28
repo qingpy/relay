@@ -4,19 +4,21 @@ import { useUiStore } from '@/store/ui';
 
 /**
  * Create a chat and make it active. Chats always live in a preset: an explicit
- * one when given, else the active chat's preset, else the default preset.
+ * one when given, else the active preset, else the active chat's preset, else
+ * the default preset.
  */
 export async function startNewSession(
   folderId: string | null = null,
 ): Promise<Session> {
-  let target = folderId;
-  if (!target) {
-    const activeId = useUiStore.getState().activeSessionId;
-    if (activeId) target = (await getSession(activeId))?.folderId ?? null;
+  const ui = useUiStore.getState();
+  let target = folderId ?? ui.activePresetId;
+  if (!target && ui.activeSessionId) {
+    target = (await getSession(ui.activeSessionId))?.folderId ?? null;
   }
   if (!target) target = await ensureDefaultPreset();
 
   const session = await createSession({ folderId: target });
-  useUiStore.getState().setActiveSession(session.id);
+  ui.setActivePreset(target);
+  ui.setActiveSession(session.id);
   return session;
 }

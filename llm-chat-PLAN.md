@@ -274,6 +274,31 @@ Resolved:
   toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
   service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
   **Auto-title** uses a configurable connection/model + prompt.
+- **Round 8 tweaks** (user request, 2026-05-28): in sidebar select mode there's no global
+  "select all"; clicking a **preset** toggles selection of all its chats (preset row shows a
+  check/partial box). The combined settings dialog no longer has a **Name** field (rename only via
+  the sidebar's inline Rename), and the sidebar no longer repeats **Preset settings** (it lives in
+  the chat header gear).
+- **Round 7 tweaks** (user request, 2026-05-28): clicking a **preset** activates it and jumps to its
+  top chat (chevron still toggles collapse); the top-level **New chat** targets the **active preset**.
+  Preset settings moved into the chat header's gear, **combined** with the chat's own system prompt
+  (one dialog). Removed the redundant per-preset "New chat" menu item and the sidebar's bottom
+  Settings button (the header Settings remains).
+- **Round 6 tweaks** (user request, 2026-05-28): sidebar **chat multi-select** (toggle in the sidebar
+  header) with select/deselect-all and bulk **delete** / **move to preset**. The Connections **Test**
+  lets you pick which saved model to test.
+- **Round 5 tweaks** (user request, 2026-05-28): Vertex `global` location uses host
+  `aiplatform.googleapis.com` (regions stay `{region}-aiplatform…`). New connections start with **no
+  models** (detect/add to populate). A chat can be **moved between presets** from its sidebar menu
+  ("Move to preset"). The Connections page has a **Test** button that sends a tiny message via the
+  first model and reports ok+latency or the error.
+- **Round 4 tweaks** (user request, 2026-05-28): the OpenAI-style connection type is labelled
+  **"Custom"** (it's a flexible base-URL/key upstream); **Vertex** creds now live on the connection
+  (project, region, client_email, private_key — or upload the service-account JSON to parse them) and
+  are sent to the proxy to mint the token (server `GOOGLE_VERTEX_CREDENTIALS` remains a fallback). The
+  composer has an **expand button** (textarea grows to ~half the viewport). **Quick prompts** moved to
+  a dedicated master-detail dialog (scrollable list + large editor) for many/long prompts. The chat
+  header no longer has a **preset selector** — move a chat between presets in the sidebar.
 - **Backup & restore** (user request, 2026-05-28): a full DB dump (config, chats/history,
   connections incl. keys, prompts, attachments as base64) to a portable JSON. **Export/import** a
   file client-side; **back up to the server's local disk** (`POST /api/backup`, listed/restored/

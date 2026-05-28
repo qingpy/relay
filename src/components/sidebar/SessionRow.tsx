@@ -1,15 +1,25 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Copy, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Check, Copy, FolderInput, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { deleteSession, duplicateSession, renameSession } from '@/db/repo';
+import {
+  deleteSession,
+  duplicateSession,
+  listFolders,
+  moveSessionToFolder,
+  renameSession,
+} from '@/db/repo';
 import type { Session } from '@/db/types';
 import { formatDateTime, formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -25,7 +35,13 @@ export function SessionRow({
 }) {
   const activeId = useUiStore((s) => s.activeSessionId);
   const setActive = useUiStore((s) => s.setActiveSession);
+  const setActivePreset = useUiStore((s) => s.setActivePreset);
+  const folders = useLiveQuery(() => listFolders(), [], []);
   const [editing, setEditing] = useState(false);
+
+  const selecting = useUiStore((s) => s.chatSelectMode);
+  const checked = useUiStore((s) => !!s.selectedChats[session.id]);
+  const setChatSelected = useUiStore((s) => s.setChatSelected);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `S:${session.id}` });
@@ -49,27 +65,48 @@ export function SessionRow({
     if (copy) setActive(copy.id);
   };
 
+  const onRowClick = () => {
+    if (editing) return;
+    if (selecting) {
+      setChatSelected(session.id, !checked);
+    } else {
+      setActivePreset(session.folderId);
+      setActive(session.id);
+    }
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
+      {...(selecting ? {} : attributes)}
+      {...(selecting ? {} : listeners)}
       role="button"
       tabIndex={0}
-      onClick={() => !editing && setActive(session.id)}
-      onDoubleClick={() => setEditing(true)}
-      onKeyDown={(e) => e.key === 'Enter' && !editing && setActive(session.id)}
+      onClick={onRowClick}
+      onDoubleClick={() => !selecting && setEditing(true)}
+      onKeyDown={(e) => e.key === 'Enter' && onRowClick()}
       className={cn(
         'group flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none transition-colors',
         nested ? 'pl-7' : 'pl-2',
         isDragging && 'opacity-50',
-        isActive
+        (selecting ? checked : isActive)
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
       )}
     >
-      <MessageSquare className="size-3.5 shrink-0 opacity-70" />
+      {selecting ? (
+        <span
+          className={cn(
+            'flex size-3.5 shrink-0 items-center justify-center rounded border',
+            checked ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+          )}
+        >
+          {checked && <Check className="size-2.5" />}
+        </span>
+      ) : (
+        <MessageSquare className="size-3.5 shrink-0 opacity-70" />
+      )}
       {editing ? (
         <InlineEdit
           value={session.title}
@@ -83,7 +120,7 @@ export function SessionRow({
         <span className="min-w-0 flex-1 truncate">{session.title}</span>
       )}
 
-      {!editing && (
+      {!editing && !selecting && (
         <div className="relative ml-1 flex min-w-[2.75rem] shrink-0 items-center justify-end">
           <time
             dateTime={new Date(session.updatedAt).toISOString()}
@@ -115,6 +152,28 @@ export function SessionRow({
                 <Copy />
                 Duplicate
               </DropdownMenuItem>
+              {folders.length > 1 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <FolderInput />
+                    Move to preset
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {folders.map((f) => (
+                      <DropdownMenuItem
+                        key={f.id}
+                        disabled={f.id === session.folderId}
+                        onSelect={() =>
+                          void moveSessionToFolder(session.id, f.id)
+                        }
+                      >
+                        {f.id === session.folderId ? <Check /> : <span className="size-4" />}
+                        <span className="min-w-0 truncate">{f.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
               <DropdownMenuItem destructive onSelect={() => void onDelete()}>
                 <Trash2 />
                 Delete

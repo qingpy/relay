@@ -35,13 +35,16 @@ function b64url(input: Buffer | string): string {
     .replace(/=+$/, '');
 }
 
-let cached: { token: string; exp: number } | null = null;
+const cache = new Map<string, { token: string; exp: number }>();
 
 /** Mint (and cache) a GCP access token from the service account via signed JWT. */
 export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  if (cached && cached.exp - 60 > now) return cached.token;
+  const hit = cache.get(sa.client_email);
+  if (hit && hit.exp - 60 > now) return hit.token;
 
+  // Private keys pasted/transported as JSON keep literal "\n"; restore them.
+  const privateKey = sa.private_key.replace(/\\n/g, '\n');
   const tokenUri = sa.token_uri || 'https://oauth2.googleapis.com/token';
   const header = b64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
   const claims = b64url(
@@ -55,7 +58,7 @@ export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   );
   const signer = crypto.createSign('RSA-SHA256');
   signer.update(`${header}.${claims}`);
-  const assertion = `${header}.${claims}.${b64url(signer.sign(sa.private_key))}`;
+  const assertion = `${header}.${claims}.${b64url(signer.sign(privateKey))}`;
 
   const res = await fetch(tokenUri, {
     method: 'POST',
@@ -69,6 +72,7 @@ export async function getAccessToken(sa: ServiceAccount): Promise<string> {
     throw new Error(`token exchange failed (${res.status}): ${await res.text()}`);
   }
   const json = (await res.json()) as { access_token: string; expires_in?: number };
-  cached = { token: json.access_token, exp: now + (json.expires_in ?? 3600) };
-  return cached.token;
+  const token = json.access_token;
+  cache.set(sa.client_email, { token, exp: now + (json.expires_in ?? 3600) });
+  return token;
 }

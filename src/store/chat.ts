@@ -144,6 +144,8 @@ export const useChatStore = create<ChatState>((set, get) => {
         baseUrl: resolved.connection.baseUrl,
         project: resolved.connection.project,
         region: resolved.connection.region,
+        clientEmail: resolved.connection.clientEmail,
+        privateKey: resolved.connection.privateKey,
       });
 
       const res = await fetch(req.url, {
