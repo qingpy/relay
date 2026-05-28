@@ -13,6 +13,9 @@ interface UiState {
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
 
+  settingsOpen: boolean;
+  setSettingsOpen: (open: boolean) => void;
+
   theme: Theme;
   setTheme: (theme: Theme) => void;
 }
@@ -24,6 +27,9 @@ export const useUiStore = create<UiState>((set) => ({
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+
+  settingsOpen: false,
+  setSettingsOpen: (open) => set({ settingsOpen: open }),
 
   theme: getTheme(),
   setTheme: (theme) => {

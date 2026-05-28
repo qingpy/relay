@@ -5,7 +5,7 @@
  * offline and synced without a server assigning keys.
  */
 
-export type ProviderId = 'openai' | 'gemini' | 'vertex';
+export type ProviderId = 'openrouter' | 'openai' | 'gemini' | 'vertex';
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'divider';
 
