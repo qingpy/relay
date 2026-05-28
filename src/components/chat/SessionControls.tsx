@@ -10,8 +10,6 @@ import {
 import {
   getSession,
   listConnections,
-  listFolders,
-  moveSessionToFolder,
   setSessionSystemPrompt,
   updateFolderConfig,
 } from '@/db/repo';
@@ -24,7 +22,6 @@ const selectClass =
 
 export function SessionControls({ sessionId }: { sessionId: string }) {
   const session = useLiveQuery(() => getSession(sessionId), [sessionId]);
-  const folders = useLiveQuery(() => listFolders(), [], []);
   const connections = useLiveQuery(() => listConnections(), [], []);
   const resolved = useResolvedConfig(sessionId);
   if (!session) return null;
@@ -44,21 +41,6 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      <select
-        value={session.folderId ?? ''}
-        onChange={(e) =>
-          void moveSessionToFolder(sessionId, e.target.value || null)
-        }
-        className={selectClass}
-        title="Preset"
-      >
-        {folders.map((f) => (
-          <option key={f.id} value={f.id}>
-            {f.name}
-          </option>
-        ))}
-      </select>
-
       <select
         value={encodeModelChoice(current, resolved?.model ?? '')}
         onChange={(e) => onModel(e.target.value)}

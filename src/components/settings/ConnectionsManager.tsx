@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { ChevronDown, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ const labelClass =
   'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
 
 const TYPE_LABEL: Record<ConnectionType, string> = {
-  openai: 'OpenAI-compatible',
+  openai: 'Custom',
   vertex: 'Vertex AI',
 };
 
@@ -118,10 +118,34 @@ function Editor({ conn }: { conn: Connection }) {
   const [apiKey, setApiKey] = useState(conn.apiKey ?? '');
   const [project, setProject] = useState(conn.project ?? '');
   const [region, setRegion] = useState(conn.region ?? '');
+  const [clientEmail, setClientEmail] = useState(conn.clientEmail ?? '');
+  const [privateKey, setPrivateKey] = useState(conn.privateKey ?? '');
   const [newModel, setNewModel] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [picker, setPicker] = useState<string[] | null>(null);
+  const saInput = useRef<HTMLInputElement>(null);
+
+  const uploadServiceAccount = async (file: File) => {
+    try {
+      const sa = JSON.parse(await file.text()) as {
+        client_email?: string;
+        private_key?: string;
+        project_id?: string;
+      };
+      const patch = {
+        clientEmail: sa.client_email ?? clientEmail,
+        privateKey: sa.private_key ?? privateKey,
+        project: sa.project_id ?? project,
+      };
+      setClientEmail(patch.clientEmail);
+      setPrivateKey(patch.privateKey);
+      setProject(patch.project);
+      void updateConnection(conn.id, patch);
+    } catch {
+      // Ignore invalid JSON; the user can paste fields manually.
+    }
+  };
 
   const setModels = (models: SavedModel[]) =>
     void setConnectionModels(conn.id, models);
@@ -177,7 +201,7 @@ function Editor({ conn }: { conn: Connection }) {
           }}
           className="h-9 rounded-md border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="openai">OpenAI-compatible</option>
+          <option value="openai">Custom (OpenAI-style API)</option>
           <option value="vertex">Vertex AI</option>
         </select>
       </Field>
@@ -210,6 +234,29 @@ function Editor({ conn }: { conn: Connection }) {
         </>
       ) : (
         <>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              Paste fields or load the service-account JSON.
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => saInput.current?.click()}
+            >
+              Upload JSON
+            </Button>
+            <input
+              ref={saInput}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = '';
+                if (f) void uploadServiceAccount(f);
+              }}
+            />
+          </div>
           <Field label="GCP project id">
             <Input
               spellCheck={false}
@@ -232,9 +279,34 @@ function Editor({ conn }: { conn: Connection }) {
               }}
             />
           </Field>
+          <Field label="Client email">
+            <Input
+              spellCheck={false}
+              placeholder="name@project.iam.gserviceaccount.com"
+              value={clientEmail}
+              onChange={(e) => {
+                setClientEmail(e.target.value);
+                void updateConnection(conn.id, { clientEmail: e.target.value });
+              }}
+            />
+          </Field>
+          <Field label="Private key">
+            <textarea
+              spellCheck={false}
+              placeholder="-----BEGIN PRIVATE KEY-----…"
+              value={privateKey}
+              onChange={(e) => {
+                setPrivateKey(e.target.value);
+                void updateConnection(conn.id, { privateKey: e.target.value });
+              }}
+              rows={3}
+              className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </Field>
           <p className="rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-            Vertex auth uses a service-account JSON on the server
-            (<code>GOOGLE_VERTEX_CREDENTIALS</code>) — no key is stored here.
+            Stored in this browser and sent to the local proxy to mint a token.
+            Leave the key blank to use a server-side
+            <code> GOOGLE_VERTEX_CREDENTIALS</code> JSON instead.
           </p>
         </>
       )}

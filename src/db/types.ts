@@ -77,10 +77,14 @@ export interface Connection {
   /** API key (browser-stored). Not used by Vertex (server-side auth). */
   apiKey?: string;
   models: SavedModel[];
-  /** Vertex project id (auth JSON is server-side). */
+  /** Vertex project id. */
   project?: string;
   /** Vertex region, e.g. `us-central1`. */
   region?: string;
+  /** Vertex service-account email (from the SA JSON). */
+  clientEmail?: string;
+  /** Vertex service-account private key (PEM; from the SA JSON). */
+  privateKey?: string;
   /** When false, the connection's models are hidden from pickers. */
   enabled?: boolean;
   order: number;

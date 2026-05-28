@@ -192,7 +192,7 @@ export async function persistFolderOrder(
 // --- Connections -----------------------------------------------------------
 
 const CONNECTION_TYPE_NAME: Record<ConnectionType, string> = {
-  openai: 'OpenAI-compatible',
+  openai: 'New connection',
   vertex: 'Vertex AI',
 };
 

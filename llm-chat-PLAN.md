@@ -274,6 +274,13 @@ Resolved:
   toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
   service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
   **Auto-title** uses a configurable connection/model + prompt.
+- **Round 4 tweaks** (user request, 2026-05-28): the OpenAI-style connection type is labelled
+  **"Custom"** (it's a flexible base-URL/key upstream); **Vertex** creds now live on the connection
+  (project, region, client_email, private_key — or upload the service-account JSON to parse them) and
+  are sent to the proxy to mint the token (server `GOOGLE_VERTEX_CREDENTIALS` remains a fallback). The
+  composer has an **expand button** (textarea grows to ~half the viewport). **Quick prompts** moved to
+  a dedicated master-detail dialog (scrollable list + large editor) for many/long prompts. The chat
+  header no longer has a **preset selector** — move a chat between presets in the sidebar.
 - **Backup & restore** (user request, 2026-05-28): a full DB dump (config, chats/history,
   connections incl. keys, prompts, attachments as base64) to a portable JSON. **Export/import** a
   file client-side; **back up to the server's local disk** (`POST /api/backup`, listed/restored/

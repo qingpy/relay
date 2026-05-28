@@ -57,6 +57,8 @@ export interface BuildInput {
   /** Vertex only. */
   project?: string;
   region?: string;
+  clientEmail?: string;
+  privateKey?: string;
 }
 
 export interface Provider {
