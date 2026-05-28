@@ -32,6 +32,28 @@ class RelayDB extends Dexie {
       prompts: 'id, order',
       appConfig: 'id',
     });
+    // v2: message tree (branching). Backfill parentId as a linear chain per
+    // session (createdAt order) and point each session at its last message.
+    this.version(2)
+      .stores({
+        messages: 'id, sessionId, parentId, createdAt',
+      })
+      .upgrade(async (tx) => {
+        const sessions = await tx.table('sessions').toArray();
+        for (const s of sessions) {
+          const msgs = await tx
+            .table('messages')
+            .where('sessionId')
+            .equals(s.id)
+            .sortBy('createdAt');
+          let prev: string | null = null;
+          for (const m of msgs) {
+            await tx.table('messages').update(m.id, { parentId: prev });
+            prev = m.id;
+          }
+          if (prev) await tx.table('sessions').update(s.id, { currentLeafId: prev });
+        }
+      });
   }
 }
 

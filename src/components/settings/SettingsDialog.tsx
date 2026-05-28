@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { useUiStore } from '@/store/ui';
 import { PromptsManager } from './PromptsManager';
 
@@ -99,6 +100,24 @@ function SettingsForm({ config }: { config: AppConfig }) {
             ))}
           </datalist>
         </div>
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <h3 className={labelClass}>Export</h3>
+        <label className="flex items-center justify-between gap-3 text-sm">
+          <span>
+            Include thinking in exports
+            <span className="block text-xs text-muted-foreground">
+              Adds the model's reasoning to copied / downloaded markdown.
+            </span>
+          </span>
+          <Switch
+            checked={config.exportIncludeThinking ?? false}
+            onCheckedChange={(v) =>
+              void updateAppConfig({ exportIncludeThinking: v })
+            }
+          />
+        </label>
       </section>
 
       <section className="flex flex-col gap-3">

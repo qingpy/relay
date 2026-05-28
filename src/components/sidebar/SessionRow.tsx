@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Copy, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -9,8 +9,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { deleteSession, renameSession } from '@/db/repo';
+import { deleteSession, duplicateSession, renameSession } from '@/db/repo';
 import type { Session } from '@/db/types';
+import { formatDateTime, formatRelative } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
@@ -41,6 +42,11 @@ export function SessionRow({
     if (!ok) return;
     await deleteSession(session.id);
     if (isActive) setActive(null);
+  };
+
+  const onDuplicate = async () => {
+    const copy = await duplicateSession(session.id);
+    if (copy) setActive(copy.id);
   };
 
   return (
@@ -78,29 +84,44 @@ export function SessionRow({
       )}
 
       {!editing && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              title="Chat options"
-              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
-              <Pencil />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem destructive onSelect={() => void onDelete()}>
-              <Trash2 />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="relative ml-1 flex min-w-[2.75rem] shrink-0 items-center justify-end">
+          <time
+            dateTime={new Date(session.updatedAt).toISOString()}
+            title={formatDateTime(session.updatedAt)}
+            className="text-[10px] tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0"
+          >
+            {formatRelative(session.updatedAt)}
+          </time>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+                title="Chat options"
+                className="absolute right-0 flex size-6 shrink-0 items-center justify-center rounded bg-sidebar-accent text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => setTimeout(() => setEditing(true), 0)}
+              >
+                <Pencil />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => void onDuplicate()}>
+                <Copy />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem destructive onSelect={() => void onDelete()}>
+                <Trash2 />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       )}
     </div>
   );

@@ -69,6 +69,8 @@ export interface Session {
   provider: ProviderId;
   model: string;
   settings: SessionSettings;
+  /** Active branch tip — the conversation shown is root → this leaf. */
+  currentLeafId?: string;
   createdAt: number;
   updatedAt: number;
   order: number;
@@ -77,6 +79,8 @@ export interface Session {
 export interface Message {
   id: string;
   sessionId: string;
+  /** Parent message in the session tree (null = root). Enables branching. */
+  parentId: string | null;
   role: MessageRole;
   content: Part[];
   /** Foldable "thinking" / reasoning text. */
@@ -87,6 +91,8 @@ export interface Message {
   citations?: Citation[];
   attachments?: string[];
   usage?: Usage;
+  /** Model id that produced an assistant message (shown in its meta line). */
+  model?: string;
   /** Marks a message that ended in an error (e.g. aborted/failed request). */
   error?: string;
   createdAt: number;
@@ -131,5 +137,7 @@ export interface AppConfig {
   theme: 'light' | 'dark' | 'system';
   defaultProvider: ProviderId;
   defaultModel: string;
+  /** Include the model's "thinking" in markdown export/download (default off). */
+  exportIncludeThinking?: boolean;
   webdav?: WebDavConfig;
 }
