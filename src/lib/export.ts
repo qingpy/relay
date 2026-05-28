@@ -47,6 +47,17 @@ export function sessionToMarkdown(
   return lines.join('\n').trim() + '\n';
 }
 
+/** Markdown for a set of messages (used by multi-select copy/export). */
+export function messagesToMarkdown(
+  messages: Message[],
+  opts: ExportOptions = {},
+): string {
+  return messages
+    .map((m) => messageToMarkdown(m, opts))
+    .filter(Boolean)
+    .join('\n\n---\n\n');
+}
+
 export function slugify(s: string): string {
   return (
     s
