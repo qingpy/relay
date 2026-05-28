@@ -7,9 +7,18 @@ import type {
   ProxyRequest,
 } from './types';
 
+interface GeminiPart {
+  text?: string;
+  thought?: boolean;
+  functionCall?: { name?: string; args?: unknown };
+}
+
 interface GeminiChunk {
   candidates?: {
-    content?: { parts?: { text?: string; thought?: boolean }[] };
+    content?: { parts?: GeminiPart[] };
+    groundingMetadata?: {
+      groundingChunks?: { web?: { uri?: string; title?: string } }[];
+    };
   }[];
   usageMetadata?: {
     promptTokenCount?: number;
@@ -83,8 +92,19 @@ export class GeminiProvider implements Provider {
     }
 
     const deltas: Delta[] = [];
-    const parts = chunk.candidates?.[0]?.content?.parts ?? [];
+    const candidate = chunk.candidates?.[0];
+    const parts = candidate?.content?.parts ?? [];
     for (const part of parts) {
+      if (part.functionCall?.name) {
+        deltas.push({
+          kind: 'toolCall',
+          call: {
+            id: part.functionCall.name,
+            name: part.functionCall.name,
+            args: part.functionCall.args,
+          },
+        });
+      }
       if (!part.text) continue;
       deltas.push(
         part.thought
@@ -92,6 +112,12 @@ export class GeminiProvider implements Provider {
           : { kind: 'text', text: part.text },
       );
     }
+
+    const grounding = candidate?.groundingMetadata?.groundingChunks ?? [];
+    const citations = grounding
+      .filter((g) => g.web?.uri)
+      .map((g) => ({ url: g.web!.uri!, title: g.web!.title }));
+    if (citations.length) deltas.push({ kind: 'citation', citations });
 
     const u = chunk.usageMetadata;
     if (u) {

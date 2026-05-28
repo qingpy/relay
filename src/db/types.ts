@@ -81,6 +81,8 @@ export interface Message {
   content: Part[];
   /** Foldable "thinking" / reasoning text. */
   reasoning?: string;
+  /** Wall-clock time spent reasoning before the answer began (ms). */
+  reasoningMs?: number;
   toolCalls?: ToolCall[];
   citations?: Citation[];
   attachments?: string[];

@@ -3,8 +3,10 @@ import { AlertCircle } from 'lucide-react';
 import type { Message } from '@/db/types';
 import { partsText } from '@/lib/conversation';
 import { useChatStore } from '@/store/chat';
+import { Citations } from './Citations';
 import { Markdown } from './Markdown';
 import { Reasoning } from './Reasoning';
+import { ToolCard } from './ToolCard';
 
 function StreamingDots() {
   return (
@@ -36,6 +38,9 @@ export const MessageItem = memo(function MessageItem({
 
   const text = streaming ? buffer.text : partsText(message.content);
   const reasoning = streaming ? buffer.reasoning : message.reasoning ?? '';
+  const reasoningMs = streaming ? buffer.reasoningMs : message.reasoningMs;
+  const toolCalls = streaming ? buffer.toolCalls : message.toolCalls ?? [];
+  const citations = streaming ? buffer.citations : message.citations ?? [];
 
   if (message.role === 'user') {
     return (
@@ -47,16 +52,30 @@ export const MessageItem = memo(function MessageItem({
     );
   }
 
+  const showDots =
+    streaming && !text && !reasoning && toolCalls.length === 0;
+
   return (
     <div className="group">
-      {reasoning && <Reasoning text={reasoning} streaming={streaming && !text} />}
-      {text ? <Markdown>{text}</Markdown> : streaming ? <StreamingDots /> : null}
+      {reasoning && (
+        <Reasoning
+          text={reasoning}
+          streaming={streaming}
+          hasAnswer={!!text}
+          durationMs={reasoningMs}
+        />
+      )}
+      {toolCalls.map((tc, i) => (
+        <ToolCard key={tc.id || i} call={tc} />
+      ))}
+      {text ? <Markdown>{text}</Markdown> : showDots ? <StreamingDots /> : null}
       {message.error && (
         <div className="mt-2 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertCircle className="mt-0.5 size-4 shrink-0" />
           <span className="whitespace-pre-wrap">{message.error}</span>
         </div>
       )}
+      {citations.length > 0 && <Citations citations={citations} />}
       {!streaming && message.usage?.totalTokens != null && (
         <div className="mt-1.5 text-[11px] text-muted-foreground">
           {message.usage.totalTokens} tokens
