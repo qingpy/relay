@@ -4,12 +4,13 @@ import {
   addMessage,
   getMessages,
   getSession,
+  saveAttachments,
   textPart,
   updateMessage,
   updateSession,
 } from '@/db/repo';
 import type { Citation, ToolCall, Usage } from '@/db/types';
-import { deriveTitle, toChatMessages } from '@/lib/conversation';
+import { buildChatMessages, deriveTitle } from '@/lib/conversation';
 import { readSSE } from '@/lib/sse';
 import { getProvider } from '@/providers/registry';
 import { NEW_SESSION_TITLE } from '@/db/repo';
@@ -34,7 +35,7 @@ interface ChatState {
   streams: Record<string, StreamBuffer>;
   /** sessionId -> streaming assistant message id (presence = streaming). */
   activeBySession: Record<string, string>;
-  send: (sessionId: string, text: string) => Promise<void>;
+  send: (sessionId: string, text: string, files?: File[]) => Promise<void>;
   stop: (sessionId: string) => void;
 }
 
@@ -60,9 +61,9 @@ export const useChatStore = create<ChatState>((set, get) => {
 
     stop: (sessionId) => controllers.get(sessionId)?.abort(),
 
-    send: async (sessionId, text) => {
+    send: async (sessionId, text, files) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed && !files?.length) return;
       if (get().activeBySession[sessionId]) return; // already streaming
 
       const session = await getSession(sessionId);
@@ -71,12 +72,16 @@ export const useChatStore = create<ChatState>((set, get) => {
       const config = await getAppConfig();
       const keyConfig = config.providerKeys[session.provider];
 
-      // Persist the user turn; name the session from the first message.
-      await addMessage({
+      // Persist the user turn (with any attachments); name the session.
+      const userMsg = await addMessage({
         sessionId,
         role: 'user',
         content: [textPart(trimmed)],
       });
+      if (files?.length) {
+        const ids = await saveAttachments(sessionId, userMsg.id, files);
+        await updateMessage(userMsg.id, { attachments: ids });
+      }
       if (session.title === NEW_SESSION_TITLE) {
         await updateSession(sessionId, { title: deriveTitle(trimmed) });
       } else {
@@ -84,7 +89,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
 
       const history = await getMessages(sessionId);
-      const chatMessages = toChatMessages(history);
+      const chatMessages = await buildChatMessages(history);
 
       const assistant = await addMessage({ sessionId, role: 'assistant' });
       const messageId = assistant.id;

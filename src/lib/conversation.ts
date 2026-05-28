@@ -1,5 +1,7 @@
 import type { Message, Part } from '@/db/types';
-import type { ChatMessage } from '@/providers/types';
+import { getFilesByIds } from '@/db/repo';
+import type { Attachment, ChatMessage } from '@/providers/types';
+import { fileToAttachment } from './attachments';
 
 /** Concatenate the text content of a message's parts. */
 export function partsText(content: Part[]): string {
@@ -9,14 +11,8 @@ export function partsText(content: Part[]): string {
     .join('');
 }
 
-/**
- * Turn persisted messages into the provider-facing conversation.
- *
- * Messages before the *latest* divider are excluded from the model context
- * (plan §4/§7 "clear context, keep page"); system messages are handled via
- * session settings, so only user/assistant turns are sent.
- */
-export function toChatMessages(messages: Message[]): ChatMessage[] {
+/** Messages after the *latest* divider (plan §4/§7 "clear context, keep page"). */
+function activeWindow(messages: Message[]): Message[] {
   let start = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'divider') {
@@ -24,13 +20,33 @@ export function toChatMessages(messages: Message[]): ChatMessage[] {
       break;
     }
   }
+  return messages.slice(start);
+}
 
+/**
+ * Turn persisted messages into the provider-facing conversation, resolving
+ * attachments to inline data. System prompts are handled via session settings,
+ * so only user/assistant turns are sent.
+ */
+export async function buildChatMessages(
+  messages: Message[],
+): Promise<ChatMessage[]> {
   const out: ChatMessage[] = [];
-  for (const m of messages.slice(start)) {
+  for (const m of activeWindow(messages)) {
     if (m.role !== 'user' && m.role !== 'assistant') continue;
     const text = partsText(m.content);
-    if (!text) continue;
-    out.push({ role: m.role, text });
+
+    let attachments: Attachment[] | undefined;
+    if (m.attachments?.length) {
+      const files = await getFilesByIds(m.attachments);
+      const resolved = (await Promise.all(files.map(fileToAttachment))).filter(
+        (a): a is Attachment => a != null,
+      );
+      if (resolved.length) attachments = resolved;
+    }
+
+    if (!text && !attachments) continue;
+    out.push({ role: m.role, text, ...(attachments ? { attachments } : {}) });
   }
   return out;
 }

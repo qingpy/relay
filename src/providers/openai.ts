@@ -2,10 +2,46 @@ import type { ProviderId } from '@/db/types';
 import type {
   BuildInput,
   Capabilities,
+  ChatMessage,
   Delta,
   Provider,
   ProxyRequest,
 } from './types';
+
+/** Build OpenAI message content: a plain string when there are no binary
+ *  attachments, otherwise the multimodal parts array. Text attachments are
+ *  inlined into the text so any model can read them. */
+function toContent(m: ChatMessage): unknown {
+  const atts = m.attachments ?? [];
+  const textFiles = atts.filter((a) => a.kind === 'text');
+  const binary = atts.filter((a) => a.kind !== 'text');
+
+  let text = m.text;
+  for (const f of textFiles) {
+    text += `\n\n[file: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
+  }
+
+  if (binary.length === 0) return text;
+
+  const parts: unknown[] = [{ type: 'text', text }];
+  for (const f of binary) {
+    if (f.kind === 'image') {
+      parts.push({
+        type: 'image_url',
+        image_url: { url: `data:${f.mimeType};base64,${f.data}` },
+      });
+    } else {
+      parts.push({
+        type: 'file',
+        file: {
+          filename: f.name,
+          file_data: `data:${f.mimeType};base64,${f.data}`,
+        },
+      });
+    }
+  }
+  return parts;
+}
 
 interface OpenAIAnnotation {
   type?: string;
@@ -71,7 +107,7 @@ export class OpenAICompatProvider implements Provider {
         ...(settings.systemPrompt
           ? [{ role: 'system', content: settings.systemPrompt }]
           : []),
-        ...messages.map((m) => ({ role: m.role, content: m.text })),
+        ...messages.map((m) => ({ role: m.role, content: toContent(m) })),
       ],
     };
 

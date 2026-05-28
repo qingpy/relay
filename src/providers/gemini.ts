@@ -2,10 +2,27 @@ import type { ProviderId } from '@/db/types';
 import type {
   BuildInput,
   Capabilities,
+  ChatMessage,
   Delta,
   Provider,
   ProxyRequest,
 } from './types';
+
+/** Build Gemini content parts: text (+ inlined text files) then inlineData
+ *  parts for images/PDFs. */
+function toParts(m: ChatMessage): unknown[] {
+  const atts = m.attachments ?? [];
+  let text = m.text;
+  for (const f of atts.filter((a) => a.kind === 'text')) {
+    text += `\n\n[file: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
+  }
+
+  const parts: unknown[] = [{ text }];
+  for (const f of atts.filter((a) => a.kind !== 'text')) {
+    parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
+  }
+  return parts;
+}
 
 interface GeminiPart {
   text?: string;
@@ -59,7 +76,7 @@ export class GeminiProvider implements Provider {
     const payload: Record<string, unknown> = {
       contents: messages.map((m) => ({
         role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: m.text }],
+        parts: toParts(m),
       })),
       generationConfig,
     };

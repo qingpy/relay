@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useUiStore } from '@/store/ui';
+import { PromptsManager } from './PromptsManager';
 
 export function SettingsDialog() {
   const open = useUiStore((s) => s.settingsOpen);
@@ -23,7 +24,7 @@ export function SettingsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="flex max-h-[85vh] max-w-md flex-col">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
           <DialogDescription>
@@ -31,8 +32,10 @@ export function SettingsDialog() {
             request through the local proxy.
           </DialogDescription>
         </DialogHeader>
-        <SettingsForm config={config} />
-
+        <div className="-mr-2 flex flex-col gap-5 overflow-y-auto pr-2">
+          <SettingsForm config={config} />
+          <PromptsManager />
+        </div>
       </DialogContent>
     </Dialog>
   );

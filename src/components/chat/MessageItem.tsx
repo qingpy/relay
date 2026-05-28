@@ -1,10 +1,12 @@
 import { memo } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import type { Message } from '@/db/types';
+import { deleteMessage } from '@/db/repo';
 import { partsText } from '@/lib/conversation';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
 import { Markdown } from './Markdown';
+import { MessageAttachments } from './MessageAttachments';
 import { Reasoning } from './Reasoning';
 import { ToolCard } from './ToolCard';
 
@@ -28,9 +30,19 @@ export const MessageItem = memo(function MessageItem({
 
   if (message.role === 'divider') {
     return (
-      <div className="my-2 flex items-center gap-3 text-[11px] uppercase tracking-wide text-muted-foreground">
+      <div className="group my-2 flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
         <div className="h-px flex-1 bg-border" />
-        Context cleared
+        <span className="flex items-center gap-1.5">
+          Context cleared
+          <button
+            type="button"
+            onClick={() => void deleteMessage(message.id)}
+            title="Restore context"
+            className="flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
+          >
+            <X className="size-3" />
+          </button>
+        </span>
         <div className="h-px flex-1 bg-border" />
       </div>
     );
@@ -43,11 +55,17 @@ export const MessageItem = memo(function MessageItem({
   const citations = streaming ? buffer.citations : message.citations ?? [];
 
   if (message.role === 'user') {
+    const attachmentIds = message.attachments ?? [];
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-secondary px-4 py-2.5 text-sm leading-relaxed">
-          {text}
-        </div>
+      <div className="flex flex-col items-end gap-1.5">
+        {attachmentIds.length > 0 && (
+          <MessageAttachments fileIds={attachmentIds} />
+        )}
+        {text && (
+          <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-secondary px-4 py-2.5 text-sm leading-relaxed">
+            {text}
+          </div>
+        )}
       </div>
     );
   }
