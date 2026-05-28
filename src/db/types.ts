@@ -91,6 +91,8 @@ export interface Message {
   citations?: Citation[];
   attachments?: string[];
   usage?: Usage;
+  /** Model id that produced an assistant message (shown in its meta line). */
+  model?: string;
   /** Marks a message that ended in an error (e.g. aborted/failed request). */
   error?: string;
   createdAt: number;
@@ -135,5 +137,7 @@ export interface AppConfig {
   theme: 'light' | 'dark' | 'system';
   defaultProvider: ProviderId;
   defaultModel: string;
+  /** Include the model's "thinking" in markdown export/download (default off). */
+  exportIncludeThinking?: boolean;
   webdav?: WebDavConfig;
 }

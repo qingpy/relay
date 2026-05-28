@@ -381,28 +381,3 @@ export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
   const res = await db.files.bulkGet(ids);
   return res.filter((f): f is StoredFile => !!f);
 }
-
-/** Duplicate stored files under a new message (so an edited turn owns its own
- *  attachments and deleting the original branch won't orphan them). */
-export async function cloneAttachments(
-  sessionId: string,
-  messageId: string,
-  sourceIds: string[],
-): Promise<string[]> {
-  const sources = await getFilesByIds(sourceIds);
-  const ids: string[] = [];
-  await db.transaction('rw', db.files, async () => {
-    for (const f of sources) {
-      const id = newId();
-      await db.files.add({
-        ...f,
-        id,
-        sessionId,
-        messageId,
-        createdAt: Date.now(),
-      });
-      ids.push(id);
-    }
-  });
-  return ids;
-}

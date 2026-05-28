@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { getAppConfig } from '@/db/db';
 import {
   addMessage,
-  cloneAttachments,
   getMessage,
   getMessages,
   getSession,
@@ -42,14 +41,9 @@ interface ChatState {
   activeBySession: Record<string, string>;
   /** Send a new user turn under the active leaf and stream the reply. */
   send: (sessionId: string, text: string, files?: File[]) => Promise<void>;
-  /** Re-answer a user turn: new assistant sibling under the same parent. */
-  regenerate: (sessionId: string, assistantId: string) => Promise<void>;
-  /** Edit a user turn and resend: new user sibling + fresh reply. */
-  editAndResend: (
-    sessionId: string,
-    userId: string,
-    text: string,
-  ) => Promise<void>;
+  /** Answer a user turn: stream a fresh assistant child under it. If a reply
+   *  already exists it becomes an alternate sibling branch. */
+  regenerate: (sessionId: string, userId: string) => Promise<void>;
   stop: (sessionId: string) => void;
 }
 
@@ -122,6 +116,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     const persist = async (final: boolean) => {
       await updateMessage(messageId, {
         content: buf.text ? [textPart(buf.text)] : [],
+        ...(session.model ? { model: session.model } : {}),
         ...(buf.reasoning ? { reasoning: buf.reasoning } : {}),
         ...(buf.reasoningMs != null ? { reasoningMs: buf.reasoningMs } : {}),
         ...(buf.toolCalls.length ? { toolCalls: buf.toolCalls } : {}),
@@ -254,49 +249,16 @@ export const useChatStore = create<ChatState>((set, get) => {
       await runTurn(session, userMsg.id, history);
     },
 
-    regenerate: async (sessionId, assistantId) => {
+    regenerate: async (sessionId, userId) => {
       if (get().activeBySession[sessionId]) return;
       const session = await getSession(sessionId);
       if (!session) return;
-      const assistant = await getMessage(assistantId);
-      if (!assistant || assistant.parentId == null) return;
+      const user = await getMessage(userId);
+      if (!user || user.role !== 'user') return;
 
       await touchSession(sessionId);
-      const history = activePath(
-        await getMessages(sessionId),
-        assistant.parentId,
-      );
-      await runTurn(session, assistant.parentId, history);
-    },
-
-    editAndResend: async (sessionId, userId, text) => {
-      const trimmed = text.trim();
-      if (!trimmed) return;
-      if (get().activeBySession[sessionId]) return;
-      const session = await getSession(sessionId);
-      if (!session) return;
-      const orig = await getMessage(userId);
-      if (!orig || orig.role !== 'user') return;
-
-      const userMsg = await addMessage({
-        sessionId,
-        parentId: orig.parentId,
-        role: 'user',
-        content: [textPart(trimmed)],
-      });
-      if (orig.attachments?.length) {
-        const ids = await cloneAttachments(
-          sessionId,
-          userMsg.id,
-          orig.attachments,
-        );
-        await updateMessage(userMsg.id, { attachments: ids });
-      }
-      await setCurrentLeaf(sessionId, userMsg.id);
-      await touchSession(sessionId);
-
-      const history = activePath(await getMessages(sessionId), userMsg.id);
-      await runTurn(session, userMsg.id, history);
+      const history = activePath(await getMessages(sessionId), user.id);
+      await runTurn(session, user.id, history);
     },
   };
 });

@@ -2,8 +2,9 @@ import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Message } from '@/db/types';
-import { spliceMessage } from '@/db/repo';
+import { spliceMessage, textPart, updateMessage } from '@/db/repo';
 import { partsText } from '@/lib/conversation';
+import { formatRelative, formatDateTime } from '@/lib/time';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
 import { Markdown } from './Markdown';
@@ -82,6 +83,13 @@ export const MessageItem = memo(function MessageItem({
             allMessages={siblings}
             onEdit={() => setEditing(true)}
           />
+          <time
+            dateTime={new Date(message.createdAt).toISOString()}
+            title={formatDateTime(message.createdAt)}
+            className="text-[11px] text-muted-foreground"
+          >
+            {formatRelative(message.createdAt)}
+          </time>
         </div>
       </div>
     );
@@ -111,17 +119,28 @@ export const MessageItem = memo(function MessageItem({
         </div>
       )}
       {citations.length > 0 && <Citations citations={citations} />}
-      {!streaming && (text || reasoning || message.error) && (
-        <div className="flex items-center justify-between">
+      {!streaming && (
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1">
             <SiblingSwitcher message={message} allMessages={siblings} />
             <MessageActions message={message} allMessages={siblings} />
           </div>
-          {message.usage?.totalTokens != null && (
-            <span className="text-[11px] text-muted-foreground">
-              {message.usage.totalTokens} tokens
-            </span>
-          )}
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            {message.model && (
+              <span className="max-w-48 truncate" title={message.model}>
+                {message.model}
+              </span>
+            )}
+            {message.usage?.totalTokens != null && (
+              <span>{message.usage.totalTokens} tokens</span>
+            )}
+            <time
+              dateTime={new Date(message.createdAt).toISOString()}
+              title={formatDateTime(message.createdAt)}
+            >
+              {formatRelative(message.createdAt)}
+            </time>
+          </div>
         </div>
       )}
     </div>
@@ -155,9 +174,7 @@ function UserEditor({
     const text = value.trim();
     if (!text) return;
     onClose();
-    await useChatStore
-      .getState()
-      .editAndResend(message.sessionId, message.id, text);
+    await updateMessage(message.id, { content: [textPart(text)] });
   };
 
   return (
@@ -192,7 +209,7 @@ function UserEditor({
           Cancel
         </Button>
         <Button size="sm" onClick={() => void save()} disabled={!value.trim()}>
-          Save &amp; submit
+          Save
         </Button>
       </div>
     </div>

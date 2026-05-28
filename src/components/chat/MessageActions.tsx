@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { confirm } from '@/components/ui/confirm';
+import { getAppConfig } from '@/db/db';
 import { deleteSubtree, setCurrentLeaf } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { partsText, deriveTitle } from '@/lib/conversation';
@@ -35,11 +36,12 @@ export function MessageActions({
     setTimeout(() => setCopied(false), 1200);
   };
 
-  const download = () => {
+  const download = async () => {
+    const { exportIncludeThinking } = await getAppConfig();
     const name = slugify(deriveTitle(partsText(message.content))) || 'message';
     downloadText(
       `${name}.md`,
-      messageToMarkdown(message, { includeThinking: true }),
+      messageToMarkdown(message, { includeThinking: exportIncludeThinking }),
     );
   };
 
@@ -72,28 +74,28 @@ export function MessageActions({
         {copied ? <Check className="text-primary" /> : <Copy />}
       </Button>
       {isUser ? (
-        <Button variant="ghost" size="icon-sm" onClick={onEdit} title="Edit & resend">
-          <Pencil />
-        </Button>
-      ) : (
         <>
+          <Button variant="ghost" size="icon-sm" onClick={onEdit} title="Edit">
+            <Pencil />
+          </Button>
           <Button
             variant="ghost"
             size="icon-sm"
             onClick={regenerate}
-            title="Regenerate"
+            title="Regenerate reply"
           >
             <RefreshCw />
           </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={download}
-            title="Download .md"
-          >
-            <Download />
-          </Button>
         </>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={() => void download()}
+          title="Download .md"
+        >
+          <Download />
+        </Button>
       )}
       <Button
         variant="ghost"
