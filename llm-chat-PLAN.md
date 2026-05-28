@@ -112,10 +112,13 @@ folders   { id, name, parentId|null, order, createdAt }
 sessions  { id, folderId|null, title, provider, model,
             settings: { temperature, topP, maxTokens, systemPrompt,
                         reasoningEffort?, thinkingBudget?, webSearch: bool },
+            currentLeafId?,             // active branch tip (see Branching)
             createdAt, updatedAt, order }
-messages  { id, sessionId, role: user|assistant|system|divider,
+messages  { id, sessionId, parentId|null,   // tree edge -> enables branching
+            role: user|assistant|system|divider,
             content: Part[],            // text / image / file refs
             reasoning?: string,         // foldable "thinking"
+            reasoningMs?: number,       // time spent thinking
             toolCalls?: ToolCall[],     // foldable tool/search cards
             citations?: Citation[],
             attachments?: fileId[],
@@ -131,6 +134,13 @@ appConfig { id:'singleton', providerKeys, theme, defaultProvider,
   full context. (Supports the "clear context without clearing the page" requirement.)
 - Binary files (images/PDFs) stored as `Blob` in IndexedDB, converted to provider format at send
   time (OpenAI `image_url` base64 / Gemini `inlineData`).
+- **Branching (tree).** Each message has a `parentId`, so a session is a *tree* of messages, not a
+  flat list. The displayed conversation is the path from the root to the session's `currentLeafId`.
+  Regenerating, editing a user turn, or forking creates a **sibling** under the same parent and moves
+  `currentLeafId` to the new branch — nothing is destroyed, every branch stays reachable. A tree
+  **overview map** lets you see all branches and jump `currentLeafId` to any node. Linear chats are
+  just a tree with no siblings. (Migration: existing messages get `parentId` = the previous message
+  in `createdAt` order.)
 
 ---
 
@@ -153,14 +163,22 @@ appConfig { id:'singleton', providerKeys, theme, defaultProvider,
    sessions (context menu + drag-drop); persisted `order`.
 10. **Long-chat navigation** — keyboard + buttons: jump to first/last message, step prev/next **user**
     turn (e.g. `Alt+↑/↓`, `Ctrl+Home/End`). Small floating nav control.
-11. **Markdown export** — whole session → `.md` (role headers; optional include-thinking toggle);
-    single message → copy or download `.md`.
-12. **Storage / sync**
-    - **Local**: IndexedDB is the primary store.
-    - **WebDAV (on launch)**: compare local `updatedAt` vs remote timestamp; pull if remote newer,
-      push if local newer (**last-write-wins**). Manual "Sync now" button too. Sync payload = JSON
-      export of the DB (+ files). Through the proxy `/api/sync` (GET/PUT) to dodge CORS.
-      **Safety**: write a timestamped backup before any overwrite; warn on conflict.
+11. **Markdown export & copy** — whole session → `.md` (role headers; optional include-thinking
+    toggle); single message → download `.md` or **copy the whole message as markdown**. **Copy
+    selected lines**: selecting text inside a rendered message and copying yields clean markdown,
+    and any rendered LaTeX copies back as its `$…$` source (KaTeX `copy-tex`).
+12. **Message actions** — per message, on hover/menu:
+    - **Regenerate** (assistant) — new sibling response under the same parent; `currentLeafId` moves
+      to it. Old response stays as an alternate branch.
+    - **Edit input** (user) — edit the text and resend; creates a sibling user turn + fresh reply.
+    - **Delete** — remove a message (and its subtree) from the session.
+    - **Fork** — branch the conversation from any message into a new line of replies.
+13. **Branch / tree navigation** — a session **overview map** of the message tree; click any node to
+    set it as the active path (`currentLeafId`). Sibling switcher (e.g. `‹ 2/3 ›`) on messages that
+    have alternates. See §4 *Branching*.
+14. **Duplicate session** — clone a whole session (messages + tree + files) into a new session.
+15. **Storage / sync — DEFERRED** (was M6). WebDAV last-write-wins sync via the proxy is postponed;
+    JSON export/import of the whole DB may land earlier as a manual backup. Design retained below.
 
 ---
 
@@ -205,10 +223,15 @@ Identical SPA + proxy for all targets. Pick later.
 - **M3 — Rich rendering**: foldable thinking; foldable tool calls; citations.
 - **M4 — Composer & UX**: file upload (drag+click); quick prompts; model-settings panel; web-search
   toggle; context divider; long-chat navigation shortcuts.
-- **M5 — Export**: session + single-message markdown.
-- **M6 — Sync**: WebDAV via proxy; launch-time last-write-wins; backups; settings UI.
+- **M5 — Export & copy**: session + single-message markdown export; copy whole message as markdown;
+  copy selected lines with LaTeX-aware copy (KaTeX `copy-tex`).
+- **M6 — Message actions & branching**: regenerate, edit-input-and-resend, delete, fork; message
+  tree (`parentId` + session `currentLeafId`); sibling switcher; session **overview map** to jump
+  to any node; duplicate whole session. (Replaces the old WebDAV-sync M6.)
 - **M7 — Polish & deploy**: light theme (+ optional dark), empty states, error handling, keyboard
-  shortcuts, then deploy to VPS (Caddy) or Cloudflare.
+  shortcuts, bundle code-splitting, then deploy to VPS (Caddy) or Cloudflare.
+- **Deferred — WebDAV sync**: last-write-wins sync via the proxy + backups + settings UI (see §5.15
+  / §6). Postponed at the user's request; revisit after M7.
 
 A usable daily driver exists after **M4**; M5–M7 are quality-of-life.
 
@@ -222,6 +245,12 @@ Resolved:
 - **Default provider/model**: **OpenRouter**, model `openai/gpt-4o-mini`. Provider ids
   are `openrouter | openai | gemini | vertex`; OpenRouter and OpenAI share
   `OpenAICompatProvider` (differ by base URL).
+
+- **WebDAV sync deferred** (user request, 2026-05-28). M6 is now *message actions & branching*;
+  sync moves to a post-M7 "Deferred" milestone.
+- **Branching model**: messages form a tree via `parentId`; the session's `currentLeafId` selects
+  the visible path. Regenerate / edit / fork create siblings (non-destructive); a tree overview map
+  navigates between branches.
 
 Still open:
 - **Deploy target** to optimize for first (local vs VPS vs Cloudflare) — affects only deploy config.
