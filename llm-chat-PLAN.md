@@ -274,6 +274,9 @@ Resolved:
   toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
   service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
   **Auto-title** uses a configurable connection/model + prompt.
+- **Round 6 tweaks** (user request, 2026-05-28): sidebar **chat multi-select** (toggle in the sidebar
+  header) with select/deselect-all and bulk **delete** / **move to preset**. The Connections **Test**
+  lets you pick which saved model to test.
 - **Round 5 tweaks** (user request, 2026-05-28): Vertex `global` location uses host
   `aiplatform.googleapis.com` (regions stay `{region}-aiplatform…`). New connections start with **no
   models** (detect/add to populate). A chat can be **moved between presets** from its sidebar menu

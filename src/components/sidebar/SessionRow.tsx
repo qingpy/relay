@@ -38,6 +38,10 @@ export function SessionRow({
   const folders = useLiveQuery(() => listFolders(), [], []);
   const [editing, setEditing] = useState(false);
 
+  const selecting = useUiStore((s) => s.chatSelectMode);
+  const checked = useUiStore((s) => !!s.selectedChats[session.id]);
+  const setChatSelected = useUiStore((s) => s.setChatSelected);
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: `S:${session.id}` });
 
@@ -60,27 +64,44 @@ export function SessionRow({
     if (copy) setActive(copy.id);
   };
 
+  const onRowClick = () => {
+    if (editing) return;
+    if (selecting) setChatSelected(session.id, !checked);
+    else setActive(session.id);
+  };
+
   return (
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
+      {...(selecting ? {} : attributes)}
+      {...(selecting ? {} : listeners)}
       role="button"
       tabIndex={0}
-      onClick={() => !editing && setActive(session.id)}
-      onDoubleClick={() => setEditing(true)}
-      onKeyDown={(e) => e.key === 'Enter' && !editing && setActive(session.id)}
+      onClick={onRowClick}
+      onDoubleClick={() => !selecting && setEditing(true)}
+      onKeyDown={(e) => e.key === 'Enter' && onRowClick()}
       className={cn(
         'group flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none transition-colors',
         nested ? 'pl-7' : 'pl-2',
         isDragging && 'opacity-50',
-        isActive
+        (selecting ? checked : isActive)
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
       )}
     >
-      <MessageSquare className="size-3.5 shrink-0 opacity-70" />
+      {selecting ? (
+        <span
+          className={cn(
+            'flex size-3.5 shrink-0 items-center justify-center rounded border',
+            checked ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
+          )}
+        >
+          {checked && <Check className="size-2.5" />}
+        </span>
+      ) : (
+        <MessageSquare className="size-3.5 shrink-0 opacity-70" />
+      )}
       {editing ? (
         <InlineEdit
           value={session.title}
@@ -94,7 +115,7 @@ export function SessionRow({
         <span className="min-w-0 flex-1 truncate">{session.title}</span>
       )}
 
-      {!editing && (
+      {!editing && !selecting && (
         <div className="relative ml-1 flex min-w-[2.75rem] shrink-0 items-center justify-end">
           <time
             dateTime={new Date(session.updatedAt).toISOString()}

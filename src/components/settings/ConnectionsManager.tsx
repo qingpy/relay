@@ -126,19 +126,24 @@ function Editor({ conn }: { conn: Connection }) {
   const [detectError, setDetectError] = useState<string | null>(null);
   const [picker, setPicker] = useState<string[] | null>(null);
   const [testing, setTesting] = useState(false);
+  const [testModel, setTestModel] = useState('');
   const [testResult, setTestResult] = useState<(TestResult & { model: string }) | null>(null);
   const saInput = useRef<HTMLInputElement>(null);
 
+  const testModelId =
+    testModel && conn.models.some((m) => m.id === testModel)
+      ? testModel
+      : conn.models[0]?.id ?? '';
+
   const runTest = async () => {
-    const model = conn.models[0]?.id;
-    if (!model) {
+    if (!testModelId) {
       setTestResult({ ok: false, error: 'Add a model first.', model: '' });
       return;
     }
     setTesting(true);
     setTestResult(null);
-    const r = await testConnection(conn, model);
-    setTestResult({ ...r, model });
+    const r = await testConnection(conn, testModelId);
+    setTestResult({ ...r, model: testModelId });
     setTesting(false);
   };
 
@@ -385,6 +390,20 @@ function Editor({ conn }: { conn: Connection }) {
       </div>
 
       <div className="flex items-center gap-2 pt-1">
+        {conn.models.length > 0 && (
+          <select
+            value={testModelId}
+            onChange={(e) => setTestModel(e.target.value)}
+            className="h-8 max-w-36 rounded-md border border-input bg-transparent pl-2 pr-6 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Model to test"
+          >
+            {conn.models.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.label || m.id}
+              </option>
+            ))}
+          </select>
+        )}
         <Button
           variant="secondary"
           size="sm"
