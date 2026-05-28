@@ -2,9 +2,11 @@ import { create } from 'zustand';
 import { getAppConfig } from '@/db/db';
 import {
   addMessage,
+  getFolder,
   getMessage,
   getMessages,
   getSession,
+  listConnections,
   saveAttachments,
   setCurrentLeaf,
   textPart,
@@ -14,10 +16,12 @@ import {
 } from '@/db/repo';
 import type { Citation, Message, Session, ToolCall, Usage } from '@/db/types';
 import { buildChatMessages, deriveTitle } from '@/lib/conversation';
+import { resolveConfig } from '@/lib/resolve';
 import { activePath } from '@/lib/tree';
 import { readSSE } from '@/lib/sse';
-import { getProvider } from '@/providers/registry';
+import { providerForConnection } from '@/providers/registry';
 import { NEW_SESSION_TITLE } from '@/db/repo';
+import { maybeAutoTitle } from '@/lib/autotitle';
 
 export interface StreamBuffer {
   text: string;
@@ -74,8 +78,12 @@ export const useChatStore = create<ChatState>((set, get) => {
     history: Message[],
   ) => {
     const sessionId = session.id;
-    const config = await getAppConfig();
-    const keyConfig = config.providerKeys[session.provider];
+    const folder = session.folderId ? await getFolder(session.folderId) : undefined;
+    const [connections, config] = await Promise.all([
+      listConnections(),
+      getAppConfig(),
+    ]);
+    const resolved = resolveConfig(session, folder, connections, config);
     const chatMessages = await buildChatMessages(history);
 
     const assistant = await addMessage({ sessionId, parentId, role: 'assistant' });
@@ -116,7 +124,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     const persist = async (final: boolean) => {
       await updateMessage(messageId, {
         content: buf.text ? [textPart(buf.text)] : [],
-        ...(session.model ? { model: session.model } : {}),
+        ...(resolved.model ? { model: resolved.model } : {}),
         ...(buf.reasoning ? { reasoning: buf.reasoning } : {}),
         ...(buf.reasoningMs != null ? { reasoningMs: buf.reasoningMs } : {}),
         ...(buf.toolCalls.length ? { toolCalls: buf.toolCalls } : {}),
@@ -126,13 +134,20 @@ export const useChatStore = create<ChatState>((set, get) => {
     };
 
     try {
-      const provider = getProvider(session.provider);
+      if (!resolved.connection || !resolved.model) {
+        throw new Error(
+          'No model configured. Add a connection in Settings and pick a model for this chat or its preset.',
+        );
+      }
+      const provider = providerForConnection(resolved.connection);
       const req = provider.buildRequest({
-        model: session.model,
+        model: resolved.model,
         messages: chatMessages,
-        settings: session.settings,
-        apiKey: keyConfig?.apiKey,
-        baseUrl: keyConfig?.baseUrl,
+        settings: resolved.settings,
+        apiKey: resolved.connection.apiKey,
+        baseUrl: resolved.connection.baseUrl,
+        project: resolved.connection.project,
+        region: resolved.connection.region,
       });
 
       const res = await fetch(req.url, {
@@ -247,6 +262,7 @@ export const useChatStore = create<ChatState>((set, get) => {
 
       const history = activePath(await getMessages(sessionId), userMsg.id);
       await runTurn(session, userMsg.id, history);
+      void maybeAutoTitle(sessionId);
     },
 
     regenerate: async (sessionId, userId) => {

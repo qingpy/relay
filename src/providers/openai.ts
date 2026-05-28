@@ -1,7 +1,5 @@
-import type { ProviderId } from '@/db/types';
 import type {
   BuildInput,
-  Capabilities,
   ChatMessage,
   Delta,
   Provider,
@@ -81,16 +79,13 @@ interface OpenAIChunk {
 
 /**
  * Covers OpenAI, OpenRouter, and any OpenAI-compatible base URL. OpenRouter and
- * OpenAI differ only in `defaultBaseUrl` and a few extension fields (reasoning,
- * web search), branched on `id`.
+ * OpenAI differ only in a few extension fields (reasoning, web search), branched
+ * on the `openRouter` flavor flag.
  */
 export class OpenAICompatProvider implements Provider {
-  constructor(
-    readonly id: ProviderId,
-    readonly label: string,
-    readonly defaultBaseUrl: string,
-    readonly capabilities: Capabilities,
-  ) {}
+  readonly type = 'openai' as const;
+
+  constructor(private readonly openRouter: boolean) {}
 
   buildRequest({
     model,
@@ -116,7 +111,7 @@ export class OpenAICompatProvider implements Provider {
     if (settings.maxTokens != null) body.max_tokens = settings.maxTokens;
 
     if (settings.reasoningEffort) {
-      if (this.id === 'openrouter') {
+      if (this.openRouter) {
         body.reasoning = { effort: settings.reasoningEffort };
       } else {
         body.reasoning_effort = settings.reasoningEffort;
@@ -124,7 +119,7 @@ export class OpenAICompatProvider implements Provider {
     }
 
     // OpenRouter native web search plugin.
-    if (settings.webSearch && this.id === 'openrouter') {
+    if (settings.webSearch && this.openRouter) {
       body.plugins = [{ id: 'web' }];
     }
 
@@ -136,7 +131,7 @@ export class OpenAICompatProvider implements Provider {
     return {
       url: '/api/chat/openai',
       headers,
-      body: { baseUrl: baseUrl || this.defaultBaseUrl, payload: body },
+      body: { baseUrl, payload: body },
     };
   }
 

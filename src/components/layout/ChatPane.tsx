@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Composer } from '@/components/chat/Composer';
 import { ExportMenu } from '@/components/chat/ExportMenu';
 import { MessageList } from '@/components/chat/MessageList';
-import { ModelSettings } from '@/components/chat/ModelSettings';
 import { SessionControls } from '@/components/chat/SessionControls';
 import { TreeMap } from '@/components/chat/TreeMap';
 import { useUiStore } from '@/store/ui';
@@ -52,7 +51,6 @@ export function ChatPane() {
         <div className="ml-auto flex items-center gap-0.5">
           {activeId && <TreeMap sessionId={activeId} />}
           {activeId && <ExportMenu sessionId={activeId} />}
-          {activeId && <ModelSettings sessionId={activeId} />}
           <Button
             variant="ghost"
             size="icon-sm"

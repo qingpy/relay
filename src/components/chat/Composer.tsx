@@ -14,13 +14,13 @@ import {
   clearContext,
   getSession,
   listPrompts,
-  updateSessionSettings,
+  setSessionWebSearch,
 } from '@/db/repo';
 import type { Prompt } from '@/db/types';
 import { acceptFor, isAllowed } from '@/lib/attachments';
 import { startNewSession } from '@/lib/session-actions';
+import { useResolvedConfig } from '@/lib/useResolved';
 import { cn } from '@/lib/utils';
-import { getProvider } from '@/providers/registry';
 import type { Capabilities } from '@/providers/types';
 import { useChatStore } from '@/store/chat';
 import { SlashPalette } from './SlashPalette';
@@ -47,11 +47,12 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
     [sessionId],
   );
   const prompts = useLiveQuery(() => listPrompts(), [], []);
+  const resolved = useResolvedConfig(sessionId);
   const streaming = useChatStore((s) =>
     sessionId ? !!s.activeBySession[sessionId] : false,
   );
-  const webSearch = session?.settings.webSearch ?? false;
-  const caps = session ? getProvider(session.provider).capabilities : FULL_CAPS;
+  const webSearch = session?.webSearch ?? false;
+  const caps = resolved?.capabilities ?? FULL_CAPS;
 
   const slashQuery =
     value.startsWith('/') && !value.includes('\n') ? value.slice(1) : null;
@@ -202,21 +203,21 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           </Button>
           {sessionId && (
             <>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() =>
-                  void updateSessionSettings(sessionId, { webSearch: !webSearch })
-                }
-                title={webSearch ? 'Web search: on' : 'Web search: off'}
-                aria-pressed={webSearch}
-                className={cn(
-                  webSearch &&
-                    'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
-                )}
-              >
-                <Globe />
-              </Button>
+              {caps.webSearch && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => void setSessionWebSearch(sessionId, !webSearch)}
+                  title={webSearch ? 'Web search: on' : 'Web search: off'}
+                  aria-pressed={webSearch}
+                  className={cn(
+                    webSearch &&
+                      'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
+                  )}
+                >
+                  <Globe />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon-sm"

@@ -8,6 +8,7 @@ import {
   MessageSquarePlus,
   MoreHorizontal,
   Pencil,
+  Settings2,
   Trash2,
 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
@@ -24,11 +25,13 @@ import { startNewSession } from '@/lib/session-actions';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
+import { PresetEditor } from './PresetEditor';
 
 export function FolderRow({ folder, count }: { folder: Folder; count: number }) {
   const collapsed = useUiStore((s) => !!s.collapsedFolders[folder.id]);
   const toggleFolder = useUiStore((s) => s.toggleFolder);
   const [editing, setEditing] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
 
   const {
     attributes,
@@ -51,7 +54,7 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
 
   const onDelete = async () => {
     const ok = await confirm({
-      title: 'Delete folder?',
+      title: 'Delete preset?',
       description:
         count > 0
           ? `"${folder.name}" will be deleted. Its ${count} chat(s) move to the top level.`
@@ -116,7 +119,7 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
               type="button"
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
-              title="Folder options"
+              title="Preset options"
               className="hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:flex data-[state=open]:flex"
             >
               <MoreHorizontal className="size-4" />
@@ -126,6 +129,10 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
             <DropdownMenuItem onSelect={() => void onNewChat()}>
               <MessageSquarePlus />
               New chat
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setTimeout(() => setConfiguring(true), 0)}>
+              <Settings2 />
+              Preset settings
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
               <Pencil />
@@ -138,6 +145,19 @@ export function FolderRow({ folder, count }: { folder: Folder; count: number }) 
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      )}
+
+      {configuring && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <PresetEditor
+            folder={folder}
+            open={configuring}
+            onOpenChange={setConfiguring}
+          />
+        </div>
       )}
     </div>
   );
