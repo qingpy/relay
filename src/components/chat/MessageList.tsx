@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
+  Check,
   ChevronDown,
   ChevronsDown,
   ChevronsUp,
@@ -8,9 +9,13 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getMessages, getSession } from '@/db/repo';
+import type { Message } from '@/db/types';
 import { activePath } from '@/lib/tree';
+import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
+import { useUiStore } from '@/store/ui';
 import { MessageItem } from './MessageItem';
+import { SelectionToolbar } from './SelectionToolbar';
 
 export function MessageList({ sessionId }: { sessionId: string }) {
   const all = useLiveQuery(() => getMessages(sessionId), [sessionId], []);
@@ -19,6 +24,10 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     () => activePath(all, session?.currentLeafId),
     [all, session?.currentLeafId],
   );
+
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const selected = useUiStore((s) => s.selected);
+  const setMessageSelected = useUiStore((s) => s.setMessageSelected);
 
   const activeId = useChatStore((s) => s.activeBySession[sessionId]);
   const streamLen = useChatStore((s) => {
@@ -94,15 +103,34 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [prevUser, nextUser, jumpTop, jumpBottom]);
 
+  const assistantIds = useMemo(
+    () => messages.filter((m) => m.role === 'assistant').map((m) => m.id),
+    [messages],
+  );
+
   return (
     <div className="relative min-h-0 flex-1">
+      {selectionMode && (
+        <SelectionToolbar messages={messages} assistantIds={assistantIds} />
+      )}
       <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
-          {messages.map((m) => (
-            <div key={m.id} data-role={m.role}>
-              <MessageItem message={m} siblings={all} />
-            </div>
-          ))}
+          {messages.map((m) =>
+            selectionMode && m.role === 'assistant' ? (
+              <SelectableRow
+                key={m.id}
+                message={m}
+                checked={!!selected[m.id]}
+                onToggle={() => setMessageSelected(m.id, !selected[m.id])}
+              >
+                <MessageItem message={m} siblings={all} />
+              </SelectableRow>
+            ) : (
+              <div key={m.id} data-role={m.role}>
+                <MessageItem message={m} siblings={all} />
+              </div>
+            ),
+          )}
         </div>
       </div>
 
@@ -122,6 +150,48 @@ export function MessageList({ sessionId }: { sessionId: string }) {
           </NavButton>
         </div>
       )}
+    </div>
+  );
+}
+
+function SelectableRow({
+  message,
+  checked,
+  onToggle,
+  children,
+}: {
+  message: Message;
+  checked: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      data-role={message.role}
+      onClick={onToggle}
+      className={cn(
+        'flex cursor-pointer gap-3 rounded-lg p-2 transition-colors',
+        checked ? 'bg-primary/5 ring-1 ring-inset ring-primary/30' : 'hover:bg-accent/40',
+      )}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+        role="checkbox"
+        aria-checked={checked}
+        className={cn(
+          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
+          checked
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-input',
+        )}
+      >
+        {checked && <Check className="size-3" />}
+      </button>
+      <div className="pointer-events-none min-w-0 flex-1">{children}</div>
     </div>
   );
 }

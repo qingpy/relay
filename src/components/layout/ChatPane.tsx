@@ -1,4 +1,9 @@
-import { MessageSquareText, PanelLeftOpen, Settings } from 'lucide-react';
+import {
+  ListChecks,
+  MessageSquareText,
+  PanelLeftOpen,
+  Settings,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Composer } from '@/components/chat/Composer';
 import { ExportMenu } from '@/components/chat/ExportMenu';
@@ -28,6 +33,8 @@ export function ChatPane() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const activeId = useUiStore((s) => s.activeSessionId);
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  const selectionMode = useUiStore((s) => s.selectionMode);
+  const toggleSelectionMode = useUiStore((s) => s.toggleSelectionMode);
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-background">
@@ -49,6 +56,23 @@ export function ChatPane() {
           <span className="text-sm font-medium text-muted-foreground">Relay</span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
+          {activeId && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={toggleSelectionMode}
+              title="Select messages"
+              aria-label="Select messages"
+              aria-pressed={selectionMode}
+              className={
+                selectionMode
+                  ? 'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary'
+                  : undefined
+              }
+            >
+              <ListChecks />
+            </Button>
+          )}
           {activeId && <TreeMap sessionId={activeId} />}
           {activeId && <ExportMenu sessionId={activeId} />}
           <Button

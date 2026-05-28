@@ -19,6 +19,14 @@ interface UiState {
   activeSessionId: string | null;
   setActiveSession: (id: string | null) => void;
 
+  /** Multi-select mode for assistant messages (bulk copy/export/delete). */
+  selectionMode: boolean;
+  selected: Record<string, true>;
+  toggleSelectionMode: () => void;
+  setMessageSelected: (id: string, on: boolean) => void;
+  setSelection: (ids: string[]) => void;
+  clearSelection: () => void;
+
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
@@ -35,7 +43,23 @@ interface UiState {
 
 export const useUiStore = create<UiState>((set) => ({
   activeSessionId: null,
-  setActiveSession: (id) => set({ activeSessionId: id }),
+  setActiveSession: (id) =>
+    set({ activeSessionId: id, selectionMode: false, selected: {} }),
+
+  selectionMode: false,
+  selected: {},
+  toggleSelectionMode: () =>
+    set((s) => ({ selectionMode: !s.selectionMode, selected: {} })),
+  setMessageSelected: (id, on) =>
+    set((s) => {
+      const selected = { ...s.selected };
+      if (on) selected[id] = true;
+      else delete selected[id];
+      return { selected };
+    }),
+  setSelection: (ids) =>
+    set({ selected: Object.fromEntries(ids.map((id) => [id, true])) }),
+  clearSelection: () => set({ selected: {} }),
 
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
