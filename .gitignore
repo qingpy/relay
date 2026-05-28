@@ -37,3 +37,7 @@ Thumbs.db
 service-account*.json
 gcp-*.json
 vertex-*.json
+
+# local backups (contain API keys) — NEVER commit
+backups/
+relay-backup-*.json

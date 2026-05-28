@@ -274,6 +274,12 @@ Resolved:
   toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
   service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
   **Auto-title** uses a configurable connection/model + prompt.
+- **Backup & restore** (user request, 2026-05-28): a full DB dump (config, chats/history,
+  connections incl. keys, prompts, attachments as base64) to a portable JSON. **Export/import** a
+  file client-side; **back up to the server's local disk** (`POST /api/backup`, listed/restored/
+  deleted via the proxy; dir = `RELAY_BACKUP_DIR`, default `./backups`, gitignored) so it survives a
+  cleared browser and works on a VPS. **Scheduled** backups run client-side while the app is open
+  (interval in `appConfig.backup`). Restore replaces the whole DB and reloads.
 - **Connections round 3** (user request, 2026-05-28): **two connection types** — `openai`
   (OpenAI-compatible; covers OpenRouter/OpenAI/Groq/local and Gemini via its OpenAI endpoint) and
   `vertex` (the incompatible one). Native Gemini AI Studio is reached through the OpenAI-compatible

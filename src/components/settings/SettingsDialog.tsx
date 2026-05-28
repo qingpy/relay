@@ -10,6 +10,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { useUiStore } from '@/store/ui';
 import { AutoTitleSettings } from './AutoTitleSettings';
+import { BackupSettings } from './BackupSettings';
 import { ConnectionsManager } from './ConnectionsManager';
 import { PromptsManager } from './PromptsManager';
 
@@ -35,6 +36,7 @@ export function SettingsDialog() {
           <AutoTitleSettings />
           <ExportSettings />
           <PromptsManager />
+          <BackupSettings />
         </div>
       </DialogContent>
     </Dialog>

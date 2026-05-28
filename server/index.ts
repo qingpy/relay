@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { backup } from './backup.ts';
 import { chat } from './chat.ts';
 import { models } from './models.ts';
 
@@ -31,6 +32,7 @@ api.get('/health', (c) =>
 );
 api.route('/chat', chat);
 api.route('/models', models);
+api.route('/backup', backup);
 app.route('/api', api);
 
 // Serve the built SPA in production (no-op in dev — dist/ won't exist).

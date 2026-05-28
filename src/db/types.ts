@@ -199,5 +199,14 @@ export interface AppConfig {
   titleConnectionId?: string;
   titleModel?: string;
   titlePrompt?: string;
+  /** Scheduled local backups (run while the app is open). */
+  backup?: BackupSettings;
   webdav?: WebDavConfig;
+}
+
+export interface BackupSettings {
+  scheduleEnabled?: boolean;
+  /** How often to write a scheduled backup, in hours. */
+  intervalHours?: number;
+  lastBackupAt?: number;
 }
