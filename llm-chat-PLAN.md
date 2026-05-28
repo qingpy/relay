@@ -214,13 +214,19 @@ A usable daily driver exists after **M4**; M5–M7 are quality-of-life.
 
 ---
 
-## 9. Open Decisions for Next Session
+## 9. Decisions (resolved) & still-open
 
-- **Project name** (working title `llm-chat`). Pick a real one before scaffolding.
-- **Theme**: light-only first, or light+dark from the start?
-- **Default provider/model** to preselect.
+Resolved:
+- **Project name**: **Relay**.
+- **Theme**: **light + dark from the start** (CSS variables + `.dark`, `system` default).
+- **Default provider/model**: **OpenRouter**, model `openai/gpt-4o-mini`. Provider ids
+  are `openrouter | openai | gemini | vertex`; OpenRouter and OpenAI share
+  `OpenAICompatProvider` (differ by base URL).
+
+Still open:
 - **Deploy target** to optimize for first (local vs VPS vs Cloudflare) — affects only deploy config.
-- Confirm **Vertex** project/location/region and that a service-account JSON is available.
+- Confirm **Vertex** project/location/region and that a service-account JSON is available
+  (Vertex provider is registered but not yet implemented).
 
 ## 10. First Steps (when you open the new session)
 
