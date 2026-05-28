@@ -274,6 +274,11 @@ Resolved:
   toggle). The old global "default model" setting is gone. **Vertex**: framework only (server-side
   service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`; client sends project/region/model).
   **Auto-title** uses a configurable connection/model + prompt.
+- **Round 5 tweaks** (user request, 2026-05-28): Vertex `global` location uses host
+  `aiplatform.googleapis.com` (regions stay `{region}-aiplatform…`). New connections start with **no
+  models** (detect/add to populate). A chat can be **moved between presets** from its sidebar menu
+  ("Move to preset"). The Connections page has a **Test** button that sends a tiny message via the
+  first model and reports ok+latency or the error.
 - **Round 4 tweaks** (user request, 2026-05-28): the OpenAI-style connection type is labelled
   **"Custom"** (it's a flexible base-URL/key upstream); **Vertex** creds now live on the connection
   (project, region, client_email, private_key — or upload the service-account JSON to parse them) and

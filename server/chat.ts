@@ -114,8 +114,13 @@ chat.post('/vertex', async (c) => {
     return errorResponse(`Vertex auth failed: ${String(err)}`, 502);
   }
 
+  // The `global` location uses the un-prefixed host; regions are prefixed.
+  const host =
+    region === 'global'
+      ? 'aiplatform.googleapis.com'
+      : `${region}-aiplatform.googleapis.com`;
   const endpoint =
-    `https://${region}-aiplatform.googleapis.com/v1/projects/${project}` +
+    `https://${host}/v1/projects/${project}` +
     `/locations/${region}/publishers/google/models/` +
     `${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
 

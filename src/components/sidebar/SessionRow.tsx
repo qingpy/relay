@@ -1,15 +1,25 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Copy, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Check, Copy, FolderInput, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { deleteSession, duplicateSession, renameSession } from '@/db/repo';
+import {
+  deleteSession,
+  duplicateSession,
+  listFolders,
+  moveSessionToFolder,
+  renameSession,
+} from '@/db/repo';
 import type { Session } from '@/db/types';
 import { formatDateTime, formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -25,6 +35,7 @@ export function SessionRow({
 }) {
   const activeId = useUiStore((s) => s.activeSessionId);
   const setActive = useUiStore((s) => s.setActiveSession);
+  const folders = useLiveQuery(() => listFolders(), [], []);
   const [editing, setEditing] = useState(false);
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -115,6 +126,28 @@ export function SessionRow({
                 <Copy />
                 Duplicate
               </DropdownMenuItem>
+              {folders.length > 1 && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <FolderInput />
+                    Move to preset
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {folders.map((f) => (
+                      <DropdownMenuItem
+                        key={f.id}
+                        disabled={f.id === session.folderId}
+                        onSelect={() =>
+                          void moveSessionToFolder(session.id, f.id)
+                        }
+                      >
+                        {f.id === session.folderId ? <Check /> : <span className="size-4" />}
+                        <span className="min-w-0 truncate">{f.name}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              )}
               <DropdownMenuItem destructive onSelect={() => void onDelete()}>
                 <Trash2 />
                 Delete

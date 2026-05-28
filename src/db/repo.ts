@@ -11,7 +11,7 @@ import type {
   Session,
   StoredFile,
 } from './types';
-import { DEFAULT_BASE_URL, flavorOf, seedModelsFor } from '@/lib/models';
+import { DEFAULT_BASE_URL, flavorOf } from '@/lib/models';
 
 export const NEW_SESSION_TITLE = 'New chat';
 
@@ -219,7 +219,7 @@ export async function createConnection(input: {
     type: input.type,
     baseUrl,
     apiKey: input.apiKey,
-    models: seedModelsFor(input.type, baseUrl),
+    models: [],
     enabled: true,
     order: (last?.order ?? -1) + 1,
     createdAt: Date.now(),

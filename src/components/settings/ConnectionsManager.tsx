@@ -18,6 +18,7 @@ import type {
   ModelCapabilities,
   SavedModel,
 } from '@/db/types';
+import { testConnection, type TestResult } from '@/lib/connTest';
 import { detectModels } from '@/lib/detect';
 import { toSavedModel } from '@/lib/models';
 import { cn } from '@/lib/utils';
@@ -124,7 +125,22 @@ function Editor({ conn }: { conn: Connection }) {
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
   const [picker, setPicker] = useState<string[] | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<(TestResult & { model: string }) | null>(null);
   const saInput = useRef<HTMLInputElement>(null);
+
+  const runTest = async () => {
+    const model = conn.models[0]?.id;
+    if (!model) {
+      setTestResult({ ok: false, error: 'Add a model first.', model: '' });
+      return;
+    }
+    setTesting(true);
+    setTestResult(null);
+    const r = await testConnection(conn, model);
+    setTestResult({ ...r, model });
+    setTesting(false);
+  };
 
   const uploadServiceAccount = async (file: File) => {
     try {
@@ -368,11 +384,32 @@ function Editor({ conn }: { conn: Connection }) {
         </div>
       </div>
 
-      <div className="flex justify-end pt-1">
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={testing}
+          onClick={() => void runTest()}
+        >
+          {testing ? 'Testing…' : 'Test'}
+        </Button>
+        {testResult && (
+          <span
+            className={cn(
+              'min-w-0 truncate text-xs',
+              testResult.ok ? 'text-primary' : 'text-destructive',
+            )}
+            title={testResult.error || testResult.text}
+          >
+            {testResult.ok
+              ? `✓ ${testResult.model} · ${testResult.ms}ms`
+              : `✗ ${testResult.error}`}
+          </span>
+        )}
         <Button
           variant="ghost"
           size="sm"
-          className="gap-1.5 text-destructive hover:text-destructive"
+          className="ml-auto gap-1.5 text-destructive hover:text-destructive"
           onClick={() => void onDelete()}
         >
           <Trash2 className="size-3.5" />
