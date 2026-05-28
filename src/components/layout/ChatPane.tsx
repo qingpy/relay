@@ -1,6 +1,7 @@
 import { MessageSquareText, PanelLeftOpen, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Composer } from '@/components/chat/Composer';
+import { ExportMenu } from '@/components/chat/ExportMenu';
 import { MessageList } from '@/components/chat/MessageList';
 import { ModelSettings } from '@/components/chat/ModelSettings';
 import { SessionControls } from '@/components/chat/SessionControls';
@@ -48,6 +49,7 @@ export function ChatPane() {
           <span className="text-sm font-medium text-muted-foreground">Relay</span>
         )}
         <div className="ml-auto flex items-center gap-0.5">
+          {activeId && <ExportMenu sessionId={activeId} />}
           {activeId && <ModelSettings sessionId={activeId} />}
           <Button
             variant="ghost"

@@ -6,6 +6,7 @@ import { partsText } from '@/lib/conversation';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
 import { Markdown } from './Markdown';
+import { MessageActions } from './MessageActions';
 import { MessageAttachments } from './MessageAttachments';
 import { Reasoning } from './Reasoning';
 import { ToolCard } from './ToolCard';
@@ -94,9 +95,14 @@ export const MessageItem = memo(function MessageItem({
         </div>
       )}
       {citations.length > 0 && <Citations citations={citations} />}
-      {!streaming && message.usage?.totalTokens != null && (
-        <div className="mt-1.5 text-[11px] text-muted-foreground">
-          {message.usage.totalTokens} tokens
+      {!streaming && (text || reasoning) && (
+        <div className="flex items-center justify-between">
+          <MessageActions message={message} />
+          {message.usage?.totalTokens != null && (
+            <span className="text-[11px] text-muted-foreground">
+              {message.usage.totalTokens} tokens
+            </span>
+          )}
         </div>
       )}
     </div>

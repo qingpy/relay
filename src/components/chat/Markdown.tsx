@@ -6,6 +6,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import 'katex/dist/katex.min.css';
+// Installs a global copy handler: selecting rendered math copies its LaTeX source.
+import 'katex/dist/contrib/copy-tex.mjs';
 
 const components: Components = {
   a: ({ node: _node, ...props }) => (
