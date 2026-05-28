@@ -43,7 +43,7 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
   id: APP_CONFIG_ID,
   providerKeys: {},
   theme: 'system',
-  defaultProvider: 'openai',
+  defaultProvider: 'openrouter',
   defaultModel: 'openai/gpt-4o-mini',
 };
 
@@ -53,6 +53,16 @@ export async function getAppConfig(): Promise<AppConfig> {
   if (existing) return existing;
   await db.appConfig.put(DEFAULT_APP_CONFIG);
   return DEFAULT_APP_CONFIG;
+}
+
+/** Merge a patch into the singleton config. */
+export async function updateAppConfig(
+  patch: Partial<Omit<AppConfig, 'id'>>,
+): Promise<AppConfig> {
+  const current = await getAppConfig();
+  const next = { ...current, ...patch, id: APP_CONFIG_ID };
+  await db.appConfig.put(next);
+  return next;
 }
 
 export function newId(): string {
