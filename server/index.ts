@@ -6,6 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { chat } from './chat.ts';
+import { models } from './models.ts';
 
 /**
  * Relay proxy — a thin, stateless request forwarder (plan §6).
@@ -29,6 +30,7 @@ api.get('/health', (c) =>
   c.json({ ok: true, service: 'relay-proxy', time: Date.now() }),
 );
 api.route('/chat', chat);
+api.route('/models', models);
 app.route('/api', api);
 
 // Serve the built SPA in production (no-op in dev — dist/ won't exist).

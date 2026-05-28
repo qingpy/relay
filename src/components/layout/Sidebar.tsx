@@ -43,8 +43,8 @@ export function Sidebar() {
           variant="secondary"
           size="icon"
           onClick={() => void createFolder()}
-          title="New folder"
-          aria-label="New folder"
+          title="New preset"
+          aria-label="New preset"
         >
           <FolderPlus />
         </Button>

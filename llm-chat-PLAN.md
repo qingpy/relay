@@ -108,10 +108,18 @@ with a curated, user-editable fallback list.
 ## 4. Data Model (Dexie / IndexedDB)
 
 ```
-folders   { id, name, parentId|null, order, createdAt }
-sessions  { id, folderId|null, title, provider, model,
-            settings: { temperature, topP, maxTokens, systemPrompt,
-                        reasoningEffort?, thinkingBudget?, webSearch: bool },
+connections { id, name, type: openai|gemini|vertex,   // user-defined upstream
+              baseUrl?, apiKey?,                       // key lives in IndexedDB
+              models: SavedModel[],                    // { id, label?, capabilities }
+              project?, region?,                       // vertex (auth JSON is server-side)
+              order, createdAt }
+folders   { id, name, parentId|null, order, createdAt,  // a "Preset" in the UI
+            connectionId?, model?,                    // fixes the model for its chats
+            settings?: { temperature, topP, maxTokens, reasoningEffort?, thinkingBudget? },
+            systemPrompt? }                           // shared, prepended to each chat's
+sessions  { id, folderId|null, title,                 // folderId = preset (sets model)
+            systemPrompt?,              // per-chat, appended to preset's
+            webSearch?,                 // per-chat toggle
             currentLeafId?,             // active branch tip (see Branching)
             createdAt, updatedAt, order }
 messages  { id, sessionId, parentId|null,   // tree edge -> enables branching
@@ -122,12 +130,22 @@ messages  { id, sessionId, parentId|null,   // tree edge -> enables branching
             toolCalls?: ToolCall[],     // foldable tool/search cards
             citations?: Citation[],
             attachments?: fileId[],
+            model?,                     // model id that produced the answer
             usage?, createdAt }
 files     { id, sessionId, messageId, name, mimeType, size, blob, createdAt }
 prompts   { id, title, content, order }      // quick prompts
-appConfig { id:'singleton', providerKeys, theme, defaultProvider,
-            defaultModel, webdav: { url, user, pass, path, enabled }, ... }
+appConfig { id:'singleton', theme, defaultConnectionId?,
+            exportIncludeThinking?,                   // include reasoning in exports
+            titleConnectionId?, titleModel?, titlePrompt?,   // auto-titling
+            webdav: { url, user, pass, path, enabled }, ... }
 ```
+
+- **Connections & presets (M7-pre redesign).** Upstreams are user-defined **connections** (name +
+  protocol + key/URL + a saved **model catalog** with per-model capabilities, detected via the proxy
+  and editable). A **Preset** (stored as a folder) fixes the connection, model, settings, and a shared
+  system prompt for the chats inside it; a chat only adds an extra system prompt + a web-search
+  toggle. Loose chats use the default connection's first model. Capabilities gate the composer
+  (vision/pdf/web). Migration v3 turns old provider keys into connections and seeds presets/chats.
 
 - **Context divider** = a `role: 'divider'` message. Messages before the *latest* divider are
   shown in the UI but **excluded** from what's sent to the model. Removing the divider restores
@@ -248,6 +266,13 @@ Resolved:
 
 - **WebDAV sync deferred** (user request, 2026-05-28). M6 is now *message actions & branching*;
   sync moves to a post-M7 "Deferred" milestone.
+- **Connections & presets redesign** (user request, 2026-05-28): fixed providers replaced by
+  user-defined **connections** (multiple per protocol, custom name/URL/key, saved model catalog with
+  per-model capabilities); folders became **Presets** that fix the model/settings/system-prompt for
+  their chats (**workspace-only model** — a chat adds only an extra system prompt + web-search
+  toggle). Loose chats fall back to the default connection. The old global "default model" setting is
+  gone. **Vertex**: framework only (server-side service-account JSON via `GOOGLE_VERTEX_CREDENTIALS`;
+  client sends project/region/model). **Auto-title** uses a configurable connection/model + prompt.
 - **Branching model**: messages form a tree via `parentId`; the session's `currentLeafId` selects
   the visible path. Regenerate / edit / fork create siblings (non-destructive); a tree overview map
   navigates between branches. Implementation choices (M6):

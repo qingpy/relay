@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { getAccessToken, loadServiceAccount } from './vertex-auth.ts';
 
 /**
  * Chat passthrough routes. The client builds the provider payload; the proxy
@@ -7,19 +8,21 @@ import { Hono } from 'hono';
  *  - OpenAI-compatible (OpenRouter / OpenAI / any base URL): key from the
  *    `x-api-key` header, or `OPENROUTER_KEY` / `OPENAI_KEY` env as fallback.
  *  - Gemini AI Studio: key from `x-api-key`, or `GEMINI_KEY` env.
+ *  - Vertex AI: server-minted OAuth token from a service-account JSON
+ *    (`GOOGLE_VERTEX_CREDENTIALS`), never exposed to the browser.
  *
  * Endpoints validate the upstream origin so the proxy can't be turned into an
- * open forwarder. Vertex (server-minted OAuth) is added in a later milestone.
+ * open forwarder.
  */
 export const chat = new Hono();
 
-const SSE_HEADERS = {
+export const SSE_HEADERS = {
   'content-type': 'text/event-stream; charset=utf-8',
   'cache-control': 'no-cache',
   connection: 'keep-alive',
 } as const;
 
-function errorResponse(message: string, status: number): Response {
+export function errorResponse(message: string, status: number): Response {
   return new Response(JSON.stringify({ error: message }), {
     status,
     headers: { 'content-type': 'application/json' },
@@ -27,7 +30,7 @@ function errorResponse(message: string, status: number): Response {
 }
 
 /** Normalize and validate an OpenAI-compatible base URL. */
-function safeBaseUrl(raw: unknown): string | null {
+export function safeBaseUrl(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw) return null;
   try {
     const url = new URL(raw);
@@ -61,6 +64,57 @@ chat.post('/openai', async (c) => {
         'content-type': 'application/json',
         authorization: `Bearer ${key}`,
         'X-Title': 'Relay',
+      },
+      body: JSON.stringify(payload),
+      signal: c.req.raw.signal,
+    });
+  } catch (err) {
+    return errorResponse(`Upstream request failed: ${String(err)}`, 502);
+  }
+
+  if (!upstream.ok || !upstream.body) {
+    const text = await upstream.text().catch(() => '');
+    return errorResponse(text || upstream.statusText, upstream.status);
+  }
+  return new Response(upstream.body, { headers: SSE_HEADERS });
+});
+
+chat.post('/vertex', async (c) => {
+  const { project, region, model, payload } = await c.req
+    .json<{ project?: string; region?: string; model?: string; payload?: unknown }>()
+    .catch(() => ({ project: undefined, region: undefined, model: undefined, payload: undefined }));
+
+  if (!project || !region || !model || !payload) {
+    return errorResponse('Missing project, region, model, or payload.', 400);
+  }
+
+  const sa = loadServiceAccount();
+  if (!sa) {
+    return errorResponse(
+      'Vertex is not configured: set GOOGLE_VERTEX_CREDENTIALS (the service-account JSON) on the server.',
+      501,
+    );
+  }
+
+  let token: string;
+  try {
+    token = await getAccessToken(sa);
+  } catch (err) {
+    return errorResponse(`Vertex auth failed: ${String(err)}`, 502);
+  }
+
+  const endpoint =
+    `https://${region}-aiplatform.googleapis.com/v1/projects/${project}` +
+    `/locations/${region}/publishers/google/models/` +
+    `${encodeURIComponent(model)}:streamGenerateContent?alt=sse`;
+
+  let upstream: Response;
+  try {
+    upstream = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${token}`,
       },
       body: JSON.stringify(payload),
       signal: c.req.raw.signal,

@@ -1,37 +1,30 @@
-import { db, newId } from './db';
+import { db, getAppConfig, newId, updateAppConfig } from './db';
 import type {
+  Connection,
+  ConnectionType,
   Folder,
   Message,
   MessageRole,
   Part,
   Prompt,
-  ProviderId,
+  SavedModel,
   Session,
-  SessionSettings,
   StoredFile,
 } from './types';
-
-export const DEFAULT_SESSION_SETTINGS: SessionSettings = {
-  webSearch: false,
-};
+import { DEFAULT_BASE_URL, flavorOf, seedModelsFor } from '@/lib/models';
 
 export const NEW_SESSION_TITLE = 'New chat';
 
 export async function createSession(input: {
-  provider: ProviderId;
-  model: string;
   title?: string;
   folderId?: string | null;
-  settings?: Partial<SessionSettings>;
 }): Promise<Session> {
   const now = Date.now();
   const session: Session = {
     id: newId(),
     folderId: input.folderId ?? null,
     title: input.title ?? NEW_SESSION_TITLE,
-    provider: input.provider,
-    model: input.model,
-    settings: { ...DEFAULT_SESSION_SETTINGS, ...input.settings },
+    webSearch: false,
     createdAt: now,
     updatedAt: now,
     // Negative so ascending `order` sort places new chats at the top; manual
@@ -70,14 +63,20 @@ export async function configureSession(
   await db.sessions.update(id, patch);
 }
 
-/** Merge a patch into a session's settings (no `updatedAt` bump). */
-export async function updateSessionSettings(
+/** Toggle this chat's web search (no `updatedAt` bump). */
+export async function setSessionWebSearch(
   id: string,
-  patch: Partial<SessionSettings>,
+  webSearch: boolean,
 ): Promise<void> {
-  const session = await db.sessions.get(id);
-  if (!session) return;
-  await db.sessions.update(id, { settings: { ...session.settings, ...patch } });
+  await db.sessions.update(id, { webSearch });
+}
+
+/** Set this chat's extra system prompt (appended to its preset's). */
+export async function setSessionSystemPrompt(
+  id: string,
+  systemPrompt: string | undefined,
+): Promise<void> {
+  await db.sessions.update(id, { systemPrompt: systemPrompt || undefined });
 }
 
 export async function deleteSession(id: string): Promise<void> {
@@ -117,23 +116,47 @@ export function listFolders(): Promise<Folder[]> {
   return db.folders.orderBy('order').toArray();
 }
 
+export function getFolder(id: string): Promise<Folder | undefined> {
+  return db.folders.get(id);
+}
+
 export async function createFolder(
-  name = 'New folder',
+  name = 'New preset',
   parentId: string | null = null,
 ): Promise<Folder> {
+  // Seed the preset with the default connection and its first model.
+  const [config, connections] = await Promise.all([
+    getAppConfig(),
+    listConnections(),
+  ]);
+  const conn =
+    (config.defaultConnectionId &&
+      connections.find((c) => c.id === config.defaultConnectionId)) ||
+    connections[0];
   const folder: Folder = {
     id: newId(),
     name,
     parentId,
     order: -Date.now(),
     createdAt: Date.now(),
+    connectionId: conn?.id ?? null,
+    model: conn?.models[0]?.id ?? '',
+    settings: {},
   };
   await db.folders.add(folder);
   return folder;
 }
 
 export async function renameFolder(id: string, name: string): Promise<void> {
-  await db.folders.update(id, { name: name.trim() || 'Untitled folder' });
+  await db.folders.update(id, { name: name.trim() || 'Untitled preset' });
+}
+
+/** Update a preset's model/connection/settings/system-prompt. */
+export async function updateFolderConfig(
+  id: string,
+  patch: Partial<Pick<Folder, 'connectionId' | 'model' | 'settings' | 'systemPrompt'>>,
+): Promise<void> {
+  await db.folders.update(id, patch);
 }
 
 /** Delete a folder, promoting its sessions and subfolders to the root. */
@@ -156,6 +179,82 @@ export async function persistFolderOrder(
 ): Promise<void> {
   await db.transaction('rw', db.folders, async () => {
     for (const it of items) await db.folders.update(it.id, { order: it.order });
+  });
+}
+
+// --- Connections -----------------------------------------------------------
+
+const CONNECTION_TYPE_NAME: Record<ConnectionType, string> = {
+  openai: 'OpenAI-compatible',
+  gemini: 'Gemini',
+  vertex: 'Vertex AI',
+};
+
+export function listConnections(): Promise<Connection[]> {
+  return db.connections.orderBy('order').toArray();
+}
+
+export function getConnection(id: string): Promise<Connection | undefined> {
+  return db.connections.get(id);
+}
+
+export async function createConnection(input: {
+  name?: string;
+  type: ConnectionType;
+  baseUrl?: string;
+  apiKey?: string;
+}): Promise<Connection> {
+  const last = await db.connections.orderBy('order').last();
+  const baseUrl =
+    input.baseUrl ?? DEFAULT_BASE_URL[flavorOf(input.type, input.baseUrl)];
+  const conn: Connection = {
+    id: newId(),
+    name: input.name?.trim() || CONNECTION_TYPE_NAME[input.type],
+    type: input.type,
+    baseUrl,
+    apiKey: input.apiKey,
+    models: seedModelsFor(input.type, baseUrl),
+    order: (last?.order ?? -1) + 1,
+    createdAt: Date.now(),
+  };
+  await db.connections.add(conn);
+  const cfg = await getAppConfig();
+  if (!cfg.defaultConnectionId) {
+    await updateAppConfig({ defaultConnectionId: conn.id });
+  }
+  return conn;
+}
+
+export async function updateConnection(
+  id: string,
+  patch: Partial<Omit<Connection, 'id' | 'createdAt'>>,
+): Promise<void> {
+  await db.connections.update(id, patch);
+}
+
+export async function setConnectionModels(
+  id: string,
+  models: SavedModel[],
+): Promise<void> {
+  await db.connections.update(id, { models });
+}
+
+export async function deleteConnection(id: string): Promise<void> {
+  await db.connections.delete(id);
+  const cfg = await getAppConfig();
+  if (cfg.defaultConnectionId === id) {
+    const next = await db.connections.orderBy('order').first();
+    await updateAppConfig({ defaultConnectionId: next?.id });
+  }
+}
+
+export async function persistConnectionOrder(
+  items: { id: string; order: number }[],
+): Promise<void> {
+  await db.transaction('rw', db.connections, async () => {
+    for (const it of items) {
+      await db.connections.update(it.id, { order: it.order });
+    }
   });
 }
 

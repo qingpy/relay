@@ -5,7 +5,8 @@
  * offline and synced without a server assigning keys.
  */
 
-export type ProviderId = 'openrouter' | 'openai' | 'gemini' | 'vertex';
+/** Wire protocol a connection speaks. OpenRouter/OpenAI/etc. are all `openai`. */
+export type ConnectionType = 'openai' | 'gemini' | 'vertex';
 
 export type MessageRole = 'user' | 'assistant' | 'system' | 'divider';
 
@@ -42,33 +43,92 @@ export interface Usage {
   reasoningTokens?: number;
 }
 
-export interface SessionSettings {
+/** What a model can do. Saved per model and used to gate the composer UI. */
+export interface ModelCapabilities {
+  vision: boolean;
+  pdf: boolean;
+  reasoning: boolean;
+  webSearch: boolean;
+  toolUse: boolean;
+}
+
+/** A model saved in a connection's catalog. */
+export interface SavedModel {
+  id: string;
+  label?: string;
+  capabilities: ModelCapabilities;
+}
+
+/**
+ * A user-defined upstream: a name, a protocol, credentials, and a saved model
+ * catalog. Multiple connections may share a protocol (e.g. two OpenAI-compatible
+ * endpoints). API keys live here in IndexedDB; Vertex auth stays server-side.
+ */
+export interface Connection {
+  id: string;
+  name: string;
+  type: ConnectionType;
+  /** Base URL for OpenAI-compatible endpoints. */
+  baseUrl?: string;
+  /** API key (browser-stored). Not used by Vertex (server-side auth). */
+  apiKey?: string;
+  models: SavedModel[];
+  /** Vertex project id (auth JSON is server-side). */
+  project?: string;
+  /** Vertex region, e.g. `us-central1`. */
+  region?: string;
+  order: number;
+  createdAt: number;
+}
+
+/** Model knobs shared by a preset (the system prompt and web search live
+ *  elsewhere — on the preset and the chat respectively). */
+export interface ModelSettings {
   temperature?: number;
   topP?: number;
   maxTokens?: number;
-  systemPrompt?: string;
   /** OpenAI-style reasoning effort. */
   reasoningEffort?: 'low' | 'medium' | 'high';
   /** Gemini-style thinking token budget. */
   thinkingBudget?: number;
-  webSearch: boolean;
 }
 
+/** The full settings object handed to a provider's `buildRequest`. */
+export interface ProviderSettings extends ModelSettings {
+  systemPrompt?: string;
+  webSearch?: boolean;
+}
+
+/**
+ * A "Preset" in the UI: a container of chats that also fixes the model,
+ * settings, and a shared system prompt for everything inside it. (Stored as
+ * `folders` for migration continuity.)
+ */
 export interface Folder {
   id: string;
   name: string;
   parentId: string | null;
   order: number;
   createdAt: number;
+  /** Connection whose model this preset uses. */
+  connectionId?: string | null;
+  /** Model id (from the connection's catalog) for chats in this preset. */
+  model?: string;
+  /** Shared model knobs. */
+  settings?: ModelSettings;
+  /** Shared system prompt, prepended to each chat's own. */
+  systemPrompt?: string;
 }
 
 export interface Session {
   id: string;
+  /** Preset this chat belongs to (null = loose, uses the default connection). */
   folderId: string | null;
   title: string;
-  provider: ProviderId;
-  model: string;
-  settings: SessionSettings;
+  /** Per-chat system prompt, appended to the preset's. */
+  systemPrompt?: string;
+  /** Per-chat web-search toggle. */
+  webSearch?: boolean;
   /** Active branch tip — the conversation shown is root → this leaf. */
   currentLeafId?: string;
   createdAt: number;
@@ -116,13 +176,6 @@ export interface Prompt {
   order: number;
 }
 
-/** Per-provider stored API key (entered in the UI, kept in IndexedDB). */
-export interface ProviderKeyConfig {
-  apiKey?: string;
-  /** Override base URL for OpenAI-compatible providers. */
-  baseUrl?: string;
-}
-
 export interface WebDavConfig {
   url: string;
   user: string;
@@ -133,11 +186,14 @@ export interface WebDavConfig {
 
 export interface AppConfig {
   id: 'singleton';
-  providerKeys: Partial<Record<ProviderId, ProviderKeyConfig>>;
   theme: 'light' | 'dark' | 'system';
-  defaultProvider: ProviderId;
-  defaultModel: string;
+  /** Connection used for loose chats and as the default for new presets. */
+  defaultConnectionId?: string;
   /** Include the model's "thinking" in markdown export/download (default off). */
   exportIncludeThinking?: boolean;
+  /** Auto-titling: which connection/model and the instruction prompt. */
+  titleConnectionId?: string;
+  titleModel?: string;
+  titlePrompt?: string;
   webdav?: WebDavConfig;
 }

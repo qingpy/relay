@@ -1,10 +1,14 @@
 import type {
   Citation,
-  ProviderId,
-  SessionSettings,
+  ConnectionType,
+  ModelCapabilities,
+  ProviderSettings,
   ToolCall,
   Usage,
 } from '@/db/types';
+
+/** UI capability gate type (same shape as a model's saved capabilities). */
+export type Capabilities = ModelCapabilities;
 
 /** A binary/text attachment resolved to inline data, ready to send. */
 export interface Attachment {
@@ -20,14 +24,6 @@ export interface ChatMessage {
   role: 'user' | 'assistant' | 'system';
   text: string;
   attachments?: Attachment[];
-}
-
-export interface Capabilities {
-  vision: boolean;
-  pdf: boolean;
-  reasoning: boolean;
-  webSearch: boolean;
-  toolUse: boolean;
 }
 
 /** A streaming event parsed from a provider's SSE chunk. */
@@ -55,17 +51,16 @@ export interface ProxyRequest {
 export interface BuildInput {
   model: string;
   messages: ChatMessage[];
-  settings: SessionSettings;
+  settings: ProviderSettings;
   apiKey?: string;
   baseUrl?: string;
+  /** Vertex only. */
+  project?: string;
+  region?: string;
 }
 
 export interface Provider {
-  id: ProviderId;
-  label: string;
-  capabilities: Capabilities;
-  /** Default upstream base URL (OpenAI-compatible providers). */
-  defaultBaseUrl?: string;
+  type: ConnectionType;
   /** Build the request we POST to the proxy. */
   buildRequest(input: BuildInput): ProxyRequest;
   /** Parse one SSE `data:` payload into zero or more deltas. */
