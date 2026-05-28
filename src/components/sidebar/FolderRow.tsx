@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  Check,
   ChevronRight,
   Folder as FolderIcon,
   FolderOpen,
+  Minus,
   MoreHorizontal,
   Pencil,
-  Settings2,
   Trash2,
 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
@@ -23,24 +24,30 @@ import type { Folder } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
-import { PresetEditor } from './PresetEditor';
 
 export function FolderRow({
   folder,
   count,
   topChatId,
+  chatIds = [],
 }: {
   folder: Folder;
   count: number;
   topChatId?: string;
+  chatIds?: string[];
 }) {
   const collapsed = useUiStore((s) => !!s.collapsedFolders[folder.id]);
   const toggleFolder = useUiStore((s) => s.toggleFolder);
   const setActivePreset = useUiStore((s) => s.setActivePreset);
   const setActive = useUiStore((s) => s.setActiveSession);
   const isActivePreset = useUiStore((s) => s.activePresetId === folder.id);
+  const selecting = useUiStore((s) => s.chatSelectMode);
+  const selectedChats = useUiStore((s) => s.selectedChats);
+  const setChatSelected = useUiStore((s) => s.setChatSelected);
   const [editing, setEditing] = useState(false);
-  const [configuring, setConfiguring] = useState(false);
+
+  const allSelected = chatIds.length > 0 && chatIds.every((id) => selectedChats[id]);
+  const someSelected = chatIds.some((id) => selectedChats[id]);
 
   const {
     attributes,
@@ -56,9 +63,14 @@ export function FolderRow({
   // Highlight as a drop target only when a session (not another folder) hovers.
   const sessionOver = isOver && String(active?.id ?? '').startsWith('S:');
 
-  // Click a preset to make it active and jump to its top chat (expanding it).
+  // While selecting: click a preset to (de)select all of its chats. Otherwise:
+  // make it active and jump to its top chat (expanding it).
   const onActivate = () => {
     if (editing) return;
+    if (selecting) {
+      for (const id of chatIds) setChatSelected(id, !allSelected);
+      return;
+    }
     setActivePreset(folder.id);
     if (collapsed) toggleFolder(folder.id);
     if (topChatId) setActive(topChatId);
@@ -92,7 +104,7 @@ export function FolderRow({
         isDragging && 'opacity-50',
         sessionOver
           ? 'bg-primary/10 ring-1 ring-inset ring-primary/40'
-          : isActivePreset
+          : !selecting && isActivePreset
             ? 'bg-sidebar-accent/70 text-foreground'
             : 'text-foreground/90 hover:bg-sidebar-accent/60',
       )}
@@ -111,7 +123,23 @@ export function FolderRow({
           className={cn('size-3.5 transition-transform', !collapsed && 'rotate-90')}
         />
       </button>
-      {collapsed ? (
+      {selecting ? (
+        <span
+          title="Select all chats in this preset"
+          className={cn(
+            'flex size-3.5 shrink-0 items-center justify-center rounded border',
+            allSelected || someSelected
+              ? 'border-primary bg-primary text-primary-foreground'
+              : 'border-input',
+          )}
+        >
+          {allSelected ? (
+            <Check className="size-2.5" />
+          ) : someSelected ? (
+            <Minus className="size-2.5" />
+          ) : null}
+        </span>
+      ) : collapsed ? (
         <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
       ) : (
         <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
@@ -148,10 +176,6 @@ export function FolderRow({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setTimeout(() => setConfiguring(true), 0)}>
-              <Settings2 />
-              Preset settings
-            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
               <Pencil />
               Rename
@@ -163,19 +187,6 @@ export function FolderRow({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      )}
-
-      {configuring && (
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <PresetEditor
-            folder={folder}
-            open={configuring}
-            onOpenChange={setConfiguring}
-          />
-        </div>
       )}
     </div>
   );

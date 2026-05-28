@@ -141,6 +141,7 @@ export function SessionTree() {
                 folder={f}
                 count={inFolder(f.id).length}
                 topChatId={inFolder(f.id)[0]?.id}
+                chatIds={inFolder(f.id).map((s) => s.id)}
               />
               {!collapsed[f.id] && (
                 <SortableContext

@@ -1,5 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { CheckCheck, FolderInput, Trash2, X } from 'lucide-react';
+import { FolderInput, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { confirm } from '@/components/ui/confirm';
 import {
@@ -16,12 +16,11 @@ import {
 } from '@/db/repo';
 import { useUiStore } from '@/store/ui';
 
-/** Toolbar shown while selecting chats in the sidebar: select-all, move, delete. */
+/** Toolbar shown while selecting chats in the sidebar: move, delete, done. */
 export function ChatSelectionBar() {
   const sessions = useLiveQuery(() => listSessions(), [], []);
   const folders = useLiveQuery(() => listFolders(), [], []);
   const selected = useUiStore((s) => s.selectedChats);
-  const setChatSelection = useUiStore((s) => s.setChatSelection);
   const clearChatSelection = useUiStore((s) => s.clearChatSelection);
   const toggleChatSelectMode = useUiStore((s) => s.toggleChatSelectMode);
   const activeId = useUiStore((s) => s.activeSessionId);
@@ -29,7 +28,6 @@ export function ChatSelectionBar() {
 
   const ids = sessions.filter((s) => selected[s.id]).map((s) => s.id);
   const count = ids.length;
-  const allSelected = sessions.length > 0 && count === sessions.length;
 
   const move = async (folderId: string) => {
     for (const id of ids) await moveSessionToFolder(id, folderId);
@@ -52,19 +50,9 @@ export function ChatSelectionBar() {
 
   return (
     <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1.5 text-sm">
-      <span className="tabular-nums text-muted-foreground">{count}</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="h-7 gap-1.5 px-2"
-        disabled={sessions.length === 0}
-        onClick={() =>
-          allSelected ? clearChatSelection() : setChatSelection(sessions.map((s) => s.id))
-        }
-      >
-        <CheckCheck className="size-3.5" />
-        {allSelected ? 'None' : 'All'}
-      </Button>
+      <span className="tabular-nums text-muted-foreground" title="Click a preset to select its chats">
+        {count} selected
+      </span>
       <div className="ml-auto flex items-center gap-0.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

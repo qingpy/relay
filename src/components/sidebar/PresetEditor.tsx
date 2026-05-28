@@ -11,7 +11,6 @@ import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import {
   listConnections,
-  renameFolder,
   setSessionSystemPrompt,
   updateFolderConfig,
 } from '@/db/repo';
@@ -53,7 +52,6 @@ export function PresetEditor({
 
 function Form({ folder, session }: { folder: Folder; session?: Session }) {
   const connections = useLiveQuery(() => listConnections(), [], []);
-  const [name, setName] = useState(folder.name);
   const [connectionId, setConnectionId] = useState(folder.connectionId ?? '');
   const [model, setModel] = useState(folder.model ?? '');
   const [settings, setSettings] = useState<ModelSettings>(folder.settings ?? {});
@@ -73,17 +71,6 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={SECTION}>
-        <label className={labelClass}>Name</label>
-        <Input
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            void renameFolder(folder.id, e.target.value);
-          }}
-        />
-      </div>
-
       <div className={SECTION}>
         <label className={labelClass}>Model</label>
         <select
