@@ -1,0 +1,107 @@
+import { useState } from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { confirm } from '@/components/ui/confirm';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { deleteSession, renameSession } from '@/db/repo';
+import type { Session } from '@/db/types';
+import { cn } from '@/lib/utils';
+import { useUiStore } from '@/store/ui';
+import { InlineEdit } from './InlineEdit';
+
+export function SessionRow({
+  session,
+  nested,
+}: {
+  session: Session;
+  nested?: boolean;
+}) {
+  const activeId = useUiStore((s) => s.activeSessionId);
+  const setActive = useUiStore((s) => s.setActiveSession);
+  const [editing, setEditing] = useState(false);
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: `S:${session.id}` });
+
+  const isActive = activeId === session.id;
+
+  const onDelete = async () => {
+    const ok = await confirm({
+      title: 'Delete chat?',
+      description: `"${session.title}" and its messages will be permanently removed.`,
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
+    await deleteSession(session.id);
+    if (isActive) setActive(null);
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      role="button"
+      tabIndex={0}
+      onClick={() => !editing && setActive(session.id)}
+      onDoubleClick={() => setEditing(true)}
+      onKeyDown={(e) => e.key === 'Enter' && !editing && setActive(session.id)}
+      className={cn(
+        'group flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none transition-colors',
+        nested ? 'pl-7' : 'pl-2',
+        isDragging && 'opacity-50',
+        isActive
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
+      )}
+    >
+      <MessageSquare className="size-3.5 shrink-0 opacity-70" />
+      {editing ? (
+        <InlineEdit
+          value={session.title}
+          onCommit={(v) => {
+            void renameSession(session.id, v);
+            setEditing(false);
+          }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <span className="min-w-0 flex-1 truncate">{session.title}</span>
+      )}
+
+      {!editing && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              title="Chat options"
+              className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
+              <Pencil />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem destructive onSelect={() => void onDelete()}>
+              <Trash2 />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+    </div>
+  );
+}
