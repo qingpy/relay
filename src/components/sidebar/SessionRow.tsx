@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Copy, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { deleteSession, renameSession } from '@/db/repo';
+import { deleteSession, duplicateSession, renameSession } from '@/db/repo';
 import type { Session } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
@@ -41,6 +41,11 @@ export function SessionRow({
     if (!ok) return;
     await deleteSession(session.id);
     if (isActive) setActive(null);
+  };
+
+  const onDuplicate = async () => {
+    const copy = await duplicateSession(session.id);
+    if (copy) setActive(copy.id);
   };
 
   return (
@@ -94,6 +99,10 @@ export function SessionRow({
             <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
               <Pencil />
               Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void onDuplicate()}>
+              <Copy />
+              Duplicate
             </DropdownMenuItem>
             <DropdownMenuItem destructive onSelect={() => void onDelete()}>
               <Trash2 />

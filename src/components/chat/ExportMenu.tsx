@@ -8,14 +8,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { getMessages, getSession } from '@/db/repo';
 import { downloadText, sessionToMarkdown, slugify } from '@/lib/export';
+import { activePath } from '@/lib/tree';
 
 export function ExportMenu({ sessionId }: { sessionId: string }) {
   const run = async (includeThinking: boolean) => {
-    const [session, messages] = await Promise.all([
+    const [session, all] = await Promise.all([
       getSession(sessionId),
       getMessages(sessionId),
     ]);
     if (!session) return;
+    const messages = activePath(all, session.currentLeafId);
     const md = sessionToMarkdown(session, messages, { includeThinking });
     downloadText(`${slugify(session.title)}.md`, md);
   };

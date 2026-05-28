@@ -2,15 +2,20 @@ import { create } from 'zustand';
 import { getAppConfig } from '@/db/db';
 import {
   addMessage,
+  cloneAttachments,
+  getMessage,
   getMessages,
   getSession,
   saveAttachments,
+  setCurrentLeaf,
   textPart,
+  touchSession,
   updateMessage,
   updateSession,
 } from '@/db/repo';
-import type { Citation, ToolCall, Usage } from '@/db/types';
+import type { Citation, Message, Session, ToolCall, Usage } from '@/db/types';
 import { buildChatMessages, deriveTitle } from '@/lib/conversation';
+import { activePath } from '@/lib/tree';
 import { readSSE } from '@/lib/sse';
 import { getProvider } from '@/providers/registry';
 import { NEW_SESSION_TITLE } from '@/db/repo';
@@ -35,7 +40,16 @@ interface ChatState {
   streams: Record<string, StreamBuffer>;
   /** sessionId -> streaming assistant message id (presence = streaming). */
   activeBySession: Record<string, string>;
+  /** Send a new user turn under the active leaf and stream the reply. */
   send: (sessionId: string, text: string, files?: File[]) => Promise<void>;
+  /** Re-answer a user turn: new assistant sibling under the same parent. */
+  regenerate: (sessionId: string, assistantId: string) => Promise<void>;
+  /** Edit a user turn and resend: new user sibling + fresh reply. */
+  editAndResend: (
+    sessionId: string,
+    userId: string,
+    text: string,
+  ) => Promise<void>;
   stop: (sessionId: string) => void;
 }
 
@@ -55,6 +69,155 @@ export const useChatStore = create<ChatState>((set, get) => {
       return { streams, activeBySession };
     });
 
+  /**
+   * Create an assistant message under `parentId`, make it the active leaf, and
+   * stream the provider response into it. `history` is the conversation path
+   * (root → parent) used to build the request.
+   */
+  const runTurn = async (
+    session: Session,
+    parentId: string,
+    history: Message[],
+  ) => {
+    const sessionId = session.id;
+    const config = await getAppConfig();
+    const keyConfig = config.providerKeys[session.provider];
+    const chatMessages = await buildChatMessages(history);
+
+    const assistant = await addMessage({ sessionId, parentId, role: 'assistant' });
+    const messageId = assistant.id;
+    await setCurrentLeaf(sessionId, messageId);
+    set((s) => ({
+      streams: { ...s.streams, [messageId]: EMPTY_BUFFER },
+      activeBySession: { ...s.activeBySession, [sessionId]: messageId },
+    }));
+
+    const controller = new AbortController();
+    controllers.set(sessionId, controller);
+
+    let buf: StreamBuffer = EMPTY_BUFFER;
+    let usage: Usage | undefined;
+    let lastPersist = 0;
+    let errored: string | null = null;
+
+    // Tool-call argument fragments, accumulated by index (OpenAI streams them
+    // piecemeal); reasoning start time for the "thought for Ns" readout.
+    const toolArgs: string[] = [];
+    let reasoningStart = 0;
+
+    // Coalesce visual updates to one per frame: re-parsing markdown on every
+    // token is expensive and makes the stream stutter. Tokens still arrive at
+    // full speed into `buf`; we just flush to the store at most once a frame.
+    let flushQueued = false;
+    const flush = () => {
+      flushQueued = false;
+      setBuffer(messageId, buf);
+    };
+    const scheduleFlush = () => {
+      if (flushQueued) return;
+      flushQueued = true;
+      requestAnimationFrame(flush);
+    };
+
+    const persist = async (final: boolean) => {
+      await updateMessage(messageId, {
+        content: buf.text ? [textPart(buf.text)] : [],
+        ...(buf.reasoning ? { reasoning: buf.reasoning } : {}),
+        ...(buf.reasoningMs != null ? { reasoningMs: buf.reasoningMs } : {}),
+        ...(buf.toolCalls.length ? { toolCalls: buf.toolCalls } : {}),
+        ...(buf.citations.length ? { citations: buf.citations } : {}),
+        ...(final && usage ? { usage } : {}),
+      });
+    };
+
+    try {
+      const provider = getProvider(session.provider);
+      const req = provider.buildRequest({
+        model: session.model,
+        messages: chatMessages,
+        settings: session.settings,
+        apiKey: keyConfig?.apiKey,
+        baseUrl: keyConfig?.baseUrl,
+      });
+
+      const res = await fetch(req.url, {
+        method: 'POST',
+        headers: req.headers,
+        body: JSON.stringify(req.body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        const detail = await res
+          .json()
+          .then((j: { error?: string }) => j.error)
+          .catch(() => null);
+        throw new Error(detail || `Request failed (${res.status})`);
+      }
+
+      for await (const data of readSSE(res.body, controller.signal)) {
+        for (const delta of provider.parseStreamChunk(data)) {
+          if (delta.kind === 'text') {
+            if (reasoningStart && buf.reasoningMs == null) {
+              buf = { ...buf, reasoningMs: Date.now() - reasoningStart };
+            }
+            buf = { ...buf, text: buf.text + delta.text };
+          } else if (delta.kind === 'reasoning') {
+            if (!reasoningStart) reasoningStart = Date.now();
+            buf = { ...buf, reasoning: buf.reasoning + delta.text };
+          } else if (delta.kind === 'toolCallDelta') {
+            const calls = buf.toolCalls.slice();
+            const cur = calls[delta.index] ?? {
+              id: delta.id ?? `tool-${delta.index}`,
+              name: '',
+              args: '',
+            };
+            toolArgs[delta.index] =
+              (toolArgs[delta.index] ?? '') + (delta.argsDelta ?? '');
+            calls[delta.index] = {
+              ...cur,
+              ...(delta.id ? { id: delta.id } : {}),
+              name: cur.name + (delta.name ?? ''),
+              args: toolArgs[delta.index],
+              pending: true,
+            };
+            buf = { ...buf, toolCalls: calls };
+          } else if (delta.kind === 'toolCall') {
+            buf = { ...buf, toolCalls: [...buf.toolCalls, delta.call] };
+          } else if (delta.kind === 'citation') {
+            const seen = new Set(buf.citations.map((c) => c.url));
+            const fresh = delta.citations.filter((c) => !seen.has(c.url));
+            if (fresh.length)
+              buf = { ...buf, citations: [...buf.citations, ...fresh] };
+          } else if (delta.kind === 'usage') usage = delta.usage;
+          else if (delta.kind === 'error') errored = delta.message;
+        }
+        scheduleFlush();
+
+        const now = Date.now();
+        if (now - lastPersist > PERSIST_INTERVAL) {
+          lastPersist = now;
+          void persist(false);
+        }
+      }
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        errored = err instanceof Error ? err.message : String(err);
+      }
+    } finally {
+      if (buf.toolCalls.some((c) => c.pending)) {
+        buf = {
+          ...buf,
+          toolCalls: buf.toolCalls.map((c) => ({ ...c, pending: false })),
+        };
+      }
+      await persist(true);
+      if (errored) await updateMessage(messageId, { error: errored });
+      controllers.delete(sessionId);
+      clearStream(sessionId, messageId);
+    }
+  };
+
   return {
     streams: {},
     activeBySession: {},
@@ -69,12 +232,10 @@ export const useChatStore = create<ChatState>((set, get) => {
       const session = await getSession(sessionId);
       if (!session) return;
 
-      const config = await getAppConfig();
-      const keyConfig = config.providerKeys[session.provider];
-
-      // Persist the user turn (with any attachments); name the session.
+      // User turn branches off the active leaf; show it immediately.
       const userMsg = await addMessage({
         sessionId,
+        parentId: session.currentLeafId ?? null,
         role: 'user',
         content: [textPart(trimmed)],
       });
@@ -82,146 +243,60 @@ export const useChatStore = create<ChatState>((set, get) => {
         const ids = await saveAttachments(sessionId, userMsg.id, files);
         await updateMessage(userMsg.id, { attachments: ids });
       }
+      await setCurrentLeaf(sessionId, userMsg.id);
       if (session.title === NEW_SESSION_TITLE) {
         await updateSession(sessionId, { title: deriveTitle(trimmed) });
       } else {
         await updateSession(sessionId, {});
       }
 
-      const history = await getMessages(sessionId);
-      const chatMessages = await buildChatMessages(history);
+      const history = activePath(await getMessages(sessionId), userMsg.id);
+      await runTurn(session, userMsg.id, history);
+    },
 
-      const assistant = await addMessage({ sessionId, role: 'assistant' });
-      const messageId = assistant.id;
-      set((s) => ({
-        streams: { ...s.streams, [messageId]: EMPTY_BUFFER },
-        activeBySession: { ...s.activeBySession, [sessionId]: messageId },
-      }));
+    regenerate: async (sessionId, assistantId) => {
+      if (get().activeBySession[sessionId]) return;
+      const session = await getSession(sessionId);
+      if (!session) return;
+      const assistant = await getMessage(assistantId);
+      if (!assistant || assistant.parentId == null) return;
 
-      const controller = new AbortController();
-      controllers.set(sessionId, controller);
+      await touchSession(sessionId);
+      const history = activePath(
+        await getMessages(sessionId),
+        assistant.parentId,
+      );
+      await runTurn(session, assistant.parentId, history);
+    },
 
-      let buf: StreamBuffer = EMPTY_BUFFER;
-      let usage: Usage | undefined;
-      let lastPersist = 0;
-      let errored: string | null = null;
+    editAndResend: async (sessionId, userId, text) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      if (get().activeBySession[sessionId]) return;
+      const session = await getSession(sessionId);
+      if (!session) return;
+      const orig = await getMessage(userId);
+      if (!orig || orig.role !== 'user') return;
 
-      // Tool-call argument fragments, accumulated by index (OpenAI streams them
-      // piecemeal); reasoning start time for the "thought for Ns" readout.
-      const toolArgs: string[] = [];
-      let reasoningStart = 0;
-
-      // Coalesce visual updates to one per frame: re-parsing markdown on every
-      // token is expensive and makes the stream stutter. Tokens still arrive at
-      // full speed into `buf`; we just flush to the store at most once a frame.
-      let flushQueued = false;
-      const flush = () => {
-        flushQueued = false;
-        setBuffer(messageId, buf);
-      };
-      const scheduleFlush = () => {
-        if (flushQueued) return;
-        flushQueued = true;
-        requestAnimationFrame(flush);
-      };
-
-      const persist = async (final: boolean) => {
-        await updateMessage(messageId, {
-          content: buf.text ? [textPart(buf.text)] : [],
-          ...(buf.reasoning ? { reasoning: buf.reasoning } : {}),
-          ...(buf.reasoningMs != null ? { reasoningMs: buf.reasoningMs } : {}),
-          ...(buf.toolCalls.length ? { toolCalls: buf.toolCalls } : {}),
-          ...(buf.citations.length ? { citations: buf.citations } : {}),
-          ...(final && usage ? { usage } : {}),
-        });
-      };
-
-      try {
-        const provider = getProvider(session.provider);
-        const req = provider.buildRequest({
-          model: session.model,
-          messages: chatMessages,
-          settings: session.settings,
-          apiKey: keyConfig?.apiKey,
-          baseUrl: keyConfig?.baseUrl,
-        });
-
-        const res = await fetch(req.url, {
-          method: 'POST',
-          headers: req.headers,
-          body: JSON.stringify(req.body),
-          signal: controller.signal,
-        });
-
-        if (!res.ok || !res.body) {
-          const detail = await res
-            .json()
-            .then((j: { error?: string }) => j.error)
-            .catch(() => null);
-          throw new Error(detail || `Request failed (${res.status})`);
-        }
-
-        for await (const data of readSSE(res.body, controller.signal)) {
-          for (const delta of provider.parseStreamChunk(data)) {
-            if (delta.kind === 'text') {
-              if (reasoningStart && buf.reasoningMs == null) {
-                buf = { ...buf, reasoningMs: Date.now() - reasoningStart };
-              }
-              buf = { ...buf, text: buf.text + delta.text };
-            } else if (delta.kind === 'reasoning') {
-              if (!reasoningStart) reasoningStart = Date.now();
-              buf = { ...buf, reasoning: buf.reasoning + delta.text };
-            } else if (delta.kind === 'toolCallDelta') {
-              const calls = buf.toolCalls.slice();
-              const cur = calls[delta.index] ?? {
-                id: delta.id ?? `tool-${delta.index}`,
-                name: '',
-                args: '',
-              };
-              toolArgs[delta.index] =
-                (toolArgs[delta.index] ?? '') + (delta.argsDelta ?? '');
-              calls[delta.index] = {
-                ...cur,
-                ...(delta.id ? { id: delta.id } : {}),
-                name: cur.name + (delta.name ?? ''),
-                args: toolArgs[delta.index],
-                pending: true,
-              };
-              buf = { ...buf, toolCalls: calls };
-            } else if (delta.kind === 'toolCall') {
-              buf = { ...buf, toolCalls: [...buf.toolCalls, delta.call] };
-            } else if (delta.kind === 'citation') {
-              const seen = new Set(buf.citations.map((c) => c.url));
-              const fresh = delta.citations.filter((c) => !seen.has(c.url));
-              if (fresh.length)
-                buf = { ...buf, citations: [...buf.citations, ...fresh] };
-            } else if (delta.kind === 'usage') usage = delta.usage;
-            else if (delta.kind === 'error') errored = delta.message;
-          }
-          scheduleFlush();
-
-          const now = Date.now();
-          if (now - lastPersist > PERSIST_INTERVAL) {
-            lastPersist = now;
-            void persist(false);
-          }
-        }
-      } catch (err) {
-        if (!(err instanceof DOMException && err.name === 'AbortError')) {
-          errored = err instanceof Error ? err.message : String(err);
-        }
-      } finally {
-        if (buf.toolCalls.some((c) => c.pending)) {
-          buf = {
-            ...buf,
-            toolCalls: buf.toolCalls.map((c) => ({ ...c, pending: false })),
-          };
-        }
-        await persist(true);
-        if (errored) await updateMessage(messageId, { error: errored });
-        controllers.delete(sessionId);
-        clearStream(sessionId, messageId);
+      const userMsg = await addMessage({
+        sessionId,
+        parentId: orig.parentId,
+        role: 'user',
+        content: [textPart(trimmed)],
+      });
+      if (orig.attachments?.length) {
+        const ids = await cloneAttachments(
+          sessionId,
+          userMsg.id,
+          orig.attachments,
+        );
+        await updateMessage(userMsg.id, { attachments: ids });
       }
+      await setCurrentLeaf(sessionId, userMsg.id);
+      await touchSession(sessionId);
+
+      const history = activePath(await getMessages(sessionId), userMsg.id);
+      await runTurn(session, userMsg.id, history);
     },
   };
 });

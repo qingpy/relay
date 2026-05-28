@@ -196,8 +196,13 @@ export function getMessages(sessionId: string): Promise<Message[]> {
     .sortBy('createdAt');
 }
 
+export function getMessage(id: string): Promise<Message | undefined> {
+  return db.messages.get(id);
+}
+
 export async function addMessage(input: {
   sessionId: string;
+  parentId: string | null;
   role: MessageRole;
   content?: Part[];
   reasoning?: string;
@@ -205,6 +210,7 @@ export async function addMessage(input: {
   const message: Message = {
     id: newId(),
     sessionId: input.sessionId,
+    parentId: input.parentId,
     role: input.role,
     content: input.content ?? [],
     createdAt: Date.now(),
@@ -221,14 +227,122 @@ export async function updateMessage(
   await db.messages.update(id, patch);
 }
 
-export async function deleteMessage(id: string): Promise<void> {
-  await db.messages.delete(id);
+export async function setCurrentLeaf(
+  sessionId: string,
+  leafId: string,
+): Promise<void> {
+  await db.sessions.update(sessionId, { currentLeafId: leafId });
 }
 
-/** Insert a context divider — messages before it are kept on the page but
- *  excluded from what's sent to the model (plan §4/§7). */
+/** Remove a node, re-parenting its children to its parent (used to restore a
+ *  divider). The rest of the branch is preserved. */
+export async function spliceMessage(id: string): Promise<void> {
+  const msg = await db.messages.get(id);
+  if (!msg) return;
+  await db.transaction('rw', db.sessions, db.messages, async () => {
+    await db.messages
+      .where('parentId')
+      .equals(id)
+      .modify({ parentId: msg.parentId });
+    await db.messages.delete(id);
+    const session = await db.sessions.get(msg.sessionId);
+    if (session?.currentLeafId === id) {
+      await db.sessions.update(msg.sessionId, {
+        currentLeafId: msg.parentId ?? undefined,
+      });
+    }
+  });
+}
+
+/** Remove a message and its entire subtree (a whole branch). */
+export async function deleteSubtree(id: string): Promise<void> {
+  const msg = await db.messages.get(id);
+  if (!msg) return;
+  const all = await getMessages(msg.sessionId);
+  const childrenOf = new Map<string | null, string[]>();
+  for (const m of all) {
+    const list = childrenOf.get(m.parentId) ?? [];
+    list.push(m.id);
+    childrenOf.set(m.parentId, list);
+  }
+  const toDelete = new Set<string>();
+  const stack = [id];
+  while (stack.length) {
+    const n = stack.pop()!;
+    toDelete.add(n);
+    for (const c of childrenOf.get(n) ?? []) stack.push(c);
+  }
+  await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
+    await db.messages.bulkDelete([...toDelete]);
+    await db.files.where('messageId').anyOf([...toDelete]).delete();
+    const session = await db.sessions.get(msg.sessionId);
+    if (session?.currentLeafId && toDelete.has(session.currentLeafId)) {
+      await db.sessions.update(msg.sessionId, {
+        currentLeafId: msg.parentId ?? undefined,
+      });
+    }
+  });
+}
+
+/** Insert a context divider under the active tip and follow it. Messages before
+ *  the divider stay on the page but leave the model context (plan §4/§7). */
 export async function clearContext(sessionId: string): Promise<void> {
-  await addMessage({ sessionId, role: 'divider' });
+  const session = await getSession(sessionId);
+  const divider = await addMessage({
+    sessionId,
+    parentId: session?.currentLeafId ?? null,
+    role: 'divider',
+  });
+  await db.sessions.update(sessionId, { currentLeafId: divider.id });
+}
+
+/** Deep-clone a session (tree + files) into a new session. */
+export async function duplicateSession(
+  sessionId: string,
+): Promise<Session | undefined> {
+  const session = await getSession(sessionId);
+  if (!session) return;
+  const msgs = await getMessages(sessionId);
+  const files = await db.files.where('sessionId').equals(sessionId).toArray();
+  const now = Date.now();
+  const newSessionId = newId();
+
+  const msgMap = new Map(msgs.map((m) => [m.id, newId()]));
+  const fileMap = new Map(files.map((f) => [f.id, newId()]));
+
+  const newSession: Session = {
+    ...session,
+    id: newSessionId,
+    title: `Copy of ${session.title}`,
+    createdAt: now,
+    updatedAt: now,
+    order: -now,
+    currentLeafId: session.currentLeafId
+      ? msgMap.get(session.currentLeafId)
+      : undefined,
+  };
+  const newMsgs: Message[] = msgs.map((m) => ({
+    ...m,
+    id: msgMap.get(m.id)!,
+    sessionId: newSessionId,
+    parentId: m.parentId ? (msgMap.get(m.parentId) ?? null) : null,
+    attachments: m.attachments
+      ?.map((fid) => fileMap.get(fid))
+      .filter((x): x is string => !!x),
+  }));
+  const newFiles: StoredFile[] = files.map((f) => ({
+    ...f,
+    id: fileMap.get(f.id)!,
+    sessionId: newSessionId,
+    messageId: f.messageId ? (msgMap.get(f.messageId) ?? null) : null,
+  }));
+
+  await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
+    await db.sessions.add(newSession);
+    await db.messages.bulkAdd(newMsgs);
+    await db.files.bulkAdd(newFiles);
+  });
+  return newSession;
 }
 
 export function textPart(text: string): Part {
@@ -266,4 +380,29 @@ export async function saveAttachments(
 export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
   const res = await db.files.bulkGet(ids);
   return res.filter((f): f is StoredFile => !!f);
+}
+
+/** Duplicate stored files under a new message (so an edited turn owns its own
+ *  attachments and deleting the original branch won't orphan them). */
+export async function cloneAttachments(
+  sessionId: string,
+  messageId: string,
+  sourceIds: string[],
+): Promise<string[]> {
+  const sources = await getFilesByIds(sourceIds);
+  const ids: string[] = [];
+  await db.transaction('rw', db.files, async () => {
+    for (const f of sources) {
+      const id = newId();
+      await db.files.add({
+        ...f,
+        id,
+        sessionId,
+        messageId,
+        createdAt: Date.now(),
+      });
+      ids.push(id);
+    }
+  });
+  return ids;
 }

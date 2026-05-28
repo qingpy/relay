@@ -69,6 +69,8 @@ export interface Session {
   provider: ProviderId;
   model: string;
   settings: SessionSettings;
+  /** Active branch tip — the conversation shown is root → this leaf. */
+  currentLeafId?: string;
   createdAt: number;
   updatedAt: number;
   order: number;
@@ -77,6 +79,8 @@ export interface Session {
 export interface Message {
   id: string;
   sessionId: string;
+  /** Parent message in the session tree (null = root). Enables branching. */
+  parentId: string | null;
   role: MessageRole;
   content: Part[];
   /** Foldable "thinking" / reasoning text. */

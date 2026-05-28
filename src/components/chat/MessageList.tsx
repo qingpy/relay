@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ChevronDown,
@@ -7,12 +7,18 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getMessages } from '@/db/repo';
+import { getMessages, getSession } from '@/db/repo';
+import { activePath } from '@/lib/tree';
 import { useChatStore } from '@/store/chat';
 import { MessageItem } from './MessageItem';
 
 export function MessageList({ sessionId }: { sessionId: string }) {
-  const messages = useLiveQuery(() => getMessages(sessionId), [sessionId], []);
+  const all = useLiveQuery(() => getMessages(sessionId), [sessionId], []);
+  const session = useLiveQuery(() => getSession(sessionId), [sessionId]);
+  const messages = useMemo(
+    () => activePath(all, session?.currentLeafId),
+    [all, session?.currentLeafId],
+  );
 
   const activeId = useChatStore((s) => s.activeBySession[sessionId]);
   const streamLen = useChatStore((s) => {
@@ -94,7 +100,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
           {messages.map((m) => (
             <div key={m.id} data-role={m.role}>
-              <MessageItem message={m} />
+              <MessageItem message={m} siblings={all} />
             </div>
           ))}
         </div>

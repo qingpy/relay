@@ -225,9 +225,9 @@ Identical SPA + proxy for all targets. Pick later.
   toggle; context divider; long-chat navigation shortcuts.
 - **M5 — Export & copy**: session + single-message markdown export; copy whole message as markdown;
   copy selected lines with LaTeX-aware copy (KaTeX `copy-tex`).
-- **M6 — Message actions & branching**: regenerate, edit-input-and-resend, delete, fork; message
-  tree (`parentId` + session `currentLeafId`); sibling switcher; session **overview map** to jump
-  to any node; duplicate whole session. (Replaces the old WebDAV-sync M6.)
+- **M6 — Message actions & branching** ✅: regenerate, edit-input-and-resend, delete (subtree), fork;
+  message tree (`parentId` + session `currentLeafId`); sibling switcher; session **overview map**
+  (Branch map dialog) to jump to any branch; duplicate whole session. (Replaces the old WebDAV-sync M6.)
 - **M7 — Polish & deploy**: light theme (+ optional dark), empty states, error handling, keyboard
   shortcuts, bundle code-splitting, then deploy to VPS (Caddy) or Cloudflare.
 - **Deferred — WebDAV sync**: last-write-wins sync via the proxy + backups + settings UI (see §5.15
@@ -250,7 +250,17 @@ Resolved:
   sync moves to a post-M7 "Deferred" milestone.
 - **Branching model**: messages form a tree via `parentId`; the session's `currentLeafId` selects
   the visible path. Regenerate / edit / fork create siblings (non-destructive); a tree overview map
-  navigates between branches.
+  navigates between branches. Implementation choices (M6):
+  - **Fork** = "Branch from here": sets `currentLeafId` to that message so the next turn starts a new
+    branch under it. Existing replies stay reachable as alternates.
+  - **Branch map** node click descends to that node's leaf (`leafOf`) so a full branch becomes active,
+    rather than truncating at the clicked node (that's what Fork is for).
+  - **Delete** removes the message *and its whole subtree* (`deleteSubtree`); confirms only when the
+    message has replies below it. **Restore divider** uses `spliceMessage` (re-parents children).
+  - **Edit & resend** clones the original turn's attachments (`cloneAttachments`) so deleting the old
+    branch can't orphan the new turn's files.
+  - DB migration v2 backfills `parentId` as a linear chain per session and points `currentLeafId` at
+    each session's last message.
 
 Still open:
 - **Deploy target** to optimize for first (local vs VPS vs Cloudflare) — affects only deploy config.
