@@ -61,7 +61,11 @@ function Stamp({ at }: { at: number }) {
 
 function StreamingDots() {
   return (
-    <span className="inline-flex h-5 items-center gap-1 text-muted-foreground">
+    <span
+      role="status"
+      aria-label="Generating response"
+      className="inline-flex h-5 items-center gap-1 text-muted-foreground"
+    >
       <span className="size-1.5 animate-pulse rounded-full bg-current" />
       <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:150ms]" />
       <span className="size-1.5 animate-pulse rounded-full bg-current [animation-delay:300ms]" />
@@ -147,9 +151,13 @@ export const MessageItem = memo(function MessageItem({
   }
 
   const showDots = streaming && !text && !reasoning && toolCalls.length === 0;
+  const retry = () => {
+    if (message.parentId)
+      void useChatStore.getState().regenerate(message.sessionId, message.parentId);
+  };
 
   return (
-    <article className="group flex flex-col">
+    <article className="group flex flex-col" aria-busy={streaming}>
       <header className="flex items-center justify-between gap-4">
         <RoleTag role="assistant" />
         <div className="label-mono flex items-center gap-3 text-muted-foreground">
@@ -179,9 +187,19 @@ export const MessageItem = memo(function MessageItem({
         ))}
         {text ? <MessageBody text={text} /> : showDots ? <StreamingDots /> : null}
         {message.error && (
-          <div className="flex items-start gap-2 border border-border border-l-2 border-l-primary bg-card px-3 py-2 text-sm">
-            <AlertCircle className="mt-0.5 size-4 shrink-0 text-primary" />
-            <span className="whitespace-pre-wrap">{message.error}</span>
+          <div
+            role="alert"
+            className="flex flex-col gap-2 border border-border border-l-2 border-l-primary bg-card px-3 py-2 text-sm"
+          >
+            <div className="flex items-start gap-2">
+              <AlertCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+              <span className="whitespace-pre-wrap">{message.error}</span>
+            </div>
+            {message.parentId && (
+              <Marginalia onClick={retry} title="Retry this turn">
+                Retry
+              </Marginalia>
+            )}
           </div>
         )}
         {citations.length > 0 && <Citations citations={citations} />}
