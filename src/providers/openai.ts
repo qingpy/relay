@@ -92,7 +92,7 @@ export class OpenAICompatProvider implements Provider {
     messages,
     settings,
     apiKey,
-    baseUrl,
+    url,
   }: BuildInput): ProxyRequest {
     const body: Record<string, unknown> = {
       model,
@@ -131,7 +131,7 @@ export class OpenAICompatProvider implements Provider {
     return {
       url: '/api/chat/openai',
       headers,
-      body: { baseUrl, payload: body },
+      body: { url, payload: body },
     };
   }
 

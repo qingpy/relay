@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { errorResponse, safeBaseUrl } from './chat.ts';
+import { errorResponse, safeUrl } from './chat.ts';
 
 /**
  * Model-discovery routes. The proxy lists upstream models so the client can
@@ -9,11 +9,11 @@ import { errorResponse, safeBaseUrl } from './chat.ts';
 export const models = new Hono();
 
 models.post('/openai', async (c) => {
-  const { baseUrl: rawBase } = await c.req
-    .json<{ baseUrl?: string }>()
-    .catch(() => ({ baseUrl: undefined }));
-  const baseUrl = safeBaseUrl(rawBase);
-  if (!baseUrl) return errorResponse('Invalid or missing baseUrl.', 400);
+  const { url: rawUrl } = await c.req
+    .json<{ url?: string }>()
+    .catch(() => ({ url: undefined }));
+  const url = safeUrl(rawUrl);
+  if (!url) return errorResponse('Invalid or missing url.', 400);
 
   const key =
     c.req.header('x-api-key') ||
@@ -23,7 +23,7 @@ models.post('/openai', async (c) => {
 
   let res: Response;
   try {
-    res = await fetch(`${baseUrl}/models`, {
+    res = await fetch(url, {
       headers: { authorization: `Bearer ${key}` },
     });
   } catch (err) {

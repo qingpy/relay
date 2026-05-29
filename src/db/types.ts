@@ -72,8 +72,9 @@ export interface Connection {
   id: string;
   name: string;
   type: ConnectionType;
-  /** Base URL for OpenAI-compatible endpoints. */
-  baseUrl?: string;
+  /** Full endpoint URL for OpenAI-compatible connections, e.g.
+   *  `https://openrouter.ai/api/v1/chat/completions`. Every part is editable. */
+  url?: string;
   /** API key (browser-stored). Not used by Vertex (server-side auth). */
   apiKey?: string;
   models: SavedModel[];

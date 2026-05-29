@@ -53,7 +53,8 @@ export interface BuildInput {
   messages: ChatMessage[];
   settings: ProviderSettings;
   apiKey?: string;
-  baseUrl?: string;
+  /** Full chat-completions endpoint URL (OpenAI-compatible connections). */
+  url?: string;
   /** Vertex only. */
   project?: string;
   region?: string;

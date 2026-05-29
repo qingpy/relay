@@ -9,9 +9,9 @@ import type {
 export type Flavor = 'openrouter' | 'openai' | 'vertex';
 
 /** Distinguish OpenRouter (web plugin, `reasoning.effort`) from plain OpenAI. */
-export function flavorOf(type: ConnectionType, baseUrl?: string): Flavor {
+export function flavorOf(type: ConnectionType, url?: string): Flavor {
   if (type === 'vertex') return 'vertex';
-  return baseUrl && /openrouter\.ai/i.test(baseUrl) ? 'openrouter' : 'openai';
+  return url && /openrouter\.ai/i.test(url) ? 'openrouter' : 'openai';
 }
 
 /** Best-effort capability guess from a model id; users can correct it. */
@@ -87,14 +87,47 @@ export const SEED_MODELS: Record<Flavor, string[]> = {
   vertex: ['gemini-2.0-flash', 'gemini-2.5-pro'],
 };
 
-/** Default base URLs for OpenAI-compatible flavors (none for Gemini/Vertex). */
-export const DEFAULT_BASE_URL: Partial<Record<Flavor, string>> = {
-  openrouter: 'https://openrouter.ai/api/v1',
-  openai: 'https://api.openai.com/v1',
+/** Default endpoint URLs for OpenAI-compatible flavors (none for Vertex). The
+ *  full chat-completions URL — the user can edit any part of it. */
+export const DEFAULT_URL: Partial<Record<Flavor, string>> = {
+  openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+  openai: 'https://api.openai.com/v1/chat/completions',
 };
 
-export function seedModelsFor(type: ConnectionType, baseUrl?: string): SavedModel[] {
-  return SEED_MODELS[flavorOf(type, baseUrl)].map((id) => toSavedModel(id, type));
+export function seedModelsFor(type: ConnectionType, url?: string): SavedModel[] {
+  return SEED_MODELS[flavorOf(type, url)].map((id) => toSavedModel(id, type));
+}
+
+/**
+ * Derive the model-listing URL from a chat-completions endpoint URL. OpenAI-
+ * compatible APIs serve the catalog at `…/models` next to `…/chat/completions`,
+ * so swap the suffix (preserving any query/hash). Returns null when the URL
+ * doesn't follow that convention — then models are added by hand.
+ */
+export function modelsUrlFrom(url: string): string | null {
+  const m = url.match(/\/chat\/completions\/?(\?[^#]*)?(#.*)?$/i);
+  if (!m || m.index == null) return null;
+  return `${url.slice(0, m.index)}/models${m[1] ?? ''}${m[2] ?? ''}`;
+}
+
+/**
+ * Ensure an OpenAI-compatible connection's `url` is the full chat-completions
+ * endpoint. Upgrades older records that stored a base URL — or the legacy
+ * `baseUrl` field — by appending `/chat/completions`, and drops `baseUrl`.
+ * Idempotent; runs on every data import (see `importAll`).
+ */
+export function normalizeConnection(
+  conn: Connection & { baseUrl?: string },
+): Connection {
+  const { baseUrl, ...rest } = conn;
+  if (rest.type !== 'openai') return rest;
+  let url = rest.url ?? baseUrl;
+  // Append the suffix only to a bare base URL — leave a complete endpoint
+  // (with any query/hash, e.g. Azure's `?api-version=…`) untouched.
+  if (url && !/\/chat\/completions\/?(\?[^#]*)?(#.*)?$/i.test(url)) {
+    url = `${url.replace(/\/+$/, '')}/chat/completions`;
+  }
+  return { ...rest, url };
 }
 
 /** Find a model in a connection's catalog (or synthesize one if missing). */

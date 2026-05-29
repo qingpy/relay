@@ -141,7 +141,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         messages: chatMessages,
         settings: resolved.settings,
         apiKey: resolved.connection.apiKey,
-        baseUrl: resolved.connection.baseUrl,
+        url: resolved.connection.url,
         project: resolved.connection.project,
         region: resolved.connection.region,
         clientEmail: resolved.connection.clientEmail,

@@ -29,25 +29,26 @@ export function errorResponse(message: string, status: number): Response {
   });
 }
 
-/** Normalize and validate an OpenAI-compatible base URL. */
-export function safeBaseUrl(raw: unknown): string | null {
+/** Validate a user-supplied upstream URL — used verbatim, so only the protocol
+ *  is checked (and it must parse as a URL). */
+export function safeUrl(raw: unknown): string | null {
   if (typeof raw !== 'string' || !raw) return null;
   try {
     const url = new URL(raw);
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    return raw.replace(/\/+$/, '');
+    return raw;
   } catch {
     return null;
   }
 }
 
 chat.post('/openai', async (c) => {
-  const { baseUrl: rawBase, payload } = await c.req
-    .json<{ baseUrl?: string; payload?: unknown }>()
-    .catch(() => ({ baseUrl: undefined, payload: undefined }));
+  const { url: rawUrl, payload } = await c.req
+    .json<{ url?: string; payload?: unknown }>()
+    .catch(() => ({ url: undefined, payload: undefined }));
 
-  const baseUrl = safeBaseUrl(rawBase);
-  if (!baseUrl) return errorResponse('Invalid or missing baseUrl.', 400);
+  const url = safeUrl(rawUrl);
+  if (!url) return errorResponse('Invalid or missing url.', 400);
   if (!payload) return errorResponse('Missing request payload.', 400);
 
   const key =
@@ -58,7 +59,7 @@ chat.post('/openai', async (c) => {
 
   let upstream: Response;
   try {
-    upstream = await fetch(`${baseUrl}/chat/completions`, {
+    upstream = await fetch(url, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
