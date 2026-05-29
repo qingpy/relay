@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { errorResponse, safeUrl } from './chat.ts';
+import { getConnectionSecret } from './secrets.ts';
 
 /**
  * Model-discovery routes. The proxy lists upstream models so the client can
@@ -9,14 +10,15 @@ import { errorResponse, safeUrl } from './chat.ts';
 export const models = new Hono();
 
 models.post('/openai', async (c) => {
-  const { url: rawUrl } = await c.req
-    .json<{ url?: string }>()
-    .catch(() => ({ url: undefined }));
+  const { url: rawUrl, connectionId } = await c.req
+    .json<{ url?: string; connectionId?: string }>()
+    .catch(() => ({ url: undefined, connectionId: undefined }));
   const url = safeUrl(rawUrl);
   if (!url) return errorResponse('Invalid or missing url.', 400);
 
   const key =
-    c.req.header('x-api-key') ||
+    c.req.header('x-api-key') || // transient: detecting against an unsaved key
+    (await getConnectionSecret(connectionId))?.apiKey ||
     process.env.OPENROUTER_KEY ||
     process.env.OPENAI_KEY;
   if (!key) return errorResponse('No API key provided.', 401);

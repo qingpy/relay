@@ -9,6 +9,7 @@ import { backup } from './backup.ts';
 import { chat } from './chat.ts';
 import { data } from './data.ts';
 import { models } from './models.ts';
+import { secrets } from './secrets.ts';
 import { sync } from './sync.ts';
 
 /**
@@ -37,6 +38,7 @@ api.route('/models', models);
 api.route('/backup', backup);
 api.route('/sync', sync);
 api.route('/data', data);
+api.route('/secrets', secrets);
 app.route('/api', api);
 
 // Serve the built SPA in production (no-op in dev — dist/ won't exist).

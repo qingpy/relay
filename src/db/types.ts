@@ -64,9 +64,14 @@ export interface SavedModel {
 }
 
 /**
- * A user-defined upstream: a name, a protocol, credentials, and a saved model
- * catalog. Multiple connections may share a protocol (e.g. two OpenAI-compatible
- * endpoints). API keys live here in IndexedDB; Vertex auth stays server-side.
+ * A user-defined upstream: a name, a protocol, non-secret config, and a saved
+ * model catalog. Multiple connections may share a protocol (e.g. two
+ * OpenAI-compatible endpoints).
+ *
+ * Secrets are NOT stored here: the API key (OpenAI-compatible) and the Vertex
+ * service-account private key live in the proxy's secret store, keyed by this
+ * connection's `id` (see `server/secrets.ts` / `src/lib/secrets.ts`), so they
+ * never enter the data snapshot, WebDAV mirror, backups, or the browser.
  */
 export interface Connection {
   id: string;
@@ -75,17 +80,14 @@ export interface Connection {
   /** Full endpoint URL for OpenAI-compatible connections, e.g.
    *  `https://openrouter.ai/api/v1/chat/completions`. Every part is editable. */
   url?: string;
-  /** API key (browser-stored). Not used by Vertex (server-side auth). */
-  apiKey?: string;
   models: SavedModel[];
   /** Vertex project id. */
   project?: string;
   /** Vertex region, e.g. `us-central1`. */
   region?: string;
-  /** Vertex service-account email (from the SA JSON). */
+  /** Vertex service-account email (non-secret; from the SA JSON). The matching
+   *  private key lives in the secret store. */
   clientEmail?: string;
-  /** Vertex service-account private key (PEM; from the SA JSON). */
-  privateKey?: string;
   /** When false, the connection's models are hidden from pickers. */
   enabled?: boolean;
   order: number;
@@ -194,7 +196,8 @@ export interface WebDavConfig {
   /** Base WebDAV URL, e.g. https://dav.example.com/remote.php/dav/files/me/ */
   url: string;
   user: string;
-  pass: string;
+  /** Password is NOT stored here — it lives in the proxy's secret store
+   *  (see `src/lib/secrets.ts`), out of the snapshot / WebDAV mirror / backups. */
   /** Folder under the base URL to keep Relay's snapshot in (default `relay`). */
   path: string;
   enabled: boolean;

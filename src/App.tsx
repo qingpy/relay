@@ -6,6 +6,7 @@ import { ConfirmDialog } from '@/components/ui/confirm';
 import { ensureDefaultPreset } from '@/db/repo';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
 import { initLocalStore } from '@/lib/localstore';
+import { initSecrets } from '@/lib/secrets';
 import { initWebdavSync, maybeRunScheduledWebdavSync } from '@/lib/webdav';
 import { useUiStore } from '@/store/ui';
 
@@ -26,14 +27,16 @@ export default function App() {
   const [boot, setBoot] = useState<Boot>({ phase: 'loading' });
   const started = useRef(false);
 
-  // Boot: load the data file into the in-memory store (off C:), seed defaults,
-  // then start WebDAV sync. The app doesn't render until the store is loaded —
-  // no flash of empty state, and no write-through before the load.
+  // Boot: load the data file into the in-memory store (off C:), move any
+  // embedded secrets into the proxy's secret store, seed defaults, then start
+  // WebDAV sync. The app doesn't render until the store is loaded — no flash of
+  // empty state, and no write-through before the load.
   const start = () => {
     setBoot({ phase: 'loading' });
     void (async () => {
       try {
         await initLocalStore();
+        await initSecrets();
         await ensureDefaultPreset();
         await initWebdavSync();
         setBoot({ phase: 'ready' });

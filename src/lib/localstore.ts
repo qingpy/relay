@@ -1,5 +1,6 @@
-import { USE_LOCAL_STORE, db, openPersistentRelayDB } from '@/db/db';
+import { USE_LOCAL_STORE, db, openPersistentRelayDB, type RelayDB } from '@/db/db';
 import { exportAll, importAll, type BackupFile } from '@/lib/backup';
+import type { Connection } from '@/db/types';
 
 /**
  * Local data store engine (ARCHITECTURE.md §4 "Storage & sync").
@@ -119,6 +120,38 @@ async function loadIntoMemory(data: BackupFile): Promise<void> {
 }
 
 /**
+ * Hand the pre-M9 persistent store's secrets to the proxy's secret store. Read
+ * straight from the old DB (which still holds them inline) and POST to
+ * `/api/secrets/*`; the connection ids match the records just loaded into the
+ * in-memory DB, so the proxy can resolve them by id afterwards.
+ */
+async function handoffPersistentSecrets(persistent: RelayDB): Promise<void> {
+  for (const conn of await persistent.connections.toArray()) {
+    const legacy = conn as Connection & { apiKey?: string; privateKey?: string };
+    const patch: { apiKey?: string; privateKey?: string } = {};
+    if (legacy.apiKey) patch.apiKey = legacy.apiKey;
+    if (legacy.privateKey) patch.privateKey = legacy.privateKey;
+    if (patch.apiKey || patch.privateKey) {
+      await fetch(`/api/secrets/connection/${conn.id}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+    }
+  }
+  const cfg = (await persistent.appConfig.get('singleton')) as
+    | { webdav?: { pass?: string } }
+    | undefined;
+  if (cfg?.webdav?.pass) {
+    await fetch('/api/secrets/webdav', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pass: cfg.webdav.pass }),
+    });
+  }
+}
+
+/**
  * One-time migration: if a *persistent* `relay` IndexedDB still exists (pre-M9),
  * move it into the data file, then delete it to actually free C:. Runs only when
  * the data file is empty. No-op (returns false) on browsers that can't enumerate
@@ -147,6 +180,10 @@ async function migrateFromPersistent(): Promise<boolean> {
       const dump = await exportAll(persistent);
       await loadIntoMemory(dump);
       await writeSnapshot(); // persist the migrated data as the file's first rev
+      // The dump/file are secret-free (exportAll strips them); move the old
+      // store's keys straight into the proxy's secret store, keyed by the same
+      // connection ids the in-memory DB now holds.
+      await handoffPersistentSecrets(persistent);
     }
   } finally {
     persistent.close();

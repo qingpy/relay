@@ -42,6 +42,13 @@ to your browser profile.
 - Change it: set `RELAY_DATA_FILE`, e.g. `RELAY_DATA_FILE=D:\Relay\relay.json`.
 - The exact path/size shows in **Settings → Sync & backup**.
 
+**Secrets are kept out of that file.** Your API keys, the Vertex private key, and
+the WebDAV password live in a separate store owned by the proxy
+(`RELAY_SECRETS_FILE`, default a per-user config dir outside the repo). The data
+file, backups, and the WebDAV mirror are credential-free, so they're safe to copy
+around — and your keys aren't sitting in plaintext where a tool or coding agent
+working in the repo would read them. (Restoring on a new device re-enters keys.)
+
 For cross-device use, mirror the same snapshot to your own **WebDAV** server in
 the same panel (optional, last-write-wins, syncs while the app is open). Portable
 JSON **backups** (file download or on-disk) live there too.
@@ -65,6 +72,7 @@ gate the composer.
 | Var | Purpose | Default |
 |---|---|---|
 | `RELAY_DATA_FILE` | Path to the data snapshot | `./data/relay.json` |
+| `RELAY_SECRETS_FILE` | Path to the secret store (keys + WebDAV password) | per-user config dir |
 | `API_PORT` | Proxy port | `8787` |
 | `RELAY_BACKUP_DIR` | Folder for on-disk backups | `./backups` |
 | `OPENROUTER_KEY` / `OPENAI_KEY` | Fallback key for OpenAI-style connections | — |

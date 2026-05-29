@@ -8,6 +8,7 @@ import type {
   Prompt,
   Session,
   StoredFile,
+  WebDavConfig,
 } from '@/db/types';
 
 /** Backup file schema version (bump if the shape changes incompatibly). */
@@ -48,7 +49,9 @@ function base64ToBlob(b64: string, type: string): Blob {
   return new Blob([bytes], { type });
 }
 
-/** Dump every table — config, chats, connections (incl. keys), files — to JSON.
+/** Dump every table — config, chats, connections, files — to JSON. Secrets are
+ *  stripped here so the snapshot (the data file, a backup, the WebDAV mirror) is
+ *  always credential-free; the proxy's secret store is their only durable home.
  *  Defaults to the app DB; pass another (e.g. the persistent store during M9
  *  migration) to dump it instead. */
 export async function exportAll(database: RelayDB = db): Promise<BackupFile> {
@@ -76,15 +79,32 @@ export async function exportAll(database: RelayDB = db): Promise<BackupFile> {
     dbVersion: database.verno,
     exportedAt: Date.now(),
     data: {
-      connections,
+      connections: connections.map(stripConnectionSecrets),
       folders,
       sessions,
       messages,
       prompts,
-      appConfig,
+      appConfig: appConfig.map(stripConfigSecrets),
       files: serializedFiles,
     },
   };
+}
+
+/** Drop any secret material from a connection (legacy records may still carry
+ *  it before the one-time migration runs). */
+function stripConnectionSecrets(conn: Connection): Connection {
+  const { apiKey, privateKey, ...rest } = conn as Connection & {
+    apiKey?: string;
+    privateKey?: string;
+  };
+  return rest;
+}
+
+/** Drop the WebDAV password from the app config snapshot. */
+function stripConfigSecrets(config: AppConfig): AppConfig {
+  if (!config.webdav) return config;
+  const { pass, ...webdav } = config.webdav as WebDavConfig & { pass?: string };
+  return { ...config, webdav };
 }
 
 /** Validate a parsed object as a Relay backup. */

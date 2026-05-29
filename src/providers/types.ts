@@ -38,9 +38,9 @@ export type Delta =
   | { kind: 'usage'; usage: Usage }
   | { kind: 'error'; message: string };
 
-/** What the client sends to our proxy. The proxy attaches nothing the client
- *  can't see for OpenAI-compat/Gemini (the key comes from here); for Vertex it
- *  swaps in a server-minted token. */
+/** What the client sends to our proxy. The proxy resolves the connection's
+ *  secret by `connectionId` (the key never travels through the browser); for
+ *  Vertex it also swaps in a server-minted token. */
 export interface ProxyRequest {
   /** Proxy endpoint path, e.g. `/api/chat/openai`. */
   url: string;
@@ -52,13 +52,18 @@ export interface BuildInput {
   model: string;
   messages: ChatMessage[];
   settings: ProviderSettings;
-  apiKey?: string;
+  /** Connection id — the proxy resolves the stored secret (API key / Vertex
+   *  private key) from this. */
+  connectionId?: string;
   /** Full chat-completions endpoint URL (OpenAI-compatible connections). */
   url?: string;
-  /** Vertex only. */
+  /** Vertex only (non-secret config). */
   project?: string;
   region?: string;
   clientEmail?: string;
+  /** Transient secrets, used ONLY to test a connection whose key hasn't been
+   *  saved to the secret store yet. Never sent for normal chats. */
+  apiKey?: string;
   privateKey?: string;
 }
 

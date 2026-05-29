@@ -92,6 +92,7 @@ export class OpenAICompatProvider implements Provider {
     messages,
     settings,
     apiKey,
+    connectionId,
     url,
   }: BuildInput): ProxyRequest {
     const body: Record<string, unknown> = {
@@ -126,12 +127,14 @@ export class OpenAICompatProvider implements Provider {
     const headers: Record<string, string> = {
       'content-type': 'application/json',
     };
+    // A transient key is sent only when testing an unsaved connection; normal
+    // chats carry just the connectionId and the proxy resolves the stored key.
     if (apiKey) headers['x-api-key'] = apiKey;
 
     return {
       url: '/api/chat/openai',
       headers,
-      body: { url, payload: body },
+      body: { url, payload: body, connectionId },
     };
   }
 

@@ -4,8 +4,9 @@ import { geminiPayload, parseGeminiChunk } from './gemini';
 /**
  * Google Cloud Vertex AI — Gemini models with the same request body as AI
  * Studio, but a different endpoint and OAuth (service-account) auth. The proxy
- * mints the token from a server-side service-account JSON; the client only
- * sends the project, region, model, and payload.
+ * mints the token from the service-account private key it holds in its secret
+ * store (resolved by connectionId); the client sends only non-secret config
+ * (connectionId, project, region, client email, model, payload).
  */
 export class VertexProvider implements Provider {
   readonly type = 'vertex' as const;
@@ -14,6 +15,7 @@ export class VertexProvider implements Provider {
     model,
     messages,
     settings,
+    connectionId,
     project,
     region,
     clientEmail,
@@ -23,9 +25,12 @@ export class VertexProvider implements Provider {
       url: '/api/chat/vertex',
       headers: { 'content-type': 'application/json' },
       body: {
+        connectionId,
         project,
         region: region || 'us-central1',
         clientEmail,
+        // Transient private key for testing an unsaved connection only; normal
+        // chats omit it and the proxy reads it from the secret store by id.
         privateKey,
         model,
         payload: geminiPayload({ messages, settings }),

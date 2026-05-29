@@ -140,12 +140,11 @@ export const useChatStore = create<ChatState>((set, get) => {
         model: resolved.model,
         messages: chatMessages,
         settings: resolved.settings,
-        apiKey: resolved.connection.apiKey,
+        connectionId: resolved.connection.id,
         url: resolved.connection.url,
         project: resolved.connection.project,
         region: resolved.connection.region,
         clientEmail: resolved.connection.clientEmail,
-        privateKey: resolved.connection.privateKey,
       });
 
       const res = await fetch(req.url, {
