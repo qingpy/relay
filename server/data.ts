@@ -4,7 +4,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 
 /**
- * Local data store (plan §9 "Local data store (option 3)").
+ * Local data store (ARCHITECTURE.md §4 "Storage & sync").
  *
  * Relay's source of truth lives in ONE snapshot file on disk — off the browser,
  * at a path the user controls — owned by this proxy. The browser holds the data

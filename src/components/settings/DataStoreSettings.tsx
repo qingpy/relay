@@ -10,7 +10,7 @@ function formatBytes(n: number): string {
 }
 
 /**
- * Read-only readout of the local data store (plan §9). The path is set
+ * Read-only readout of the local data store (ARCHITECTURE.md §4). The path is set
  * server-side via `RELAY_DATA_FILE` at launch — the browser doesn't repoint the
  * proxy's filesystem target — so it's shown, not edited, here.
  */
