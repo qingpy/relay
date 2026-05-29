@@ -41,3 +41,8 @@ vertex-*.json
 # local backups (contain API keys) — NEVER commit
 backups/
 relay-backup-*.json
+
+# local data store (the source-of-truth snapshot, contains API keys) — NEVER commit
+data/
+relay.json
+relay.json.tmp

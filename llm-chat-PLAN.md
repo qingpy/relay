@@ -270,14 +270,21 @@ Identical SPA + proxy for all targets. Pick later.
   device can't clobber the cloud nor the cloud clobber unsynced local edits; configured on the page
   (**Settings → Sync & backup**: URL/user/pass/folder/interval, Test, Sync now, Back up, Restore).
   Proxy verified end-to-end against a stub; the user wires their own WebDAV server + tests live.
-- **M9 — Local data store off the browser, at a custom path** ⏳ (next — to execute): move Relay's
-  **source of truth out of the browser's IndexedDB** (which lives on C: and can't be relocated
-  per-site) into a single snapshot file at a **user-chosen path** (e.g. `D:\Relay\relay.json`),
-  owned by the local proxy. Keeps Relay as a normal browser tab, takes the *whole* dataset off C:,
-  and makes that file the thing WebDAV syncs. **Full spec in §9 → "Local data store (option 3)".**
+- **M9 — Local data store off the browser, at a custom path** ✅ (built; engine-verified, pending the
+  user's live browser confirm): Relay's **source of truth now lives outside the browser's IndexedDB**
+  (which sits on C: and can't be relocated per-site) — in a single snapshot file at a **user-chosen
+  path** (env `RELAY_DATA_FILE`, e.g. `D:\Relay\relay.json`; default `./data/relay.json`), owned by
+  the local proxy. The browser backs Dexie with an **in-memory IndexedDB** (`fake-indexeddb`) so
+  `repo.ts`/`useLiveQuery`/components are unchanged but nothing persists to the browser profile; the
+  proxy (`server/data.ts`, `/api/data` GET/PUT/`/info`) reads/writes the whole `{rev,savedAt,data}`
+  snapshot atomically, and `src/lib/localstore.ts` loads it on boot (gating the app render) and writes
+  it back on change (short-debounced + flush on hide/unload). A one-time migration exports any existing
+  persistent `relay` IndexedDB into the file then `deleteDatabase('relay')` to free C:. WebDAV (M8)
+  stays the off-machine layer over the same snapshot. **Full spec in §9 → "Local data store (option 3)".**
 
 The functional build is complete through **M7** (and verified by the user); **M8** (WebDAV sync) is
-built and pending the user's live test; **M9** (local data store on a custom path) is next to build.
+built and pending the user's live test; **M9** (local data store on a custom path) is built and
+engine-verified (server round-trip + in-memory Dexie + Blob persistence), pending live browser confirm.
 
 ### Status & handoff (2026-05-28)
 
@@ -308,13 +315,32 @@ local proxy (`/api/sync`, `src/lib/webdav.ts`), opportunistically, last-write-wi
 proxy mediates so there's no CORS/credential exposure. Target/credentials are entered on the page
 (**Settings → Sync & backup**). Proxy verified against a stub; awaiting the user's real-server test.
 
-**Next to BUILD — M9: local data store off the browser, at a custom path.** Agreed and fully specced
-in **§9 → "Local data store (option 3)"**. In one line: back Dexie with in-memory IndexedDB (so the
-browser writes nothing to C:) and persist the whole snapshot through the proxy to `RELAY_DATA_FILE`
-(e.g. `D:\Relay\relay.json`) — load on boot, short-debounced write-through on change, one-time
-migration that exports the existing persistent IndexedDB then `deleteDatabase('relay')` to free C:.
-WebDAV (M8) stays the off-machine layer atop the same snapshot. **Execute the §9 build order.**
-(Session was compacted right before execution — start from the §9 spec.)
+**M9 — local data store off the browser: BUILT (2026-05-29), engine-verified.** Implemented per the
+§9 spec: `server/data.ts` (`/api/data` GET/PUT/`/info`, atomic tmp+rename); Dexie backed by an
+in-memory `fake-indexeddb` factory (`USE_LOCAL_STORE` in `db.ts`, with `openPersistentRelayDB()` for
+migration); `src/lib/localstore.ts` (boot load → `importAll`, ~400 ms debounced write-through, flush
+on hide/unload, one-time migration from the persistent `relay` DB then `deleteDatabase`); `App.tsx`
+gates render on the initial load with a proxy-unreachable error screen; Settings → Sync shows the data
+file path/size (`DataStoreSettings`). `exportAll`/`importAll` gained an optional DB arg for the
+migration. **Verified without a browser:** server curl round-trip; Dexie+fake-indexeddb Blob round-trip
+through a clear+bulkPut; and a full in-memory→PUT→GET→restore round-trip (connections/folders/files +
+blob bytes intact). **Left to the user:** a live `npm run dev` confirm — create a chat, watch
+`RELAY_DATA_FILE` update while the browser's IndexedDB stays empty, reload → data restored. Launch with
+`RELAY_DATA_FILE=D:\Relay\relay.json` (or set it in the environment) to choose the path.
+
+**Post-M9 polish (same session, 2026-05-29):**
+- **Temperature / Top-P are explicit on/off** in "Model & instructions" — off (default) omits the knob
+  entirely (provider default); on reveals the slider. `saveSettings` strips `undefined` keys so "off"
+  is truly absent from the request.
+- **Reasoning effort is now a dropdown from a global, user-editable list** (`AppConfig.reasoningEfforts`,
+  seeded `minimal/low/medium/high`; managed in **Settings → Chats → Reasoning effort options**), not a
+  free-text field — the preset picks from it (plus "Default" and a "· current" fallback for stale
+  values). Storage stays `reasoningEffort: string`; `sanitizeReasoning` unchanged.
+- **Settings dialog** detail panels got extra top padding so the first section clears the floating
+  close (×) — fixes the Connections "Add" / × crowding.
+- **Context meter** in the chat header: a quiet `~Nk ctx` readout estimating the tokens sent next turn
+  (system prompt + turns after the latest divider, ~4 chars/token) plus an attachment count
+  (`src/lib/context.ts` + `ContextMeter`).
 
 **Carry-over notes / caveats:**
 - Backups contain API keys in plaintext (gitignored). The proxy has **no auth** — fine for the
@@ -338,13 +364,17 @@ Resolved:
   are `openrouter | openai | gemini | vertex`; OpenRouter and OpenAI share
   `OpenAICompatProvider` (differ by base URL).
 
-- **Reasoning effort is free-typed, per model** (user request, M7, 2026-05-28): the accepted set
-  varies by model (GPT-5 adds `minimal`, xAI mini reasoners only do `low`/`high`, DeepSeek-R1 /
-  grok-4 / QwQ reason with no knob), so a fixed Off/Low/Medium/High dropdown was wrong. The preset
-  editor now shows a **text field** the user types (`reasoningEffort: string`); the control is
-  **gated on the model's saved `reasoning` capability** and split by protocol via
+- **Reasoning effort is chosen from a global, user-editable list** (user request, M7 then refined
+  post-M9, 2026-05-29): the accepted set varies by model (GPT-5 adds `minimal`, xAI mini reasoners
+  only do `low`/`high`, DeepSeek-R1 / grok-4 / QwQ reason with no knob), so a fixed Off/Low/Medium/High
+  dropdown was wrong. It was briefly a free-text field, then turned into a **dropdown backed by a
+  global option list** the user curates (`AppConfig.reasoningEfforts`, seeded `minimal/low/medium/high`,
+  add/edit/delete in **Settings → Chats → Reasoning effort options**) — so the same vetted choices are
+  offered everywhere, with no per-field typos. The preset picker shows those options plus "Default"
+  and a "· current" entry for a stored value not in the list. Storage stays `reasoningEffort: string`;
+  the control is **gated on the model's saved `reasoning` capability** and split by protocol via
   `reasoningKind(type, caps)` — `none` (no knob), `budget` (Vertex numeric `thinkingBudget`), or
-  `effort` (the typed string). `sanitizeReasoning()` strips the inapplicable knob at the resolve
+  `effort` (the chosen string). `sanitizeReasoning()` strips the inapplicable knob at the resolve
   boundary, so a stale value (after a model switch / backup import / migration) is never sent.
 
 - **UI redesign — "Unboxed Stationery"** (user request, M7, 2026-05-28): replaced the indigo

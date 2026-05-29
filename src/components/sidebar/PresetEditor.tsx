@@ -8,6 +8,8 @@ import {
 } from '@/components/ui/dialog';
 import { FlatSelect } from '@/components/ui/flat-select';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
+import { DEFAULT_REASONING_EFFORTS, getAppConfig } from '@/db/db';
 import {
   listConnections,
   setSessionSystemPrompt,
@@ -21,6 +23,7 @@ import {
   modelGroups,
   reasoningKind,
 } from '@/lib/models';
+import { cn } from '@/lib/utils';
 
 const FIELD = 'flex flex-col gap-3';
 const FLAT_INPUT =
@@ -35,6 +38,59 @@ function GroupHeader({ label, value }: { label: string; value?: string }) {
         <span className="font-mono text-xs tabular-nums text-foreground">
           {value}
         </span>
+      )}
+    </div>
+  );
+}
+
+/** A slider with an on/off switch: off omits the knob entirely (provider
+ *  default), on reveals the slider with a stored value. */
+function OptionalSlider({
+  label,
+  value,
+  defaultValue,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number | undefined;
+  defaultValue: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number | undefined) => void;
+}) {
+  const on = value !== undefined;
+  const shown = value ?? defaultValue;
+  return (
+    <div className={FIELD}>
+      <div className="flex items-end justify-between">
+        <span className="label-mono text-muted-foreground">{label}</span>
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              'font-mono text-xs tabular-nums',
+              on ? 'text-foreground' : 'text-muted-foreground',
+            )}
+          >
+            {on ? shown.toFixed(2) : 'Default'}
+          </span>
+          <Switch
+            checked={on}
+            onCheckedChange={(v) => onChange(v ? shown : undefined)}
+          />
+        </div>
+      </div>
+      {on && (
+        <Slider
+          min={min}
+          max={max}
+          step={step}
+          value={[shown]}
+          onValueChange={([v]) => onChange(v)}
+        />
       )}
     </div>
   );
@@ -70,6 +126,7 @@ export function PresetEditor({
 
 function Form({ folder, session }: { folder: Folder; session?: Session }) {
   const connections = useLiveQuery(() => listConnections(), [], []);
+  const config = useLiveQuery(() => getAppConfig(), []);
   const [connectionId, setConnectionId] = useState(folder.connectionId ?? '');
   const [model, setModel] = useState(folder.model ?? '');
   const [settings, setSettings] = useState<ModelSettings>(folder.settings ?? {});
@@ -78,14 +135,18 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
 
   const conn = connections.find((c) => c.id === connectionId);
   const groups = modelGroups(connections);
-  const temperature = settings.temperature ?? 1;
-  const topP = settings.topP ?? 1;
+  const effortOptions = config?.reasoningEfforts ?? DEFAULT_REASONING_EFFORTS;
   const reasoning = conn
     ? reasoningKind(conn.type, findModel(conn, model).capabilities)
     : 'none';
 
   const saveSettings = (patch: Partial<ModelSettings>) => {
-    const next = { ...settings, ...patch };
+    // Drop undefined keys so an "off" knob is truly absent → provider default.
+    const next = Object.fromEntries(
+      Object.entries({ ...settings, ...patch }).filter(
+        ([, v]) => v !== undefined,
+      ),
+    ) as ModelSettings;
     setSettings(next);
     void updateFolderConfig(folder.id, { settings: next });
   };
@@ -126,27 +187,25 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
         </FlatSelect>
       </div>
 
-      <div className={FIELD}>
-        <GroupHeader label="Temperature" value={temperature.toFixed(2)} />
-        <Slider
-          min={0}
-          max={2}
-          step={0.05}
-          value={[temperature]}
-          onValueChange={([v]) => saveSettings({ temperature: v })}
-        />
-      </div>
+      <OptionalSlider
+        label="Temperature"
+        value={settings.temperature}
+        defaultValue={1}
+        min={0}
+        max={2}
+        step={0.05}
+        onChange={(v) => saveSettings({ temperature: v })}
+      />
 
-      <div className={FIELD}>
-        <GroupHeader label="Top P" value={topP.toFixed(2)} />
-        <Slider
-          min={0}
-          max={1}
-          step={0.05}
-          value={[topP]}
-          onValueChange={([v]) => saveSettings({ topP: v })}
-        />
-      </div>
+      <OptionalSlider
+        label="Top P"
+        value={settings.topP}
+        defaultValue={1}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => saveSettings({ topP: v })}
+      />
 
       <div className={FIELD}>
         <GroupHeader label="Max tokens" />
@@ -187,14 +246,28 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
       {reasoning === 'effort' && (
         <div className={FIELD}>
           <GroupHeader label="Reasoning effort" />
-          <input
+          <FlatSelect
             value={settings.reasoningEffort ?? ''}
             onChange={(e) =>
-              saveSettings({ reasoningEffort: e.target.value.trim() || undefined })
+              saveSettings({ reasoningEffort: e.target.value || undefined })
             }
-            placeholder="Default — e.g. minimal, low, medium, high"
-            className={FLAT_INPUT}
-          />
+          >
+            <option value="">Default</option>
+            {settings.reasoningEffort &&
+              !effortOptions.includes(settings.reasoningEffort) && (
+                <option value={settings.reasoningEffort}>
+                  {settings.reasoningEffort} · current
+                </option>
+              )}
+            {effortOptions.map((o) => (
+              <option key={o} value={o}>
+                {o}
+              </option>
+            ))}
+          </FlatSelect>
+          <p className="text-xs text-muted-foreground">
+            Edit these choices in Settings → Chats.
+          </p>
         </div>
       )}
 

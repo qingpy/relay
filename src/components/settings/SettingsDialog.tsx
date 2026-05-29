@@ -13,7 +13,9 @@ import { useUiStore } from '@/store/ui';
 import { AutoTitleSettings } from './AutoTitleSettings';
 import { BackupSettings } from './BackupSettings';
 import { ConnectionsManager } from './ConnectionsManager';
+import { DataStoreSettings } from './DataStoreSettings';
 import { PromptsManager } from './PromptsManager';
+import { ReasoningEffortSettings } from './ReasoningEffortSettings';
 import { SectionLabel } from './SectionLabel';
 import { WebdavSettings } from './WebdavSettings';
 
@@ -61,20 +63,24 @@ export function SettingsDialog() {
         {/* Detail */}
         <div className="flex min-w-0 flex-1 flex-col">
           {panel === 'prompts' ? (
-            <div className="h-full min-h-0 p-8">
+            <div className="h-full min-h-0 px-8 pb-8 pt-12">
               <PromptsManager />
             </div>
           ) : (
-            <div className="flex h-full min-h-0 flex-col gap-10 overflow-y-auto p-8">
+            // Extra top padding so the first section clears the dialog's
+            // floating close (×) at the top-right corner.
+            <div className="flex h-full min-h-0 flex-col gap-10 overflow-y-auto px-8 pb-8 pt-12">
               {panel === 'connections' && <ConnectionsManager />}
               {panel === 'chats' && (
                 <>
                   <AutoTitleSettings />
+                  <ReasoningEffortSettings />
                   <ExportSettings />
                 </>
               )}
               {panel === 'sync' && (
                 <>
+                  <DataStoreSettings />
                   <WebdavSettings />
                   <BackupSettings />
                 </>

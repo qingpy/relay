@@ -1,5 +1,6 @@
 import { Marginalia } from '@/components/ui/marginalia';
 import { Composer } from '@/components/chat/Composer';
+import { ContextMeter } from '@/components/chat/ContextMeter';
 import { ExportMenu } from '@/components/chat/ExportMenu';
 import { MessageList } from '@/components/chat/MessageList';
 import { SessionControls } from '@/components/chat/SessionControls';
@@ -35,6 +36,7 @@ export function ChatPane() {
           <span className="label-mono text-muted-foreground">Relay</span>
         )}
         <div className="ml-auto flex items-center gap-4">
+          {activeId && <ContextMeter sessionId={activeId} />}
           {activeId && (
             <Marginalia
               onClick={toggleSelectionMode}

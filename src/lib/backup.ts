@@ -1,4 +1,4 @@
-import { db } from '@/db/db';
+import { db, type RelayDB } from '@/db/db';
 import type {
   AppConfig,
   Connection,
@@ -47,17 +47,19 @@ function base64ToBlob(b64: string, type: string): Blob {
   return new Blob([bytes], { type });
 }
 
-/** Dump every table — config, chats, connections (incl. keys), files — to JSON. */
-export async function exportAll(): Promise<BackupFile> {
+/** Dump every table — config, chats, connections (incl. keys), files — to JSON.
+ *  Defaults to the app DB; pass another (e.g. the persistent store during M9
+ *  migration) to dump it instead. */
+export async function exportAll(database: RelayDB = db): Promise<BackupFile> {
   const [connections, folders, sessions, messages, prompts, appConfig, files] =
     await Promise.all([
-      db.connections.toArray(),
-      db.folders.toArray(),
-      db.sessions.toArray(),
-      db.messages.toArray(),
-      db.prompts.toArray(),
-      db.appConfig.toArray(),
-      db.files.toArray(),
+      database.connections.toArray(),
+      database.folders.toArray(),
+      database.sessions.toArray(),
+      database.messages.toArray(),
+      database.prompts.toArray(),
+      database.appConfig.toArray(),
+      database.files.toArray(),
     ]);
 
   const serializedFiles: SerializedFile[] = await Promise.all(
@@ -70,7 +72,7 @@ export async function exportAll(): Promise<BackupFile> {
   return {
     app: 'relay',
     version: BACKUP_VERSION,
-    dbVersion: db.verno,
+    dbVersion: database.verno,
     exportedAt: Date.now(),
     data: {
       connections,
@@ -95,8 +97,11 @@ export function isBackupFile(x: unknown): x is BackupFile {
   );
 }
 
-/** Replace the entire local database with a backup's contents. */
-export async function importAll(file: BackupFile): Promise<void> {
+/** Replace the entire database with a backup's contents (defaults to the app DB). */
+export async function importAll(
+  file: BackupFile,
+  database: RelayDB = db,
+): Promise<void> {
   if (!isBackupFile(file)) throw new Error('Not a valid Relay backup file.');
   const d = file.data;
   const files: StoredFile[] = d.files.map(({ blobBase64, ...rest }) => ({
@@ -104,35 +109,35 @@ export async function importAll(file: BackupFile): Promise<void> {
     blob: base64ToBlob(blobBase64, rest.mimeType),
   }));
 
-  await db.transaction(
+  await database.transaction(
     'rw',
     [
-      db.connections,
-      db.folders,
-      db.sessions,
-      db.messages,
-      db.prompts,
-      db.files,
-      db.appConfig,
+      database.connections,
+      database.folders,
+      database.sessions,
+      database.messages,
+      database.prompts,
+      database.files,
+      database.appConfig,
     ],
     async () => {
       await Promise.all([
-        db.connections.clear(),
-        db.folders.clear(),
-        db.sessions.clear(),
-        db.messages.clear(),
-        db.prompts.clear(),
-        db.files.clear(),
-        db.appConfig.clear(),
+        database.connections.clear(),
+        database.folders.clear(),
+        database.sessions.clear(),
+        database.messages.clear(),
+        database.prompts.clear(),
+        database.files.clear(),
+        database.appConfig.clear(),
       ]);
       await Promise.all([
-        db.connections.bulkPut(d.connections ?? []),
-        db.folders.bulkPut(d.folders ?? []),
-        db.sessions.bulkPut(d.sessions ?? []),
-        db.messages.bulkPut(d.messages ?? []),
-        db.prompts.bulkPut(d.prompts ?? []),
-        db.appConfig.bulkPut(d.appConfig ?? []),
-        db.files.bulkPut(files),
+        database.connections.bulkPut(d.connections ?? []),
+        database.folders.bulkPut(d.folders ?? []),
+        database.sessions.bulkPut(d.sessions ?? []),
+        database.messages.bulkPut(d.messages ?? []),
+        database.prompts.bulkPut(d.prompts ?? []),
+        database.appConfig.bulkPut(d.appConfig ?? []),
+        database.files.bulkPut(files),
       ]);
     },
   );
