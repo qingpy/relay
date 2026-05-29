@@ -37,6 +37,10 @@ Thumbs.db
 service-account*.json
 gcp-*.json
 vertex-*.json
+# secret store (default lives outside the repo; guard a repo-relative override)
+secrets.json
+*.secrets.json
+secrets.json.tmp
 
 # local backups (contain API keys) — NEVER commit
 backups/

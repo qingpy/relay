@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { getConnectionSecret } from './secrets.ts';
 import { getAccessToken, loadServiceAccount } from './vertex-auth.ts';
 
 /**
@@ -6,10 +7,12 @@ import { getAccessToken, loadServiceAccount } from './vertex-auth.ts';
  * attaches auth and streams the upstream SSE straight back.
  *
  *  - OpenAI-compatible (OpenRouter / OpenAI / Gemini's OpenAI endpoint / any
- *    base URL): key from the `x-api-key` header, or `OPENROUTER_KEY` /
- *    `OPENAI_KEY` env as fallback.
- *  - Vertex AI: server-minted OAuth token from a service-account JSON
- *    (`GOOGLE_VERTEX_CREDENTIALS`), never exposed to the browser.
+ *    base URL): key resolved from the secret store by `connectionId`, or a
+ *    transient `x-api-key` header (testing an unsaved key), or
+ *    `OPENROUTER_KEY` / `OPENAI_KEY` env as fallback.
+ *  - Vertex AI: server-minted OAuth token from a service-account whose private
+ *    key comes from the secret store (or a transient one in the body for
+ *    testing), or `GOOGLE_VERTEX_CREDENTIALS`. The key never reaches the browser.
  *
  * Endpoints validate the upstream origin so the proxy can't be turned into an
  * open forwarder.
@@ -43,16 +46,17 @@ export function safeUrl(raw: unknown): string | null {
 }
 
 chat.post('/openai', async (c) => {
-  const { url: rawUrl, payload } = await c.req
-    .json<{ url?: string; payload?: unknown }>()
-    .catch(() => ({ url: undefined, payload: undefined }));
+  const { url: rawUrl, payload, connectionId } = await c.req
+    .json<{ url?: string; payload?: unknown; connectionId?: string }>()
+    .catch(() => ({ url: undefined, payload: undefined, connectionId: undefined }));
 
   const url = safeUrl(rawUrl);
   if (!url) return errorResponse('Invalid or missing url.', 400);
   if (!payload) return errorResponse('Missing request payload.', 400);
 
   const key =
-    c.req.header('x-api-key') ||
+    c.req.header('x-api-key') || // transient: testing an unsaved key
+    (await getConnectionSecret(connectionId))?.apiKey ||
     process.env.OPENROUTER_KEY ||
     process.env.OPENAI_KEY;
   if (!key) return errorResponse('No API key provided.', 401);
@@ -81,25 +85,30 @@ chat.post('/openai', async (c) => {
 });
 
 chat.post('/vertex', async (c) => {
-  const { project, region, model, payload, clientEmail, privateKey } = await c.req
-    .json<{
-      project?: string;
-      region?: string;
-      model?: string;
-      payload?: unknown;
-      clientEmail?: string;
-      privateKey?: string;
-    }>()
-    .catch(() => ({}) as Record<string, undefined>);
+  const { project, region, model, payload, connectionId, clientEmail, privateKey } =
+    await c.req
+      .json<{
+        project?: string;
+        region?: string;
+        model?: string;
+        payload?: unknown;
+        connectionId?: string;
+        clientEmail?: string;
+        privateKey?: string;
+      }>()
+      .catch(() => ({}) as Record<string, undefined>);
 
   if (!project || !region || !model || !payload) {
     return errorResponse('Missing project, region, model, or payload.', 400);
   }
 
-  // Prefer the connection's service-account creds; fall back to a server JSON.
+  // Service-account email is non-secret config (from the connection); the
+  // private key comes from the secret store by id, or a transient one in the
+  // body when testing. Fall back to a server-side JSON if neither is present.
+  const pk = privateKey || (await getConnectionSecret(connectionId))?.privateKey;
   const sa =
-    clientEmail && privateKey
-      ? { client_email: clientEmail, private_key: privateKey }
+    clientEmail && pk
+      ? { client_email: clientEmail, private_key: pk }
       : loadServiceAccount();
   if (!sa) {
     return errorResponse(

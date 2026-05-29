@@ -1,14 +1,18 @@
 import { Hono } from 'hono';
+import { getWebdavPass } from './secrets.ts';
 
 /**
  * WebDAV sync proxy. The browser can't reach most WebDAV servers directly
- * (CORS + Basic-auth), so it sends the target URL and credentials here per
- * request (nothing is stored) and we forward GET/PUT to the user's server.
- * This keeps Relay local-first: sync is optional and the proxy is stateless.
+ * (CORS + Basic-auth), so it sends the target URL + username here and we
+ * forward GET/PUT to the user's server. The password is a secret: it lives in
+ * the proxy's secret store (never in the snapshot / browser), and we assemble
+ * the `Authorization: Basic` header here.
  *
  * Client headers:
  *   x-webdav-url   full target URL (the snapshot file for GET/PUT, the folder for /test)
- *   x-webdav-auth  base64("user:pass"), sent upstream as `Authorization: Basic …`
+ *   x-webdav-user  WebDAV username (non-secret config)
+ *   x-webdav-pass  transient password — only sent for /test (an unsaved password);
+ *                  otherwise the stored password is used.
  */
 export const sync = new Hono();
 
@@ -22,10 +26,16 @@ function safeUrl(raw: string | undefined): string | null {
   }
 }
 
-function creds(c: { req: { header: (k: string) => string | undefined } }) {
+async function creds(c: { req: { header: (k: string) => string | undefined } }) {
   const url = safeUrl(c.req.header('x-webdav-url'));
-  const auth = c.req.header('x-webdav-auth');
-  return { url, authHeader: auth ? `Basic ${auth}` : undefined };
+  const user = c.req.header('x-webdav-user');
+  // Transient password (testing an unsaved one) wins over the stored secret.
+  const pass = c.req.header('x-webdav-pass') || (await getWebdavPass());
+  const authHeader =
+    user && pass
+      ? `Basic ${Buffer.from(`${user}:${pass}`, 'utf-8').toString('base64')}`
+      : undefined;
+  return { url, authHeader };
 }
 
 function err(message: string, status = 400): Response {
@@ -44,7 +54,7 @@ function parentUrl(fileUrl: string): string {
 
 // Verify the endpoint + credentials (PROPFIND the folder).
 sync.post('/test', async (c) => {
-  const { url, authHeader } = creds(c);
+  const { url, authHeader } = await creds(c);
   if (!url || !authHeader) return err('Missing WebDAV URL or credentials.');
   try {
     const res = await fetch(url, {
@@ -61,7 +71,7 @@ sync.post('/test', async (c) => {
 
 // Download the snapshot. 404 -> nothing stored yet.
 sync.get('/', async (c) => {
-  const { url, authHeader } = creds(c);
+  const { url, authHeader } = await creds(c);
   if (!url || !authHeader) return err('Missing WebDAV URL or credentials.');
   let res: Response;
   try {
@@ -78,7 +88,7 @@ sync.get('/', async (c) => {
 
 // Upload the snapshot (creating the folder first if needed).
 sync.put('/', async (c) => {
-  const { url, authHeader } = creds(c);
+  const { url, authHeader } = await creds(c);
   if (!url || !authHeader) return err('Missing WebDAV URL or credentials.');
   const body = await c.req.text();
   if (!body) return err('Empty body.');

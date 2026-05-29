@@ -208,7 +208,6 @@ export async function createConnection(input: {
   name?: string;
   type: ConnectionType;
   url?: string;
-  apiKey?: string;
 }): Promise<Connection> {
   const last = await db.connections.orderBy('order').last();
   const url = input.url ?? DEFAULT_URL[flavorOf(input.type, input.url)];
@@ -217,7 +216,6 @@ export async function createConnection(input: {
     name: input.name?.trim() || CONNECTION_TYPE_NAME[input.type],
     type: input.type,
     url,
-    apiKey: input.apiKey,
     models: [],
     enabled: true,
     order: (last?.order ?? -1) + 1,

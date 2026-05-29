@@ -23,6 +23,11 @@ import type {
 import { testConnection, type TestResult } from '@/lib/connTest';
 import { detectModels } from '@/lib/detect';
 import { toSavedModel } from '@/lib/models';
+import {
+  connectionSecretSet,
+  deleteConnectionSecret,
+  putConnectionSecret,
+} from '@/lib/secrets';
 import { cn } from '@/lib/utils';
 import { ModelPicker } from './ModelPicker';
 import { SectionLabel } from './SectionLabel';
@@ -111,11 +116,14 @@ function Editor({ conn }: { conn: Connection }) {
   const [name, setName] = useState(conn.name);
   const [type, setType] = useState<ConnectionType>(conn.type);
   const [url, setUrl] = useState(conn.url ?? '');
-  const [apiKey, setApiKey] = useState(conn.apiKey ?? '');
+  // Secrets aren't held in the connection record — these hold only a freshly
+  // typed value (the transient used to test before it's saved to the store).
+  const [apiKey, setApiKey] = useState('');
   const [project, setProject] = useState(conn.project ?? '');
   const [region, setRegion] = useState(conn.region ?? '');
   const [clientEmail, setClientEmail] = useState(conn.clientEmail ?? '');
-  const [privateKey, setPrivateKey] = useState(conn.privateKey ?? '');
+  const [privateKey, setPrivateKey] = useState('');
+  const keySaved = connectionSecretSet(conn.id);
   const [newModel, setNewModel] = useState('');
   const [detecting, setDetecting] = useState(false);
   const [detectError, setDetectError] = useState<string | null>(null);
@@ -137,7 +145,7 @@ function Editor({ conn }: { conn: Connection }) {
     }
     setTesting(true);
     setTestResult(null);
-    const r = await testConnection(conn, testModelId);
+    const r = await testConnection(conn, testModelId, { apiKey, privateKey });
     setTestResult({ ...r, model: testModelId });
     setTesting(false);
   };
@@ -149,15 +157,15 @@ function Editor({ conn }: { conn: Connection }) {
         private_key?: string;
         project_id?: string;
       };
-      const patch = {
-        clientEmail: sa.client_email ?? clientEmail,
-        privateKey: sa.private_key ?? privateKey,
-        project: sa.project_id ?? project,
-      };
-      setClientEmail(patch.clientEmail);
-      setPrivateKey(patch.privateKey);
-      setProject(patch.project);
-      void updateConnection(conn.id, patch);
+      const email = sa.client_email ?? clientEmail;
+      const proj = sa.project_id ?? project;
+      const key = sa.private_key ?? privateKey;
+      setClientEmail(email);
+      setProject(proj);
+      setPrivateKey(key);
+      // Email + project are non-secret config; the private key goes to the store.
+      void updateConnection(conn.id, { clientEmail: email, project: proj });
+      if (key) void putConnectionSecret(conn.id, { privateKey: key });
     } catch {
       // Ignore invalid JSON; the user can paste fields manually.
     }
@@ -170,7 +178,7 @@ function Editor({ conn }: { conn: Connection }) {
     setDetecting(true);
     setDetectError(null);
     try {
-      setPicker(await detectModels(conn));
+      setPicker(await detectModels(conn, apiKey || undefined));
     } catch (e) {
       setDetectError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -192,7 +200,10 @@ function Editor({ conn }: { conn: Connection }) {
       confirmLabel: 'Delete',
       destructive: true,
     });
-    if (ok) await deleteConnection(conn.id);
+    if (ok) {
+      await deleteConnection(conn.id);
+      await deleteConnectionSecret(conn.id);
+    }
   };
 
   return (
@@ -238,11 +249,11 @@ function Editor({ conn }: { conn: Connection }) {
             <Input
               type="password"
               autoComplete="off"
-              placeholder="API key"
+              placeholder={keySaved ? 'Saved — leave blank to keep' : 'API key'}
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
-                void updateConnection(conn.id, { apiKey: e.target.value });
+                void putConnectionSecret(conn.id, { apiKey: e.target.value });
               }}
             />
           </Field>
@@ -301,11 +312,13 @@ function Editor({ conn }: { conn: Connection }) {
           <Field label="Private key">
             <textarea
               spellCheck={false}
-              placeholder="-----BEGIN PRIVATE KEY-----…"
+              placeholder={
+                keySaved ? 'Saved — leave blank to keep' : '-----BEGIN PRIVATE KEY-----…'
+              }
               value={privateKey}
               onChange={(e) => {
                 setPrivateKey(e.target.value);
-                void updateConnection(conn.id, { privateKey: e.target.value });
+                void putConnectionSecret(conn.id, { privateKey: e.target.value });
               }}
               rows={3}
               className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring"

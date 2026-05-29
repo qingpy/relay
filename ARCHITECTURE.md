@@ -51,10 +51,11 @@ Types live in `src/db/types.ts`; the schema + migrations in `src/db/db.ts`; all
 reads/writes in `src/db/repo.ts`.
 
 ```
-connections { id, name, type: 'openai'|'vertex', url?, apiKey?,  // url = full …/chat/completions
+connections { id, name, type: 'openai'|'vertex', url?,        // url = full …/chat/completions
               models: SavedModel[] (id, label?, capabilities),
-              project?, region?, clientEmail?, privateKey?,   // vertex
+              project?, region?, clientEmail?,                // vertex (non-secret)
               enabled?, order, createdAt }
+              // secrets (API key, Vertex private key) live in the proxy's secret store, not here
 folders     { id, name, parentId|null, order, createdAt,      // a "Preset" in the UI
               connectionId?, model?, settings?: ModelSettings, systemPrompt? }
 sessions    { id, folderId (preset), title, systemPrompt?, webSearch?,
@@ -72,8 +73,10 @@ appConfig   { id:'singleton', theme, exportIncludeThinking?,
 ```
 
 Key ideas:
-- **Connections** are user-defined upstreams (a name + protocol + key/URL + a
-  saved model catalog with per-model capabilities). **Presets** (stored as
+- **Connections** are user-defined upstreams (a name + protocol + URL + a
+  saved model catalog with per-model capabilities); their secrets live in the
+  proxy's secret store (§4), keyed by connection id, never in the record.
+  **Presets** (stored as
   `folders`) fix the connection/model/settings/system-prompt for the chats inside
   them; a chat adds only an extra system prompt + a web-search toggle.
 - **Branching.** Messages form a *tree* via `parentId`; the visible conversation
@@ -91,10 +94,21 @@ Key ideas:
 ## 4. Storage & sync — one snapshot, three layers
 
 All three serialize the **same payload**: the `BackupFile` from
-`exportAll()` in `src/lib/backup.ts` — the whole DB (connections incl. keys,
-folders, sessions, messages, prompts, appConfig, and attachments as base64).
-`importAll()` replaces the DB from one. Both take an optional DB arg (used by the
-M9 migration to read the old persistent store).
+`exportAll()` in `src/lib/backup.ts` — the whole DB (connections, folders,
+sessions, messages, prompts, appConfig, and attachments as base64). `exportAll()`
+**strips every secret** (API keys, the Vertex private key, the WebDAV password)
+at this one chokepoint, so the snapshot is always credential-free — on disk, on
+WebDAV, and in every backup. `importAll()` replaces the DB from one. Both take an
+optional DB arg (used by the M9 migration to read the old persistent store).
+
+Secrets instead live in a **separate proxy-owned store** (`server/secrets.ts`),
+keyed by connection id, in a file outside the repo (env `RELAY_SECRETS_FILE`,
+default a per-user config dir). The browser never holds raw keys after boot: it
+sends only a `connectionId` and the proxy injects the credential when forwarding
+(see §5). The client mirror is `src/lib/secrets.ts` — write-only setters, a
+booleans-only status read for the "saved" placeholders, and a one-time
+`migrateEmbeddedSecrets()` on boot that lifts any keys still embedded in an older
+snapshot into the store and rewrites the file clean.
 
 1. **Local data store (the source of truth).** The browser backs Dexie with an
    **in-memory IndexedDB** (`fake-indexeddb`, selected by `USE_LOCAL_STORE` in
@@ -119,8 +133,9 @@ M9 migration to read the old persistent store).
 
 2. **WebDAV sync (off-machine / cross-device).** `src/lib/webdav.ts` mirrors the
    same snapshot to the user's WebDAV server through **`server/sync.ts`** (a
-   stateless GET/PUT/PROPFIND/MKCOL forwarder; creds passed per request as
-   `x-webdav-url` + `x-webdav-auth`). Last-write-wins for a single user, with
+   stateless GET/PUT/PROPFIND/MKCOL forwarder; `x-webdav-url` + `x-webdav-user`
+   per request, with the password supplied from the secret store — or a
+   transient `x-webdav-pass` for the Settings "Test"). Last-write-wins for a single user, with
    guards: a fresh device won't clobber the cloud nor be clobbered; a device with
    unsynced edits pushes. Pull on open, scheduled push while open (interval in
    **hours**), flush on hide. Configured in Settings → Sync.
@@ -151,15 +166,17 @@ interface Provider {
   `gemini.ts`) — Gemini `generateContent` body; the proxy mints the OAuth token.
 
 The client builds the full payload and POSTs to the proxy:
-- `POST /api/chat/openai` — body `{ url, payload }`, key via `x-api-key`
-  header (or `OPENROUTER_KEY`/`OPENAI_KEY` env). `url` is the connection's full,
-  user-editable endpoint; the proxy validates the protocol and calls it verbatim.
-  Model detection (`/api/models/openai`) derives the `…/models` URL from it.
-- `POST /api/chat/vertex` — body `{ project, region, model, payload, clientEmail?,
-  privateKey? }`. Proxy mints a token (`server/vertex-auth.ts`) and calls
-  `…:streamGenerateContent?alt=sse`. Service-account creds come from the
-  connection, or `GOOGLE_VERTEX_CREDENTIALS*` env as fallback; they never reach
-  the browser.
+- `POST /api/chat/openai` — body `{ url, payload, connectionId }`. The proxy
+  resolves the API key from the secret store by `connectionId` (or a transient
+  `x-api-key` header when testing an unsaved key, or `OPENROUTER_KEY`/`OPENAI_KEY`
+  env). `url` is the connection's full, user-editable endpoint; the proxy
+  validates the protocol and calls it verbatim. Model detection
+  (`/api/models/openai`) derives the `…/models` URL from it.
+- `POST /api/chat/vertex` — body `{ project, region, model, payload, connectionId,
+  clientEmail }`. Proxy mints a token (`server/vertex-auth.ts`) and calls
+  `…:streamGenerateContent?alt=sse`. The service-account **private key** comes
+  from the secret store by `connectionId` (or a transient one in the body when
+  testing, or `GOOGLE_VERTEX_CREDENTIALS*` env); it never reaches the browser.
 
 The proxy streams the upstream SSE straight back; `src/lib/sse.ts` parses it and
 `store/chat.ts` turns deltas into the streaming buffers it persists.
@@ -193,6 +210,9 @@ PUT  /api/data               # local data store: atomic write
 GET  /api/data/info          # data file path/size/savedAt
 *    /api/sync               # WebDAV forwarder (GET/PUT/PROPFIND/MKCOL)
 GET/POST/DELETE /api/backup  # on-disk backups (list/write/read/delete)
+GET  /api/secrets/status         # which connection ids / WebDAV have a secret (booleans only)
+PUT/DELETE /api/secrets/connection/:id   # set/clear a connection's API key or Vertex private key
+PUT  /api/secrets/webdav         # set/clear the WebDAV password
 ```
 
 `server/index.ts` mounts these under `/api` and, in production, serves `dist/`
@@ -212,8 +232,9 @@ store/     ui.ts (view state) · chat.ts (streaming engine: send/regenerate/stop
 providers/ types.ts · registry.ts · openai.ts · gemini.ts · vertex.ts
 lib/       resolve.ts/useResolved.ts · models.ts · conversation.ts · tree.ts ·
            context.ts (header meter) · backup.ts · localstore.ts · webdav.ts ·
-           backupClient.ts · attachments.ts · sse.ts · detect.ts · connTest.ts ·
-           autotitle.ts · export.ts · session-actions.ts · time.ts · utils.ts
+           backupClient.ts · secrets.ts (secret-store client) · attachments.ts ·
+           sse.ts · detect.ts · connTest.ts · autotitle.ts · export.ts ·
+           session-actions.ts · time.ts · utils.ts
 components/
   layout/   ChatPane · Sidebar · KeyboardShortcuts
   chat/     MessageList · MessageItem · Composer · Reasoning · ToolCard · Citations ·
@@ -270,10 +291,16 @@ utility). Shared primitives avoid repetition: `Marginalia` (mono text actions),
 - **Durability:** the last unsynced change can be lost on a hard crash —
   mitigated by the ~400 ms debounce + hide/unload flush.
 - **Two tabs of the same origin are last-write-wins** (local file and WebDAV).
-- **Secrets:** API keys live in the data file / backups / WebDAV snapshot in
-  plaintext (all gitignored locally / on your own server). The proxy has **no
-  auth** — fine for local use; do not expose it publicly without a gate. Vertex
-  service-account JSON stays server-side only.
+- **Secrets:** API keys, the Vertex private key, and the WebDAV password live
+  **only** in the proxy's secret store (`RELAY_SECRETS_FILE`, default a per-user
+  config dir **outside the repo**), keyed by connection id. `exportAll()` strips
+  them, so the data file / backups / WebDAV snapshot are credential-free, and the
+  browser never persists them — which keeps them out of an agent's working tree.
+  The store is plaintext on disk: it protects against accidental exposure and
+  propagation, not against a process running as you (use OS file perms / disk
+  encryption for that). The proxy has **no auth** — fine for local use; do not
+  expose it publicly without a gate. **Old** backups / WebDAV snapshots written
+  before this change may still contain keys — rotate or delete them.
 - **Scheduled work (backups, WebDAV) runs only while a tab is open.**
 - **Migration from the old persistent store** needs `indexedDB.databases()`
   (Chromium/Edge). On browsers without it, the old store isn't auto-removed; the
@@ -286,6 +313,7 @@ utility). Shared primitives avoid repetition: `Marginalia` (mono text actions),
 | Var | Purpose | Default |
 |---|---|---|
 | `RELAY_DATA_FILE` | Path to the data snapshot | `./data/relay.json` |
+| `RELAY_SECRETS_FILE` | Path to the secret store (API keys, Vertex key, WebDAV password) | per-user config dir (`%APPDATA%\Relay\secrets.json` / `~/.config/relay/secrets.json`) |
 | `API_PORT` | Proxy port | `8787` |
 | `RELAY_BACKUP_DIR` | Folder for on-disk backups | `./backups` |
 | `OPENROUTER_KEY` / `OPENAI_KEY` | Fallback key for OpenAI-style connections + model listing | — |

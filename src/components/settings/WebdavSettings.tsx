@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { getAppConfig } from '@/db/db';
 import type { WebDavConfig } from '@/db/types';
+import { putWebdavSecret, webdavSecretSet } from '@/lib/secrets';
 import { formatDateTime } from '@/lib/time';
 import {
   backupToWebdav,
@@ -25,7 +26,6 @@ const LABEL = 'label-mono text-muted-foreground';
 const BLANK: WebDavConfig = {
   url: '',
   user: '',
-  pass: '',
   path: 'relay',
   enabled: false,
   intervalHours: 1,
@@ -37,6 +37,9 @@ export function WebdavSettings() {
   const status = useUiStore((s) => s.syncStatus);
 
   const [form, setForm] = useState<WebDavConfig>(BLANK);
+  // The password isn't in the config — it's held transiently here and saved to
+  // the proxy's secret store. Blank means "keep the stored one".
+  const [pass, setPass] = useState('');
   const [seeded, setSeeded] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,12 +62,15 @@ export function WebdavSettings() {
   const test = async () => {
     setBusy(true);
     setNote(null);
-    const r = await testWebdav(form);
+    const r = await testWebdav(form, pass);
     setBusy(false);
     flash(r.ok ? 'Connection OK.' : `Failed: ${r.error}`);
   };
 
   const save = async () => {
+    // Save the password to the secret store first so the config save (which may
+    // kick off a sync) sees it; an empty field keeps the stored password.
+    if (pass) await putWebdavSecret(pass);
     await saveWebdavConfig(form);
     flash('Saved.');
   };
@@ -124,8 +130,9 @@ export function WebdavSettings() {
           <span className={LABEL}>Password</span>
           <Input
             type="password"
-            value={form.pass}
-            onChange={(e) => set({ pass: e.target.value })}
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+            placeholder={webdavSecretSet() ? 'Saved — leave blank to keep' : ''}
             autoComplete="off"
           />
         </div>

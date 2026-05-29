@@ -9,22 +9,27 @@ export interface TestResult {
   error?: string;
 }
 
-/** Send a tiny message through a connection's model to confirm it works. */
+/** Send a tiny message through a connection's model to confirm it works.
+ *  `secret` carries a just-typed, not-yet-saved key so a connection can be
+ *  tested before its key reaches the store; otherwise the proxy uses the stored
+ *  key resolved by connection id. */
 export async function testConnection(
   conn: Connection,
   model: string,
+  secret?: { apiKey?: string; privateKey?: string },
 ): Promise<TestResult> {
   const provider = providerForConnection(conn);
   const req = provider.buildRequest({
     model,
     messages: [{ role: 'user', text: 'Reply with exactly: ok' }],
     settings: { maxTokens: 16, temperature: 0 },
-    apiKey: conn.apiKey,
+    connectionId: conn.id,
     url: conn.url,
     project: conn.project,
     region: conn.region,
     clientEmail: conn.clientEmail,
-    privateKey: conn.privateKey,
+    apiKey: secret?.apiKey || undefined,
+    privateKey: secret?.privateKey || undefined,
   });
 
   const start = Date.now();

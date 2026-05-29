@@ -1,5 +1,6 @@
 import { db, getAppConfig, updateAppConfig } from '@/db/db';
 import { exportAll, importAll, type BackupFile } from '@/lib/backup';
+import { webdavSecretSet } from '@/lib/secrets';
 import type { WebDavConfig } from '@/db/types';
 import { useUiStore } from '@/store/ui';
 
@@ -48,16 +49,13 @@ const setStatus = (s: 'off' | 'syncing' | 'synced' | 'error', msg = '') => {
 };
 
 function configured(c?: WebDavConfig): c is WebDavConfig {
-  return !!(c && c.enabled && c.url && c.user && c.pass);
+  // The password lives in the proxy's secret store, not the config, so "ready
+  // to sync" requires a stored password (webdavSecretSet) rather than a field.
+  return !!(c && c.enabled && c.url && c.user && webdavSecretSet());
 }
 
 function trimSlash(s: string): string {
   return s.replace(/\/+$/, '');
-}
-
-function authOf(c: WebDavConfig): string {
-  // UTF-8 safe base64 of "user:pass".
-  return btoa(unescape(encodeURIComponent(`${c.user}:${c.pass}`)));
 }
 
 function folder(c: WebDavConfig): string {
@@ -69,17 +67,24 @@ function fileUrl(c: WebDavConfig): string {
 }
 
 function headers(c: WebDavConfig): Record<string, string> {
-  return { 'x-webdav-url': fileUrl(c), 'x-webdav-auth': authOf(c) };
+  // No password here — the proxy adds the stored one and builds Basic auth.
+  return { 'x-webdav-url': fileUrl(c), 'x-webdav-user': c.user };
 }
 
-/** Verify URL + credentials against the server (used by the Settings "Test"). */
+/** Verify URL + credentials against the server (used by the Settings "Test").
+ *  `pass` is the just-typed password; if empty the proxy uses the stored one. */
 export async function testWebdav(
   c: WebDavConfig,
+  pass: string,
 ): Promise<{ ok: boolean; status?: number; error?: string }> {
   try {
     const res = await fetch('/api/sync/test', {
       method: 'POST',
-      headers: { 'x-webdav-url': trimSlash(c.url), 'x-webdav-auth': authOf(c) },
+      headers: {
+        'x-webdav-url': trimSlash(c.url),
+        'x-webdav-user': c.user,
+        'x-webdav-pass': pass,
+      },
     });
     if (res.ok) return { ok: true, status: (await res.json()).status };
     const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -227,7 +232,6 @@ export async function saveWebdavConfig(patch: Partial<WebDavConfig>): Promise<vo
   const next: WebDavConfig = {
     url: '',
     user: '',
-    pass: '',
     path: 'relay',
     enabled: false,
     ...cur,
