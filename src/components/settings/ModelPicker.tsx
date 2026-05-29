@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Check, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CheckSquare } from '@/components/ui/check-square';
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { SavedModel } from '@/db/types';
-import { cn } from '@/lib/utils';
 
 /**
  * Pick which models to keep in a connection's catalog from a (possibly large)
@@ -100,18 +100,9 @@ export function ModelPicker({
                 key={id}
                 type="button"
                 onClick={() => setChecked((c) => ({ ...c, [id]: !c[id] }))}
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent/60"
+                className="flex items-center gap-2 px-2 py-1.5 text-left text-sm hover:bg-accent/60"
               >
-                <span
-                  className={cn(
-                    'flex size-4 shrink-0 items-center justify-center rounded border',
-                    checked[id]
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-input',
-                  )}
-                >
-                  {checked[id] && <Check className="size-3" />}
-                </span>
+                <CheckSquare checked={!!checked[id]} />
                 <span className="min-w-0 truncate">{id}</span>
               </button>
             ))}

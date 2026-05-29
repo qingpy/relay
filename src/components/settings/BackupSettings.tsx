@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Download, HardDriveDownload, RotateCcw, Trash2, Upload } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FlatButton } from '@/components/ui/flat-button';
 import { confirm } from '@/components/ui/confirm';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -15,9 +15,7 @@ import {
   type ServerBackup,
 } from '@/lib/backupClient';
 import { formatDateTime } from '@/lib/time';
-
-const labelClass =
-  'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+import { SectionLabel } from './SectionLabel';
 
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -126,33 +124,22 @@ export function BackupSettings() {
     void updateAppConfig({ backup: { ...backup, ...patch } });
 
   return (
-    <section className="flex flex-col gap-3">
-      <h3 className={labelClass}>Backup &amp; restore</h3>
+    <section className="flex flex-col gap-6">
+      <SectionLabel>Backup &amp; restore</SectionLabel>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" size="sm" className="gap-1.5" onClick={() => void downloadNow()}>
-          <Download className="size-3.5" />
+        <FlatButton onClick={() => void downloadNow()}>
+          <Download />
           Download
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="gap-1.5"
-          onClick={() => fileInput.current?.click()}
-        >
-          <Upload className="size-3.5" />
+        </FlatButton>
+        <FlatButton onClick={() => fileInput.current?.click()}>
+          <Upload />
           Restore from file
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="gap-1.5"
-          disabled={busy}
-          onClick={() => void backupToServer()}
-        >
-          <HardDriveDownload className="size-3.5" />
+        </FlatButton>
+        <FlatButton disabled={busy} onClick={() => void backupToServer()}>
+          <HardDriveDownload />
           Back up to server
-        </Button>
+        </FlatButton>
         <input
           ref={fileInput}
           type="file"
@@ -172,13 +159,11 @@ export function BackupSettings() {
       <label className="flex items-center justify-between gap-3 text-sm">
         <span>
           Automatic server backups
-          <span className="block text-xs text-muted-foreground">
-            Runs while the app is open
-            {backup?.lastBackupAt
-              ? ` · last ${formatDateTime(backup.lastBackupAt)}`
-              : ''}
-            .
-          </span>
+          {backup?.lastBackupAt && (
+            <span className="block text-xs text-muted-foreground">
+              Last {formatDateTime(backup.lastBackupAt)}
+            </span>
+          )}
         </span>
         <Switch
           checked={backup?.scheduleEnabled ?? false}
@@ -204,10 +189,10 @@ export function BackupSettings() {
         </label>
       )}
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between">
           <span className="text-xs font-medium">
-            Server backups ({list.length})
+            Server backups{list.length ? ` · ${list.length}` : ''}
           </span>
           {dir && (
             <span className="max-w-56 truncate text-[11px] text-muted-foreground" title={dir}>
@@ -217,12 +202,12 @@ export function BackupSettings() {
         </div>
         <div className="flex max-h-48 flex-col divide-y divide-border overflow-y-auto rounded-md border border-border">
           {list.length === 0 && (
-            <p className="px-2 py-2 text-xs text-muted-foreground">
+            <p className="px-3 py-3 text-xs text-muted-foreground">
               No server backups yet.
             </p>
           )}
           {list.map((b) => (
-            <div key={b.name} className="flex items-center gap-2 px-2 py-1.5">
+            <div key={b.name} className="flex items-center gap-2 px-3 py-2.5">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs" title={b.name}>
                   {b.name}

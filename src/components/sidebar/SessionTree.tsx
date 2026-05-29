@@ -116,8 +116,8 @@ export function SessionTree() {
 
   if (folders.length === 0) {
     return (
-      <p className="px-1 py-8 text-center text-xs text-muted-foreground">
-        No presets yet.
+      <p className="label-mono px-1 py-8 text-center text-muted-foreground/60">
+        No presets yet
       </p>
     );
   }
@@ -130,13 +130,13 @@ export function SessionTree() {
       onDragEnd={onDragEnd}
       onDragCancel={() => setActive(null)}
     >
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-6">
         <SortableContext
           items={folders.map((f) => `F:${f.id}`)}
           strategy={verticalListSortingStrategy}
         >
           {folders.map((f) => (
-            <div key={f.id} className="flex flex-col gap-0.5">
+            <div key={f.id} className="flex flex-col">
               <FolderRow
                 folder={f}
                 count={inFolder(f.id).length}
@@ -148,7 +148,7 @@ export function SessionTree() {
                   items={inFolder(f.id).map((s) => `S:${s.id}`)}
                   strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex flex-col gap-0.5">
+                  <div className="flex flex-col">
                     {inFolder(f.id).map((s) => (
                       <SessionRow key={s.id} session={s} nested />
                     ))}
@@ -162,7 +162,7 @@ export function SessionTree() {
 
       <DragOverlay dropAnimation={null}>
         {active && (
-          <div className="flex h-8 items-center rounded-md border border-border bg-popover px-2 text-sm shadow-md">
+          <div className="flex h-8 items-center border border-border bg-popover px-2 text-sm">
             <span className="max-w-48 truncate">{active.label}</span>
           </div>
         )}

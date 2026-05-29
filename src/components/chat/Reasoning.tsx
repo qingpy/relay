@@ -31,14 +31,14 @@ export function Reasoning({
       : 'Thoughts';
 
   return (
-    <div className="mb-2.5 overflow-hidden rounded-lg border border-border bg-muted/40">
+    <div className="overflow-hidden border border-border bg-muted/40">
       <button
         type="button"
         onClick={() => {
           setTouched(true);
           setOpen((o) => !o);
         }}
-        className="flex w-full items-center gap-1.5 px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="label-mono flex w-full items-center gap-2 px-3 py-2 text-muted-foreground transition-colors hover:text-foreground"
       >
         <ChevronRight
           className={cn('size-3.5 transition-transform', open && 'rotate-90')}

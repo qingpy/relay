@@ -1,10 +1,11 @@
 import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Marginalia } from '@/components/ui/marginalia';
 import type { Message } from '@/db/types';
 import { spliceMessage, textPart, updateMessage } from '@/db/repo';
 import { partsText } from '@/lib/conversation';
 import { formatStamp, formatDateTime } from '@/lib/time';
+import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
 import { Markdown } from './Markdown';
@@ -13,6 +14,34 @@ import { MessageAttachments } from './MessageAttachments';
 import { Reasoning } from './Reasoning';
 import { SiblingSwitcher } from './SiblingSwitcher';
 import { ToolCard } from './ToolCard';
+
+/** Indent that lines content/actions up under the role label (marker + gap). */
+const INDENT = 'pl-[22px]';
+
+function RoleTag({ role }: { role: 'user' | 'assistant' }) {
+  const assistant = role === 'assistant';
+  return (
+    <span className="flex items-center gap-3">
+      <span
+        className={cn(
+          'size-2.5',
+          assistant ? 'bg-primary' : 'border-2 border-foreground',
+        )}
+      />
+      <span className={cn('label-mono', assistant && 'text-primary')}>
+        {assistant ? 'Assistant' : 'You'}
+      </span>
+    </span>
+  );
+}
+
+function Stamp({ at }: { at: number }) {
+  return (
+    <time dateTime={new Date(at).toISOString()} title={formatDateTime(at)}>
+      {formatStamp(at)}
+    </time>
+  );
+}
 
 function StreamingDots() {
   return (
@@ -37,7 +66,7 @@ export const MessageItem = memo(function MessageItem({
 
   if (message.role === 'divider') {
     return (
-      <div className="group my-2 flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+      <div className="group label-mono flex items-center gap-3 text-muted-foreground">
         <div className="h-px flex-1 bg-border" />
         <span className="flex items-center gap-1.5">
           Context cleared
@@ -45,7 +74,7 @@ export const MessageItem = memo(function MessageItem({
             type="button"
             onClick={() => void spliceMessage(message.id)}
             title="Restore context"
-            className="flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
+            className="flex size-4 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
           >
             <X className="size-3" />
           </button>
@@ -67,83 +96,88 @@ export const MessageItem = memo(function MessageItem({
     }
     const attachmentIds = message.attachments ?? [];
     return (
-      <div className="group flex flex-col items-end gap-1">
+      <article className="group flex flex-col">
+        <header className="flex items-center justify-between gap-4">
+          <RoleTag role="user" />
+          <span className="label-mono text-muted-foreground">
+            <Stamp at={message.createdAt} />
+          </span>
+        </header>
         {attachmentIds.length > 0 && (
-          <MessageAttachments fileIds={attachmentIds} />
+          <div className={cn('mt-3', INDENT)}>
+            <MessageAttachments fileIds={attachmentIds} />
+          </div>
         )}
         {text && (
-          <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl bg-secondary px-4 py-2.5 text-sm leading-relaxed">
+          <div
+            className={cn(
+              'mt-3 whitespace-pre-wrap text-base leading-relaxed',
+              INDENT,
+            )}
+          >
             {text}
           </div>
         )}
-        <div className="flex items-center gap-1">
+        <div className={cn('mt-3 flex items-center gap-4', INDENT)}>
           <SiblingSwitcher message={message} allMessages={siblings} />
           <MessageActions
             message={message}
             allMessages={siblings}
             onEdit={() => setEditing(true)}
           />
-          <time
-            dateTime={new Date(message.createdAt).toISOString()}
-            title={formatDateTime(message.createdAt)}
-            className="text-[11px] text-muted-foreground"
-          >
-            {formatStamp(message.createdAt)}
-          </time>
         </div>
-      </div>
+      </article>
     );
   }
 
-  const showDots =
-    streaming && !text && !reasoning && toolCalls.length === 0;
+  const showDots = streaming && !text && !reasoning && toolCalls.length === 0;
 
   return (
-    <div className="group">
-      {reasoning && (
-        <Reasoning
-          text={reasoning}
-          streaming={streaming}
-          hasAnswer={!!text}
-          durationMs={reasoningMs}
-        />
-      )}
-      {toolCalls.map((tc, i) => (
-        <ToolCard key={tc.id || i} call={tc} />
-      ))}
-      {text ? <Markdown>{text}</Markdown> : showDots ? <StreamingDots /> : null}
-      {message.error && (
-        <div className="mt-2 flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          <AlertCircle className="mt-0.5 size-4 shrink-0" />
-          <span className="whitespace-pre-wrap">{message.error}</span>
+    <article className="group flex flex-col">
+      <header className="flex items-center justify-between gap-4">
+        <RoleTag role="assistant" />
+        <div className="label-mono flex items-center gap-3 text-muted-foreground">
+          {message.model && (
+            <span className="max-w-[12rem] truncate" title={message.model}>
+              {message.model}
+            </span>
+          )}
+          {message.usage?.totalTokens != null && (
+            <span>{message.usage.totalTokens} tok</span>
+          )}
+          {!streaming && <Stamp at={message.createdAt} />}
         </div>
-      )}
-      {citations.length > 0 && <Citations citations={citations} />}
+      </header>
+
+      <div className={cn('mt-3 flex flex-col gap-3', INDENT)}>
+        {reasoning && (
+          <Reasoning
+            text={reasoning}
+            streaming={streaming}
+            hasAnswer={!!text}
+            durationMs={reasoningMs}
+          />
+        )}
+        {toolCalls.map((tc, i) => (
+          <ToolCard key={tc.id || i} call={tc} />
+        ))}
+        {text ? <Markdown>{text}</Markdown> : showDots ? <StreamingDots /> : null}
+        {message.error && (
+          <div className="flex items-start gap-2 border border-border border-l-2 border-l-primary bg-card px-3 py-2 text-sm">
+            <AlertCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+            <span className="whitespace-pre-wrap">{message.error}</span>
+          </div>
+        )}
+        {citations.length > 0 && <Citations citations={citations} />}
+      </div>
+
       {!streaming && (
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-1">
-            <SiblingSwitcher message={message} allMessages={siblings} />
-            <MessageActions message={message} allMessages={siblings} />
-          </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            {message.model && (
-              <span className="max-w-48 truncate" title={message.model}>
-                {message.model}
-              </span>
-            )}
-            {message.usage?.totalTokens != null && (
-              <span>{message.usage.totalTokens} tokens</span>
-            )}
-            <time
-              dateTime={new Date(message.createdAt).toISOString()}
-              title={formatDateTime(message.createdAt)}
-            >
-              {formatStamp(message.createdAt)}
-            </time>
-          </div>
+        <div className={cn('mt-3 flex items-center gap-4', INDENT)}>
+          <SiblingSwitcher message={message} allMessages={siblings} />
+          <MessageActions message={message} allMessages={siblings} />
         </div>
       )}
-    </div>
+    </article>
   );
 });
 
@@ -178,8 +212,11 @@ function UserEditor({
   };
 
   return (
-    <div className="flex flex-col items-end gap-1.5">
-      <div className="w-full max-w-[85%] rounded-2xl border border-input bg-card p-2 shadow-sm focus-within:ring-2 focus-within:ring-ring">
+    <article className="flex flex-col">
+      <header className="flex items-center gap-3">
+        <RoleTag role="user" />
+      </header>
+      <div className={cn('mt-3', INDENT)}>
         <textarea
           ref={ref}
           value={value}
@@ -201,17 +238,15 @@ function UserEditor({
               void save();
             }
           }}
-          className="block max-h-60 min-h-9 w-full resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
+          className="block max-h-60 min-h-9 w-full resize-none border border-input bg-card px-3 py-2 text-base leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
+        <div className="mt-2 flex items-center gap-4">
+          <Marginalia onClick={() => void save()} disabled={!value.trim()}>
+            Save
+          </Marginalia>
+          <Marginalia onClick={onClose}>Cancel</Marginalia>
+        </div>
       </div>
-      <div className="flex items-center gap-1.5">
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button size="sm" onClick={() => void save()} disabled={!value.trim()}>
-          Save
-        </Button>
-      </div>
-    </div>
+    </article>
   );
 }

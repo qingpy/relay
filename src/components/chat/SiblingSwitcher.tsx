@@ -19,17 +19,17 @@ export function SiblingSwitcher({
     void setCurrentLeaf(message.sessionId, leafOf(allMessages, sibs[i].id));
 
   return (
-    <div className="flex select-none items-center gap-0.5 text-[11px] tabular-nums text-muted-foreground">
+    <div className="label-mono flex select-none items-center gap-1 text-muted-foreground">
       <button
         type="button"
         onClick={() => go(index - 1)}
         disabled={index <= 0}
         title="Previous branch"
-        className="flex size-5 items-center justify-center rounded transition hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+        className="flex size-4 items-center justify-center transition hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
       >
         <ChevronLeft className="size-3.5" />
       </button>
-      <span>
+      <span className="tabular-nums">
         {index + 1}/{sibs.length}
       </span>
       <button
@@ -37,7 +37,7 @@ export function SiblingSwitcher({
         onClick={() => go(index + 1)}
         disabled={index >= sibs.length - 1}
         title="Next branch"
-        className="flex size-5 items-center justify-center rounded transition hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+        className="flex size-4 items-center justify-center transition hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
       >
         <ChevronRight className="size-3.5" />
       </button>

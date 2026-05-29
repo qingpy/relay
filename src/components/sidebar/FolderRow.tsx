@@ -1,16 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  Check,
-  ChevronRight,
-  Folder as FolderIcon,
-  FolderOpen,
-  Minus,
-  MoreHorizontal,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
+import { MoreHorizontal, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -24,6 +15,7 @@ import type { Folder } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
+import { PresetEditor } from './PresetEditor';
 
 export function FolderRow({
   folder,
@@ -45,9 +37,9 @@ export function FolderRow({
   const selectedChats = useUiStore((s) => s.selectedChats);
   const setChatSelected = useUiStore((s) => s.setChatSelected);
   const [editing, setEditing] = useState(false);
+  const [configuring, setConfiguring] = useState(false);
 
   const allSelected = chatIds.length > 0 && chatIds.every((id) => selectedChats[id]);
-  const someSelected = chatIds.some((id) => selectedChats[id]);
 
   const {
     attributes,
@@ -64,7 +56,7 @@ export function FolderRow({
   const sessionOver = isOver && String(active?.id ?? '').startsWith('S:');
 
   // While selecting: click a preset to (de)select all of its chats. Otherwise:
-  // make it active and jump to its top chat (expanding it).
+  // make it active, expand it, and jump to its top chat.
   const onActivate = () => {
     if (editing) return;
     if (selecting) {
@@ -81,13 +73,15 @@ export function FolderRow({
       title: 'Delete preset?',
       description:
         count > 0
-          ? `"${folder.name}" will be deleted. Its ${count} chat(s) move to the top level.`
+          ? `"${folder.name}" will be deleted. Its ${count} chat(s) move to another preset.`
           : `"${folder.name}" will be deleted.`,
       confirmLabel: 'Delete',
       destructive: true,
     });
     if (ok) await deleteFolder(folder.id);
   };
+
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
   return (
     <div
@@ -100,50 +94,24 @@ export function FolderRow({
       onClick={onActivate}
       onKeyDown={(e) => e.key === 'Enter' && onActivate()}
       className={cn(
-        'group flex h-8 cursor-pointer items-center gap-1.5 rounded-md px-2 text-sm font-medium outline-none transition-colors',
+        'group flex cursor-pointer items-center gap-2 px-8 pb-3 pt-1 outline-none transition-colors',
         isDragging && 'opacity-50',
-        sessionOver
-          ? 'bg-primary/10 ring-1 ring-inset ring-primary/40'
-          : !selecting && isActivePreset
-            ? 'bg-sidebar-accent/70 text-foreground'
-            : 'text-foreground/90 hover:bg-sidebar-accent/60',
+        sessionOver && 'bg-primary/10',
       )}
     >
       <button
         type="button"
         title={collapsed ? 'Expand' : 'Collapse'}
-        onPointerDown={(e) => e.stopPropagation()}
+        onPointerDown={stop}
         onClick={(e) => {
-          e.stopPropagation();
+          stop(e);
           toggleFolder(folder.id);
         }}
-        className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+        className="flex w-3 shrink-0 justify-center font-mono text-[0.7rem] text-muted-foreground/60 hover:text-foreground"
       >
-        <ChevronRight
-          className={cn('size-3.5 transition-transform', !collapsed && 'rotate-90')}
-        />
+        {collapsed ? '▸' : '▾'}
       </button>
-      {selecting ? (
-        <span
-          title="Select all chats in this preset"
-          className={cn(
-            'flex size-3.5 shrink-0 items-center justify-center rounded border',
-            allSelected || someSelected
-              ? 'border-primary bg-primary text-primary-foreground'
-              : 'border-input',
-          )}
-        >
-          {allSelected ? (
-            <Check className="size-2.5" />
-          ) : someSelected ? (
-            <Minus className="size-2.5" />
-          ) : null}
-        </span>
-      ) : collapsed ? (
-        <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
-      ) : (
-        <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
-      )}
+
       {editing ? (
         <InlineEdit
           value={folder.name}
@@ -155,39 +123,57 @@ export function FolderRow({
         />
       ) : (
         <>
-          <span className="min-w-0 flex-1 truncate">{folder.name}</span>
-          <span className="shrink-0 text-xs tabular-nums text-muted-foreground/70 group-hover:hidden">
+          <span
+            className={cn(
+              'label-mono min-w-0 flex-1 truncate transition-colors',
+              isActivePreset
+                ? 'text-primary'
+                : 'text-muted-foreground group-hover:text-foreground',
+            )}
+          >
+            {folder.name}
+          </span>
+          <span className="label-mono shrink-0 tabular-nums text-muted-foreground/40 group-hover:hidden">
             {count || ''}
           </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                onPointerDown={stop}
+                onClick={stop}
+                title="Preset options"
+                className="hidden size-6 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground focus-visible:opacity-100 group-hover:flex data-[state=open]:flex"
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => setTimeout(() => setConfiguring(true), 0)}
+              >
+                <SlidersHorizontal />
+                Settings
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
+                <Pencil />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem destructive onSelect={() => void onDelete()}>
+                <Trash2 />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </>
       )}
 
-      {!editing && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              title="Preset options"
-              className="hidden size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:flex data-[state=open]:flex"
-            >
-              <MoreHorizontal className="size-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
-              <Pencil />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem destructive onSelect={() => void onDelete()}>
-              <Trash2 />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <PresetEditor
+        folder={folder}
+        open={configuring}
+        onOpenChange={setConfiguring}
+      />
     </div>
   );
 }

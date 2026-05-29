@@ -1,6 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FolderInput, Trash2, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Marginalia } from '@/components/ui/marginalia';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -16,7 +15,7 @@ import {
 } from '@/db/repo';
 import { useUiStore } from '@/store/ui';
 
-/** Toolbar shown while selecting chats in the sidebar: move, delete, done. */
+/** Bulk actions shown while selecting chats in the sidebar: move, delete, done. */
 export function ChatSelectionBar() {
   const sessions = useLiveQuery(() => listSessions(), [], []);
   const folders = useLiveQuery(() => listFolders(), [], []);
@@ -38,7 +37,8 @@ export function ChatSelectionBar() {
     if (!count) return;
     const ok = await confirm({
       title: `Delete ${count} chat${count > 1 ? 's' : ''}?`,
-      description: 'The selected chats and their messages will be permanently removed.',
+      description:
+        'The selected chats and their messages will be permanently removed.',
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -49,21 +49,22 @@ export function ChatSelectionBar() {
   };
 
   return (
-    <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1.5 text-sm">
-      <span className="tabular-nums text-muted-foreground" title="Click a preset to select its chats">
+    <div className="flex items-center gap-3 px-8 pb-4">
+      <span
+        className="label-mono tabular-nums text-muted-foreground"
+        title="Click a preset to select its chats"
+      >
         {count} selected
       </span>
-      <div className="ml-auto flex items-center gap-0.5">
+      <div className="ml-auto flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
+            <Marginalia
               disabled={!count || folders.length === 0}
               title="Move to preset"
             >
-              <FolderInput />
-            </Button>
+              Move
+            </Marginalia>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {folders.map((f) => (
@@ -73,18 +74,14 @@ export function ChatSelectionBar() {
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          disabled={!count}
-          onClick={() => void remove()}
-          title="Delete selected"
-        >
-          <Trash2 />
-        </Button>
-        <Button variant="ghost" size="icon-sm" onClick={toggleChatSelectMode} title="Done">
-          <X />
-        </Button>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia disabled={!count} onClick={() => void remove()} title="Delete selected">
+          Delete
+        </Marginalia>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia onClick={toggleChatSelectMode} title="Done">
+          Done
+        </Marginalia>
       </div>
     </div>
   );

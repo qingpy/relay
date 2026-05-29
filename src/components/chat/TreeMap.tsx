@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Check, GitBranch, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CheckSquare } from '@/components/ui/check-square';
+import { Marginalia } from '@/components/ui/marginalia';
 import { confirm } from '@/components/ui/confirm';
 import {
   Dialog,
@@ -99,7 +101,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
       <div key={node.id}>
         <div
           className={cn(
-            'flex items-center rounded-md transition-colors',
+            'flex items-center transition-colors',
             onPath
               ? 'bg-accent text-foreground'
               : 'text-muted-foreground hover:bg-accent/60',
@@ -112,14 +114,9 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
             role="checkbox"
             aria-checked={checked}
             title="Select"
-            className={cn(
-              'mr-2 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
-              checked
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-input',
-            )}
+            className="mr-2"
           >
-            {checked && <Check className="size-3" />}
+            <CheckSquare checked={checked} />
           </button>
           <button
             type="button"
@@ -128,7 +125,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
           >
             <span
               className={cn(
-                'inline-flex shrink-0 items-center text-[10px] font-medium uppercase tracking-wide',
+                'label-mono inline-flex shrink-0 items-center',
                 ROLE_TONE[node.role] ?? 'text-muted-foreground',
               )}
             >
@@ -157,14 +154,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpenReset}>
       <DialogTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          title="Branch map"
-          aria-label="Branch map"
-        >
-          <GitBranch />
-        </Button>
+        <Marginalia title="Branch map">Map</Marginalia>
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>

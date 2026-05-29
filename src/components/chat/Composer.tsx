@@ -1,17 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import {
-  ArrowUp,
-  FileText,
-  Globe,
-  Maximize2,
-  Minimize2,
-  Paperclip,
-  Scissors,
-  Square,
-  X,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { FileText, X } from 'lucide-react';
+import { Marginalia } from '@/components/ui/marginalia';
 import {
   clearContext,
   getSession,
@@ -159,7 +149,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-4 pb-4 pt-1">
+    <div className="border-t border-border bg-card">
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -175,8 +165,8 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           addFiles(e.dataTransfer.files);
         }}
         className={cn(
-          'relative rounded-xl border border-input bg-card p-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-ring',
-          dragOver && 'border-primary ring-2 ring-primary',
+          'relative mx-auto w-full max-w-3xl px-6 py-5',
+          dragOver && 'ring-2 ring-inset ring-primary',
         )}
       >
         {paletteOpen && (
@@ -206,11 +196,11 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
-          placeholder="Message Relay…  (/ for prompts)"
-          className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-muted-foreground"
+          placeholder="Message…   / for prompts"
+          className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground"
         />
 
-        <div className="mt-1 flex items-center gap-1">
+        <div className="mt-4 flex items-center gap-6 px-1">
           <input
             ref={fileInput}
             type="file"
@@ -222,81 +212,67 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
               e.target.value = '';
             }}
           />
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <Marginalia
             onClick={() => fileInput.current?.click()}
             title="Attach files"
           >
-            <Paperclip />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
+            Attach
+          </Marginalia>
+          <Marginalia
             onClick={() => setExpanded((v) => !v)}
+            active={expanded}
             title={expanded ? 'Shrink input' : 'Expand input'}
-            aria-pressed={expanded}
           >
-            {expanded ? <Minimize2 /> : <Maximize2 />}
-          </Button>
+            {expanded ? 'Shrink' : 'Expand'}
+          </Marginalia>
           {sessionId && (
             <>
               {caps.webSearch && (
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
+                <Marginalia
                   onClick={() => void setSessionWebSearch(sessionId, !webSearch)}
-                  title={webSearch ? 'Web search: on' : 'Web search: off'}
-                  aria-pressed={webSearch}
-                  className={cn(
-                    webSearch &&
-                      'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
-                  )}
+                  active={webSearch}
+                  title={webSearch ? 'Web search on' : 'Web search off'}
                 >
-                  <Globe />
-                </Button>
+                  Web
+                </Marginalia>
               )}
-              <Button
-                variant="ghost"
-                size="icon-sm"
+              <Marginalia
                 onClick={() => void clearContext(sessionId)}
-                title="Clear context (keep messages on screen)"
+                title="Clear context"
               >
-                <Scissors />
-              </Button>
+                Clear
+              </Marginalia>
             </>
           )}
           <div className="ml-auto" />
           {streaming ? (
-            <Button
-              size="icon"
-              variant="secondary"
+            <button
+              type="button"
               onClick={() => sessionId && useChatStore.getState().stop(sessionId)}
               title="Stop generating"
+              className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground"
             >
-              <Square className="fill-current" />
-            </Button>
+              Stop
+            </button>
           ) : (
-            <Button
-              size="icon"
+            <button
+              type="button"
               onClick={() => void submit()}
               disabled={!value.trim() && files.length === 0}
-              title="Send"
+              title="Send (Enter)"
+              className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/40"
             >
-              <ArrowUp />
-            </Button>
+              Send
+            </button>
           )}
         </div>
 
         {dragOver && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl bg-primary/5 text-sm font-medium text-primary">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-primary/5 text-sm font-medium text-primary">
             Drop files to attach
           </div>
         )}
       </div>
-      <p className="mt-1.5 text-center text-[11px] text-muted-foreground">
-        Enter to send · Shift+Enter for newline
-      </p>
     </div>
   );
 }
@@ -313,9 +289,9 @@ function PendingChip({ file, onRemove }: { file: File; onRemove: () => void }) {
   }, [file, isImage]);
 
   return (
-    <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/50 py-1 pl-1.5 pr-1 text-xs">
+    <div className="flex items-center gap-1.5 border border-border bg-muted/50 py-1 pl-1.5 pr-1 text-xs">
       {isImage && url ? (
-        <img src={url} alt="" className="size-7 rounded object-cover" />
+        <img src={url} alt="" className="size-7 object-cover" />
       ) : (
         <FileText className="size-4 text-muted-foreground" />
       )}
@@ -324,7 +300,7 @@ function PendingChip({ file, onRemove }: { file: File; onRemove: () => void }) {
         type="button"
         onClick={onRemove}
         title="Remove"
-        className="flex size-5 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground"
+        className="flex size-5 items-center justify-center text-muted-foreground transition hover:bg-background hover:text-foreground"
       >
         <X className="size-3" />
       </button>

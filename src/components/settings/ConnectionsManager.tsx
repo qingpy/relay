@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ChevronDown, Plus, RefreshCw, Trash2, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ChevronDown, X } from 'lucide-react';
+import { FlatButton } from '@/components/ui/flat-button';
+import { FlatSelect } from '@/components/ui/flat-select';
+import { Marginalia } from '@/components/ui/marginalia';
 import { confirm } from '@/components/ui/confirm';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -23,9 +25,7 @@ import { detectModels } from '@/lib/detect';
 import { toSavedModel } from '@/lib/models';
 import { cn } from '@/lib/utils';
 import { ModelPicker } from './ModelPicker';
-
-const labelClass =
-  'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+import { SectionLabel } from './SectionLabel';
 
 const TYPE_LABEL: Record<ConnectionType, string> = {
   openai: 'Custom',
@@ -44,17 +44,12 @@ export function ConnectionsManager() {
   return (
     <section className="flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <h3 className={labelClass}>Connections</h3>
-        <Button variant="ghost" size="sm" className="gap-1" onClick={() => void add()}>
-          <Plus className="size-3.5" />
-          Add
-        </Button>
+        <SectionLabel>Connections</SectionLabel>
+        <Marginalia onClick={() => void add()}>Add</Marginalia>
       </div>
 
       {connections.length === 0 && (
-        <p className="text-xs text-muted-foreground">
-          No connections yet — add one to start chatting.
-        </p>
+        <p className="text-xs text-muted-foreground">No connections yet.</p>
       )}
 
       <div className="flex flex-col gap-1.5">
@@ -213,18 +208,17 @@ function Editor({ conn }: { conn: Connection }) {
       </Field>
 
       <Field label="Type">
-        <select
+        <FlatSelect
           value={type}
           onChange={(e) => {
             const t = e.target.value as ConnectionType;
             setType(t);
             void updateConnection(conn.id, { type: t });
           }}
-          className="h-9 rounded-md border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="openai">Custom (OpenAI-style API)</option>
+          <option value="openai">Custom · OpenAI-style API</option>
           <option value="vertex">Vertex AI</option>
-        </select>
+        </FlatSelect>
       </Field>
 
       {type === 'openai' ? (
@@ -255,17 +249,10 @@ function Editor({ conn }: { conn: Connection }) {
         </>
       ) : (
         <>
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">
-              Paste fields or load the service-account JSON.
-            </span>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => saInput.current?.click()}
-            >
+          <div className="flex items-center">
+            <FlatButton onClick={() => saInput.current?.click()}>
               Upload JSON
-            </Button>
+            </FlatButton>
             <input
               ref={saInput}
               type="file"
@@ -324,36 +311,24 @@ function Editor({ conn }: { conn: Connection }) {
               className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
           </Field>
-          <p className="rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-            Stored in this browser and sent to the local proxy to mint a token.
-            Leave the key blank to use a server-side
-            <code> GOOGLE_VERTEX_CREDENTIALS</code> JSON instead.
-          </p>
         </>
       )}
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
-          <label className="text-xs font-medium">Models ({conn.models.length})</label>
+          <label className="text-xs font-medium">
+            Models{conn.models.length ? ` · ${conn.models.length}` : ''}
+          </label>
           {type !== 'vertex' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-1"
-              disabled={detecting}
-              onClick={() => void detect()}
-            >
-              <RefreshCw className={cn('size-3.5', detecting && 'animate-spin')} />
-              Detect
-            </Button>
+            <Marginalia disabled={detecting} onClick={() => void detect()}>
+              {detecting ? 'Detecting…' : 'Detect'}
+            </Marginalia>
           )}
         </div>
         {detectError && <p className="text-xs text-destructive">{detectError}</p>}
         <div className="flex max-h-56 flex-col divide-y divide-border overflow-y-auto rounded-md border border-border">
           {conn.models.length === 0 && (
-            <p className="px-2 py-2 text-xs text-muted-foreground">
-              No models. Detect or add one below.
-            </p>
+            <p className="px-2 py-2 text-xs text-muted-foreground">No models yet.</p>
           )}
           {conn.models.map((m) => (
             <ModelRow
@@ -383,9 +358,7 @@ function Editor({ conn }: { conn: Connection }) {
               }
             }}
           />
-          <Button variant="secondary" size="sm" onClick={addModel}>
-            Add
-          </Button>
+          <FlatButton onClick={addModel}>Add</FlatButton>
         </div>
       </div>
 
@@ -404,14 +377,9 @@ function Editor({ conn }: { conn: Connection }) {
             ))}
           </select>
         )}
-        <Button
-          variant="secondary"
-          size="sm"
-          disabled={testing}
-          onClick={() => void runTest()}
-        >
+        <FlatButton disabled={testing} onClick={() => void runTest()}>
           {testing ? 'Testing…' : 'Test'}
-        </Button>
+        </FlatButton>
         {testResult && (
           <span
             className={cn(
@@ -425,15 +393,9 @@ function Editor({ conn }: { conn: Connection }) {
               : `✗ ${testResult.error}`}
           </span>
         )}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto gap-1.5 text-destructive hover:text-destructive"
-          onClick={() => void onDelete()}
-        >
-          <Trash2 className="size-3.5" />
+        <Marginalia className="ml-auto" onClick={() => void onDelete()}>
           Delete
-        </Button>
+        </Marginalia>
       </div>
 
       {picker && (

@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { getTheme, setTheme as applyTheme, type Theme } from '@/lib/theme';
 
 const COLLAPSED_KEY = 'relay.collapsedFolders';
 
@@ -48,9 +47,6 @@ interface UiState {
 
   collapsedFolders: Record<string, boolean>;
   toggleFolder: (id: string) => void;
-
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
 }
 
 export const useUiStore = create<UiState>((set) => ({
@@ -106,10 +102,4 @@ export const useUiStore = create<UiState>((set) => ({
       localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
       return { collapsedFolders: next };
     }),
-
-  theme: getTheme(),
-  setTheme: (theme) => {
-    applyTheme(theme);
-    set({ theme });
-  },
 }));
