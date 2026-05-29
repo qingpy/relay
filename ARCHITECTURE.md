@@ -133,12 +133,21 @@ snapshot into the store and rewrites the file clean.
 
 2. **WebDAV sync (off-machine / cross-device).** `src/lib/webdav.ts` mirrors the
    same snapshot to the user's WebDAV server through **`server/sync.ts`** (a
-   stateless GET/PUT/PROPFIND/MKCOL forwarder; `x-webdav-url` + `x-webdav-user`
-   per request, with the password supplied from the secret store — or a
-   transient `x-webdav-pass` for the Settings "Test"). Last-write-wins for a single user, with
-   guards: a fresh device won't clobber the cloud nor be clobbered; a device with
-   unsynced edits pushes. Pull on open, scheduled push while open (interval in
-   **hours**), flush on hide. Configured in Settings → Sync.
+   stateless GET/PUT/PROPFIND/DELETE/MKCOL forwarder; `x-webdav-url` +
+   `x-webdav-user` per request, with the password supplied from the secret store
+   — or a transient `x-webdav-pass` for the Settings "Test"). Last-write-wins for
+   a single user, but **no automatic sync overwrites real local data**: the cloud
+   is auto-adopted only onto a pristine device, an empty/blank remote never
+   clobbers a device with content, and a pristine device never seeds a blank
+   snapshot — anything ambiguous pauses with a visible conflict (resolve by
+   restoring a backup). Pull on open, scheduled push while open (interval in
+   **hours**), flush on hide.
+   - **Versioned backups.** Alongside the single live snapshot, Relay keeps a
+     rolling set of timestamped copies in a `backups/` subfolder — one written
+     every `intervalHours`, plus one on each manual **Backup**, pruned to the
+     newest `backupsKeep` (default 10; `0` disables). Each is a normal
+     (secret-free) snapshot; any one is restorable from the **Restore** list.
+     The Settings panel is just **Test · Backup · Restore**. Settings → Sync.
 
 3. **Backups (portable copies).** `src/lib/backupClient.ts` + **`server/backup.ts`**
    write timestamped snapshots to `RELAY_BACKUP_DIR` (`/api/backup`), plus
@@ -208,7 +217,9 @@ GET  /api/models/:provider   # optional model-list proxy
 GET  /api/data               # local data store: read snapshot
 PUT  /api/data               # local data store: atomic write
 GET  /api/data/info          # data file path/size/savedAt
-*    /api/sync               # WebDAV forwarder (GET/PUT/PROPFIND/MKCOL)
+GET/PUT/DELETE /api/sync     # WebDAV forwarder: live snapshot + versioned backups
+POST /api/sync/list          # WebDAV PROPFIND (enumerate backups), raw XML to the client
+POST /api/sync/test          # WebDAV PROPFIND credential check
 GET/POST/DELETE /api/backup  # on-disk backups (list/write/read/delete)
 GET  /api/secrets/status         # which connection ids / WebDAV have a secret (booleans only)
 PUT/DELETE /api/secrets/connection/:id   # set/clear a connection's API key or Vertex private key

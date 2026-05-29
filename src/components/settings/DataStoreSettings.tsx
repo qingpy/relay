@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { getDataInfo, type DataInfo } from '@/lib/localstore';
-import { formatDateTime } from '@/lib/time';
 import { SectionLabel } from './SectionLabel';
 
 function formatBytes(n: number): string {
@@ -25,27 +24,22 @@ export function DataStoreSettings() {
   }, []);
 
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex flex-col gap-2">
       <SectionLabel>Local data store</SectionLabel>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
       {info && (
-        <div className="flex flex-col gap-2 border border-border p-3">
-          <div className="flex flex-col gap-1">
-            <span className="label-mono text-muted-foreground">File</span>
-            <span className="break-all font-mono text-xs text-foreground" title={info.path}>
-              {info.path}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {info.exists ? formatBytes(info.size ?? 0) : 'Not created yet'}
-            </span>
-            {info.exists && info.savedAt && (
-              <span>Saved {formatDateTime(info.savedAt)}</span>
-            )}
-          </div>
+        <div className="flex items-baseline gap-3 text-xs">
+          <span
+            className="min-w-0 flex-1 truncate font-mono text-muted-foreground"
+            title={info.path}
+          >
+            {info.path}
+          </span>
+          <span className="shrink-0 text-muted-foreground">
+            {info.exists ? formatBytes(info.size ?? 0) : 'Not created yet'}
+          </span>
         </div>
       )}
     </section>

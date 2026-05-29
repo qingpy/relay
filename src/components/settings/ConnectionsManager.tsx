@@ -249,7 +249,9 @@ function Editor({ conn }: { conn: Connection }) {
             <Input
               type="password"
               autoComplete="off"
-              placeholder={keySaved ? 'Saved — leave blank to keep' : 'API key'}
+              // The real key lives server-side; show dots to signal it's set.
+              placeholder={keySaved ? '••••••••••' : 'API key'}
+              title={keySaved ? 'A key is saved — type to replace it' : undefined}
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
