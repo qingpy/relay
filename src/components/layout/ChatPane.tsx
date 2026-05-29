@@ -11,6 +11,7 @@ export function ChatPane() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const activeId = useUiStore((s) => s.activeSessionId);
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
   const selectionMode = useUiStore((s) => s.selectionMode);
   const toggleSelectionMode = useUiStore((s) => s.toggleSelectionMode);
 
@@ -45,6 +46,12 @@ export function ChatPane() {
           )}
           {activeId && <TreeMap sessionId={activeId} />}
           {activeId && <ExportMenu sessionId={activeId} />}
+          <Marginalia
+            onClick={() => setShortcutsOpen(true)}
+            title="Keyboard shortcuts (?)"
+          >
+            Keys
+          </Marginalia>
           <Marginalia onClick={() => setSettingsOpen(true)} title="Settings">
             Settings
           </Marginalia>
