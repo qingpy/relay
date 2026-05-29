@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -8,8 +8,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FlatSelect } from '@/components/ui/flat-select';
-import { Input } from '@/components/ui/input';
-import { Marginalia } from '@/components/ui/marginalia';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -103,9 +101,28 @@ function OptionalSlider({
   );
 }
 
-/** Inline editor for the GLOBAL reasoning-effort choices (shared across every
- *  preset). The list above selects from these; here you add / edit / delete them. */
-function EffortOptions() {
+const chipClass = (active: boolean) =>
+  cn(
+    'flex h-7 items-center border px-2.5 font-mono text-xs transition-colors',
+    active
+      ? 'border-primary text-primary'
+      : 'border-input text-muted-foreground hover:border-foreground hover:text-foreground',
+  );
+
+/**
+ * Reasoning effort — selection and editing merged into one row of compact
+ * chips. Click a chip to activate it for this preset (the highlighted one) and
+ * edit its label inline; × removes it, + adds one, "Default" clears the knob.
+ * The options are global (shared across presets, on `appConfig`); the active
+ * choice is per-preset.
+ */
+function EffortField({
+  value,
+  onActivate,
+}: {
+  value: string | undefined;
+  onActivate: (value: string | undefined) => void;
+}) {
   const config = useLiveQuery(() => getAppConfig(), []);
   const [efforts, setEfforts] = useState<string[]>([]);
   const [seeded, setSeeded] = useState(false);
@@ -124,32 +141,101 @@ function EffortOptions() {
     });
   };
 
+  // Renaming or removing the active option keeps the preset's choice in sync.
+  const rename = (i: number, text: string) => {
+    if (value === efforts[i]) onActivate(text.trim() || undefined);
+    commit(efforts.map((v, j) => (j === i ? text : v)));
+  };
+  const remove = (i: number) => {
+    if (value === efforts[i]) onActivate(undefined);
+    commit(efforts.filter((_, j) => j !== i));
+  };
+
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <span className="label-mono text-muted-foreground">Options</span>
-        <Marginalia onClick={() => commit([...efforts, ''])}>Add</Marginalia>
-      </div>
-      {efforts.map((value, i) => (
-        <div key={i} className="flex items-center gap-1.5">
-          <Input
-            value={value}
-            spellCheck={false}
-            placeholder="e.g. minimal, low, medium, high"
-            onChange={(e) =>
-              commit(efforts.map((v, j) => (j === i ? e.target.value : v)))
-            }
+    <div className={FIELD}>
+      <GroupHeader label="Reasoning effort" />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onActivate(undefined)}
+          className={chipClass(!value)}
+        >
+          Default
+        </button>
+        {efforts.map((opt, i) => (
+          <EditableChip
+            key={i}
+            value={opt}
+            active={!!value && value === opt}
+            onActivate={() => onActivate(opt.trim() || undefined)}
+            onRename={(t) => rename(i, t)}
+            onRemove={() => remove(i)}
           />
-          <button
-            type="button"
-            aria-label="Remove option"
-            onClick={() => commit(efforts.filter((_, j) => j !== i))}
-            className="flex size-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
-          >
-            <X className="size-3.5" />
-          </button>
-        </div>
-      ))}
+        ))}
+        {value && !efforts.includes(value) && (
+          <span className={cn(chipClass(true), 'gap-1')}>
+            {value}
+            <button
+              type="button"
+              aria-label="Clear effort"
+              onClick={() => onActivate(undefined)}
+              className="text-primary/60 transition-colors hover:text-primary"
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        )}
+        <button
+          type="button"
+          aria-label="Add effort option"
+          onClick={() => commit([...efforts, ''])}
+          className="flex size-7 items-center justify-center border border-input text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+        >
+          <Plus className="size-3.5" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EditableChip({
+  value,
+  active,
+  onActivate,
+  onRename,
+  onRemove,
+}: {
+  value: string;
+  active: boolean;
+  onActivate: () => void;
+  onRename: (text: string) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      onClick={onActivate}
+      className={cn('group/chip cursor-text gap-1', chipClass(active))}
+    >
+      <input
+        value={value}
+        spellCheck={false}
+        placeholder="new"
+        onChange={(e) => onRename(e.target.value)}
+        onFocus={onActivate}
+        style={{ width: `${Math.max(value.length, 3)}ch` }}
+        className="bg-transparent font-mono text-xs outline-none placeholder:text-muted-foreground/50"
+      />
+      <button
+        type="button"
+        aria-label="Remove effort option"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="opacity-0 transition-opacity group-hover/chip:opacity-100"
+      >
+        <X className="size-3" />
+      </button>
     </div>
   );
 }
@@ -184,7 +270,6 @@ export function PresetEditor({
 
 function Form({ folder, session }: { folder: Folder; session?: Session }) {
   const connections = useLiveQuery(() => listConnections(), [], []);
-  const config = useLiveQuery(() => getAppConfig(), []);
   const [connectionId, setConnectionId] = useState(folder.connectionId ?? '');
   const [model, setModel] = useState(folder.model ?? '');
   const [settings, setSettings] = useState<ModelSettings>(folder.settings ?? {});
@@ -193,9 +278,8 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
 
   const conn = connections.find((c) => c.id === connectionId);
   const groups = modelGroups(connections);
-  const effortOptions = config?.reasoningEfforts ?? DEFAULT_REASONING_EFFORTS;
   const reasoning = conn
-    ? reasoningKind(conn.type, findModel(conn, model).capabilities)
+    ? reasoningKind(findModel(conn, model).capabilities)
     : 'none';
 
   const saveSettings = (patch: Partial<ModelSettings>) => {
@@ -281,50 +365,11 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
         />
       </div>
 
-      {reasoning === 'budget' && (
-        <div className={FIELD}>
-          <GroupHeader label="Thinking budget" />
-          <input
-            type="number"
-            min={0}
-            placeholder="Auto"
-            value={settings.thinkingBudget ?? ''}
-            onChange={(e) =>
-              saveSettings({
-                thinkingBudget: e.target.value
-                  ? Number(e.target.value)
-                  : undefined,
-              })
-            }
-            className={FLAT_INPUT}
-          />
-        </div>
-      )}
-
       {reasoning === 'effort' && (
-        <div className={FIELD}>
-          <GroupHeader label="Reasoning effort" />
-          <FlatSelect
-            value={settings.reasoningEffort ?? ''}
-            onChange={(e) =>
-              saveSettings({ reasoningEffort: e.target.value || undefined })
-            }
-          >
-            <option value="">Default</option>
-            {settings.reasoningEffort &&
-              !effortOptions.includes(settings.reasoningEffort) && (
-                <option value={settings.reasoningEffort}>
-                  {settings.reasoningEffort} · current
-                </option>
-              )}
-            {effortOptions.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </FlatSelect>
-          <EffortOptions />
-        </div>
+        <EffortField
+          value={settings.reasoningEffort}
+          onActivate={(v) => saveSettings({ reasoningEffort: v })}
+        />
       )}
 
       <div className={FIELD}>

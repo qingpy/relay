@@ -42,34 +42,30 @@ export function toSavedModel(id: string, type: ConnectionType): SavedModel {
 /**
  * How a model exposes its "thinking" knob:
  * - `none`   — the model doesn't reason (or the capability is turned off).
- * - `budget` — a numeric token budget (Gemini / Vertex `thinkingBudget`).
- * - `effort` — an OpenAI-style effort string the user types (the accepted set
- *   varies per model, so we don't constrain it).
+ * - `effort` — an effort string the user picks. OpenAI-compatible models send it
+ *   as `reasoning_effort`; Vertex/Gemini as `thinkingConfig.thinkingLevel`. The
+ *   accepted set varies per model, so we don't constrain it.
  */
-export type ReasoningKind = 'none' | 'budget' | 'effort';
+export type ReasoningKind = 'none' | 'effort';
 
-/** Which reasoning control a model exposes — gated by the saved capability so a
- *  non-reasoning model shows no knob, and split by protocol (Vertex = budget). */
-export function reasoningKind(
-  type: ConnectionType,
-  caps: ModelCapabilities,
-): ReasoningKind {
-  if (!caps.reasoning) return 'none';
-  return type === 'vertex' ? 'budget' : 'effort';
+/** Whether a model exposes the reasoning-effort knob — gated by the saved
+ *  capability so a non-reasoning model shows no control. */
+export function reasoningKind(caps: ModelCapabilities): ReasoningKind {
+  return caps.reasoning ? 'effort' : 'none';
 }
 
 /**
- * Strip the reasoning knob that doesn't apply to the resolved model so a stale
+ * Strip the reasoning effort when the resolved model can't use it, so a stale
  * value (left over after a model switch, a backup import, or a migration) is
- * never sent upstream — e.g. a thinking budget to an OpenAI model.
+ * never sent upstream.
  */
 export function sanitizeReasoning(
   settings: ModelSettings,
   kind: ReasoningKind,
 ): ModelSettings {
+  if (kind === 'effort') return settings;
   const out = { ...settings };
-  if (kind !== 'effort') delete out.reasoningEffort;
-  if (kind !== 'budget') delete out.thinkingBudget;
+  delete out.reasoningEffort;
   return out;
 }
 

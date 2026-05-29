@@ -49,9 +49,9 @@ export function geminiPayload({
   if (settings.topP != null) generationConfig.topP = settings.topP;
   if (settings.maxTokens != null)
     generationConfig.maxOutputTokens = settings.maxTokens;
-  if (settings.thinkingBudget != null) {
+  if (settings.reasoningEffort) {
     generationConfig.thinkingConfig = {
-      thinkingBudget: settings.thinkingBudget,
+      thinkingLevel: settings.reasoningEffort,
       includeThoughts: true,
     };
   }
