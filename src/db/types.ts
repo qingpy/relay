@@ -201,10 +201,16 @@ export interface WebDavConfig {
   /** Folder under the base URL to keep Relay's snapshot in (default `relay`). */
   path: string;
   enabled: boolean;
-  /** How often to sync while the app is open, in hours (default 1). */
+  /** How often to sync while the app is open, in hours (default 1). Also the
+   *  spacing between versioned backups. */
   intervalHours?: number;
   /** Last successful sync (push or pull), for the Settings readout. */
   lastSyncAt?: number;
+  /** How many timestamped backups to keep on the server (0/undefined = off).
+   *  A new one is written each `intervalHours`; older ones are pruned. */
+  backupsKeep?: number;
+  /** When the last versioned backup was written (spacing + Settings readout). */
+  lastWebdavBackupAt?: number;
 }
 
 export interface AppConfig {

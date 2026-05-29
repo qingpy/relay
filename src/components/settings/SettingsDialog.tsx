@@ -79,8 +79,8 @@ export function SettingsDialog() {
               {panel === 'sync' && (
                 <>
                   <DataStoreSettings />
-                  <WebdavSettings />
                   <BackupSettings />
+                  <WebdavSettings />
                 </>
               )}
             </div>

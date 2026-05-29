@@ -50,8 +50,10 @@ around — and your keys aren't sitting in plaintext where a tool or coding agen
 working in the repo would read them. (Restoring on a new device re-enters keys.)
 
 For cross-device use, mirror the same snapshot to your own **WebDAV** server in
-the same panel (optional, last-write-wins, syncs while the app is open). Portable
-JSON **backups** (file download or on-disk) live there too.
+the same panel (optional, last-write-wins, syncs while the app is open). WebDAV
+can also keep a rolling set of **timestamped backups** — choose how many to keep,
+and restore any one from the list. Portable JSON **backups** (file download or
+on-disk) live there too.
 
 ## Providers
 

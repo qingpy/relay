@@ -7,7 +7,11 @@ import { ensureDefaultPreset } from '@/db/repo';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
 import { initLocalStore } from '@/lib/localstore';
 import { initSecrets } from '@/lib/secrets';
-import { initWebdavSync, maybeRunScheduledWebdavSync } from '@/lib/webdav';
+import {
+  initWebdavSync,
+  maybeRunScheduledWebdavBackup,
+  maybeRunScheduledWebdavSync,
+} from '@/lib/webdav';
 import { useUiStore } from '@/store/ui';
 
 // Settings (with its connection/backup/prompt managers) loads on first open.
@@ -63,6 +67,7 @@ export default function App() {
     const id = setInterval(() => {
       void maybeRunScheduledBackup();
       void maybeRunScheduledWebdavSync();
+      void maybeRunScheduledWebdavBackup();
     }, 60_000);
     return () => clearInterval(id);
   }, [boot.phase]);
