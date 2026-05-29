@@ -50,8 +50,9 @@ JSON **backups** (file download or on-disk) live there too.
 
 No login. In **Settings → Connections**, add a connection:
 
-- **Custom (OpenAI-style)** — paste a base URL + API key (OpenRouter, OpenAI,
-  Groq, a local server, or Gemini via its OpenAI-compatible endpoint).
+- **Custom** — paste the full API URL (e.g. `…/v1/chat/completions`) + API key
+  (OpenRouter, OpenAI, Groq, a local server, or Gemini's OpenAI-compatible
+  endpoint). Any OpenAI-compatible endpoint works — every part of the URL is editable.
 - **Vertex AI** — upload/paste a service-account JSON (project, region, key); the
   key stays server-side.
 

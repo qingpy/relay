@@ -20,7 +20,7 @@ export async function testConnection(
     messages: [{ role: 'user', text: 'Reply with exactly: ok' }],
     settings: { maxTokens: 16, temperature: 0 },
     apiKey: conn.apiKey,
-    baseUrl: conn.baseUrl,
+    url: conn.url,
     project: conn.project,
     region: conn.region,
     clientEmail: conn.clientEmail,

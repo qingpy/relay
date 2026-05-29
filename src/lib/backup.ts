@@ -1,4 +1,5 @@
 import { db, type RelayDB } from '@/db/db';
+import { normalizeConnection } from '@/lib/models';
 import type {
   AppConfig,
   Connection,
@@ -131,7 +132,7 @@ export async function importAll(
         database.appConfig.clear(),
       ]);
       await Promise.all([
-        database.connections.bulkPut(d.connections ?? []),
+        database.connections.bulkPut((d.connections ?? []).map(normalizeConnection)),
         database.folders.bulkPut(d.folders ?? []),
         database.sessions.bulkPut(d.sessions ?? []),
         database.messages.bulkPut(d.messages ?? []),

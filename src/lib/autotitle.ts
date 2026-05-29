@@ -51,7 +51,7 @@ export async function maybeAutoTitle(sessionId: string): Promise<void> {
       messages,
       settings: { maxTokens: 32, temperature: 0.3 },
       apiKey: connection.apiKey,
-      baseUrl: connection.baseUrl,
+      url: connection.url,
       project: connection.project,
       region: connection.region,
       clientEmail: connection.clientEmail,

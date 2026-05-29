@@ -1,4 +1,5 @@
 import type { Connection } from '@/db/types';
+import { modelsUrlFrom } from '@/lib/models';
 
 const ENDPOINT: Record<Connection['type'], string> = {
   openai: '/api/models/openai',
@@ -10,10 +11,17 @@ export async function detectModels(conn: Connection): Promise<string[]> {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (conn.apiKey) headers['x-api-key'] = conn.apiKey;
 
+  const modelsUrl = conn.url ? modelsUrlFrom(conn.url) : null;
+  if (conn.type === 'openai' && !modelsUrl) {
+    throw new Error(
+      'Auto-detect needs a standard “…/chat/completions” URL — add models by hand.',
+    );
+  }
+
   const res = await fetch(ENDPOINT[conn.type], {
     method: 'POST',
     headers,
-    body: JSON.stringify({ baseUrl: conn.baseUrl }),
+    body: JSON.stringify({ url: modelsUrl }),
   });
   if (!res.ok) {
     const j = (await res.json().catch(() => null)) as { error?: string } | null;

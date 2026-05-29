@@ -7,5 +7,5 @@ import type { Provider } from './types';
 /** Instantiate the right provider for a connection's protocol. */
 export function providerForConnection(conn: Connection): Provider {
   if (conn.type === 'vertex') return new VertexProvider();
-  return new OpenAICompatProvider(flavorOf(conn.type, conn.baseUrl) === 'openrouter');
+  return new OpenAICompatProvider(flavorOf(conn.type, conn.url) === 'openrouter');
 }

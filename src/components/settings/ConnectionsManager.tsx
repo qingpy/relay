@@ -98,7 +98,7 @@ function ConnectionCard({
         <Switch
           checked={enabled}
           onCheckedChange={(v) => void updateConnection(conn.id, { enabled: v })}
-          title={enabled ? 'On — models available' : 'Off — hidden from pickers'}
+          aria-label="Toggle connection"
         />
       </div>
 
@@ -110,7 +110,7 @@ function ConnectionCard({
 function Editor({ conn }: { conn: Connection }) {
   const [name, setName] = useState(conn.name);
   const [type, setType] = useState<ConnectionType>(conn.type);
-  const [baseUrl, setBaseUrl] = useState(conn.baseUrl ?? '');
+  const [url, setUrl] = useState(conn.url ?? '');
   const [apiKey, setApiKey] = useState(conn.apiKey ?? '');
   const [project, setProject] = useState(conn.project ?? '');
   const [region, setRegion] = useState(conn.region ?? '');
@@ -216,21 +216,21 @@ function Editor({ conn }: { conn: Connection }) {
             void updateConnection(conn.id, { type: t });
           }}
         >
-          <option value="openai">Custom · OpenAI-style API</option>
+          <option value="openai">Custom</option>
           <option value="vertex">Vertex AI</option>
         </FlatSelect>
       </Field>
 
       {type === 'openai' ? (
         <>
-          <Field label="Base URL">
+          <Field label="API URL">
             <Input
               spellCheck={false}
-              placeholder="https://api.example.com/v1"
-              value={baseUrl}
+              placeholder="https://api.openai.com/v1/chat/completions"
+              value={url}
               onChange={(e) => {
-                setBaseUrl(e.target.value);
-                void updateConnection(conn.id, { baseUrl: e.target.value });
+                setUrl(e.target.value);
+                void updateConnection(conn.id, { url: e.target.value });
               }}
             />
           </Field>
@@ -368,7 +368,7 @@ function Editor({ conn }: { conn: Connection }) {
             value={testModelId}
             onChange={(e) => setTestModel(e.target.value)}
             className="h-8 max-w-36 rounded-md border border-input bg-transparent pl-2 pr-6 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            title="Model to test"
+            aria-label="Model to test"
           >
             {conn.models.map((m) => (
               <option key={m.id} value={m.id}>
@@ -450,7 +450,7 @@ function ModelRow({
           <button
             key={key}
             type="button"
-            title={title}
+            aria-label={title}
             onClick={() =>
               onChange({ ...model.capabilities, [key]: !model.capabilities[key] })
             }
@@ -468,7 +468,7 @@ function ModelRow({
       <button
         type="button"
         onClick={onRemove}
-        title="Remove model"
+        aria-label="Remove model"
         className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground"
       >
         <X className="size-3.5" />

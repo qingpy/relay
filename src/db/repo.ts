@@ -11,7 +11,7 @@ import type {
   Session,
   StoredFile,
 } from './types';
-import { DEFAULT_BASE_URL, flavorOf } from '@/lib/models';
+import { DEFAULT_URL, flavorOf } from '@/lib/models';
 
 export const NEW_SESSION_TITLE = 'New chat';
 
@@ -207,17 +207,16 @@ export function getConnection(id: string): Promise<Connection | undefined> {
 export async function createConnection(input: {
   name?: string;
   type: ConnectionType;
-  baseUrl?: string;
+  url?: string;
   apiKey?: string;
 }): Promise<Connection> {
   const last = await db.connections.orderBy('order').last();
-  const baseUrl =
-    input.baseUrl ?? DEFAULT_BASE_URL[flavorOf(input.type, input.baseUrl)];
+  const url = input.url ?? DEFAULT_URL[flavorOf(input.type, input.url)];
   const conn: Connection = {
     id: newId(),
     name: input.name?.trim() || CONNECTION_TYPE_NAME[input.type],
     type: input.type,
-    baseUrl,
+    url,
     apiKey: input.apiKey,
     models: [],
     enabled: true,

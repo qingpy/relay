@@ -51,7 +51,7 @@ Types live in `src/db/types.ts`; the schema + migrations in `src/db/db.ts`; all
 reads/writes in `src/db/repo.ts`.
 
 ```
-connections { id, name, type: 'openai'|'vertex', baseUrl?, apiKey?,
+connections { id, name, type: 'openai'|'vertex', url?, apiKey?,  // url = full …/chat/completions
               models: SavedModel[] (id, label?, capabilities),
               project?, region?, clientEmail?, privateKey?,   // vertex
               enabled?, order, createdAt }
@@ -151,8 +151,10 @@ interface Provider {
   `gemini.ts`) — Gemini `generateContent` body; the proxy mints the OAuth token.
 
 The client builds the full payload and POSTs to the proxy:
-- `POST /api/chat/openai` — body `{ baseUrl, payload }`, key via `x-api-key`
-  header (or `OPENROUTER_KEY`/`OPENAI_KEY` env). Proxy → `${baseUrl}/chat/completions`.
+- `POST /api/chat/openai` — body `{ url, payload }`, key via `x-api-key`
+  header (or `OPENROUTER_KEY`/`OPENAI_KEY` env). `url` is the connection's full,
+  user-editable endpoint; the proxy validates the protocol and calls it verbatim.
+  Model detection (`/api/models/openai`) derives the `…/models` URL from it.
 - `POST /api/chat/vertex` — body `{ project, region, model, payload, clientEmail?,
   privateKey? }`. Proxy mints a token (`server/vertex-auth.ts`) and calls
   `…:streamGenerateContent?alt=sse`. Service-account creds come from the

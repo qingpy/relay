@@ -12,7 +12,7 @@ import type {
   Session,
   StoredFile,
 } from './types.ts';
-import { DEFAULT_BASE_URL, seedModelsFor } from '@/lib/models';
+import { DEFAULT_URL, seedModelsFor } from '@/lib/models';
 import type { ConnectionType } from './types.ts';
 
 /**
@@ -94,12 +94,14 @@ export class RelayDB extends Dexie {
     // v5: collapse connection types to openai|vertex. Convert Gemini AI Studio
     // connections to the OpenAI-compatible Google endpoint.
     this.version(5).upgrade(async (tx) => {
-      const conns = (await tx.table('connections').toArray()) as Connection[];
+      const conns = (await tx.table('connections').toArray()) as (Connection & {
+        baseUrl?: string;
+      })[];
       for (const c of conns) {
         if ((c.type as string) === 'gemini') {
           await tx.table('connections').update(c.id, {
             type: 'openai',
-            baseUrl: c.baseUrl || GOOGLE_OPENAI_BASE_URL,
+            url: c.url || c.baseUrl || GOOGLE_OPENAI_URL,
           });
         }
       }
@@ -107,16 +109,16 @@ export class RelayDB extends Dexie {
   }
 }
 
-const GOOGLE_OPENAI_BASE_URL =
-  'https://generativelanguage.googleapis.com/v1beta/openai';
+const GOOGLE_OPENAI_URL =
+  'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions';
 
 const PROVIDER_META: Record<
   string,
-  { name: string; type: ConnectionType; baseUrl?: string }
+  { name: string; type: ConnectionType; url?: string }
 > = {
-  openrouter: { name: 'OpenRouter', type: 'openai', baseUrl: DEFAULT_BASE_URL.openrouter },
-  openai: { name: 'OpenAI', type: 'openai', baseUrl: DEFAULT_BASE_URL.openai },
-  gemini: { name: 'Gemini', type: 'openai', baseUrl: GOOGLE_OPENAI_BASE_URL },
+  openrouter: { name: 'OpenRouter', type: 'openai', url: DEFAULT_URL.openrouter },
+  openai: { name: 'OpenAI', type: 'openai', url: DEFAULT_URL.openai },
+  gemini: { name: 'Gemini', type: 'openai', url: GOOGLE_OPENAI_URL },
 };
 
 /** v3 upgrade: build connections from old provider keys; seed preset/chat config. */
@@ -142,14 +144,16 @@ async function migrateToConnections(tx: Transaction): Promise<void> {
     const meta = PROVIDER_META[provider];
     if (!meta) continue;
     const id = crypto.randomUUID();
-    const baseUrl = keys[provider]?.baseUrl || meta.baseUrl;
+    // Legacy provider keys stored a base URL; `normalizeConnection` upgrades it
+    // to a full chat-completions URL when the data is imported.
+    const url = keys[provider]?.baseUrl || meta.url;
     await tx.table('connections').add({
       id,
       name: meta.name,
       type: meta.type,
-      baseUrl,
+      url,
       apiKey: keys[provider]?.apiKey,
-      models: seedModelsFor(meta.type, baseUrl),
+      models: seedModelsFor(meta.type, url),
       enabled: true,
       order: order++,
       createdAt: Date.now(),
@@ -270,7 +274,7 @@ export async function ensureDefaultConnection(): Promise<void> {
     id: crypto.randomUUID(),
     name: 'OpenRouter',
     type: 'openai',
-    baseUrl: DEFAULT_BASE_URL.openrouter,
+    url: DEFAULT_URL.openrouter,
     models: [],
     enabled: true,
     order: 0,
