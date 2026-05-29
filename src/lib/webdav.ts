@@ -19,7 +19,7 @@ import { useUiStore } from '@/store/ui';
 const SNAPSHOT = 'relay-state.json';
 const REV_KEY = 'relay.webdav.rev';
 const LAST_KEY = 'relay.webdav.lastSyncAt';
-const DEFAULT_INTERVAL_MIN = 15;
+const DEFAULT_INTERVAL_HOURS = 1;
 
 interface Snapshot {
   rev: number;
@@ -211,7 +211,7 @@ export async function maybeRunScheduledWebdavSync(): Promise<void> {
   const cfg = (await getAppConfig()).webdav;
   if (!configured(cfg)) return;
   const intervalMs =
-    Math.max(1, cfg.intervalMinutes ?? DEFAULT_INTERVAL_MIN) * 60_000;
+    Math.max(1, cfg.intervalHours ?? DEFAULT_INTERVAL_HOURS) * 3_600_000;
   if (Date.now() - getLastSync() < intervalMs) return;
   await reconcile();
 }

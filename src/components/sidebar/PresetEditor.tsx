@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { X } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -7,9 +8,15 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { FlatSelect } from '@/components/ui/flat-select';
+import { Input } from '@/components/ui/input';
+import { Marginalia } from '@/components/ui/marginalia';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
-import { DEFAULT_REASONING_EFFORTS, getAppConfig } from '@/db/db';
+import {
+  DEFAULT_REASONING_EFFORTS,
+  getAppConfig,
+  updateAppConfig,
+} from '@/db/db';
 import {
   listConnections,
   setSessionSystemPrompt,
@@ -92,6 +99,57 @@ function OptionalSlider({
           onValueChange={([v]) => onChange(v)}
         />
       )}
+    </div>
+  );
+}
+
+/** Inline editor for the GLOBAL reasoning-effort choices (shared across every
+ *  preset). The list above selects from these; here you add / edit / delete them. */
+function EffortOptions() {
+  const config = useLiveQuery(() => getAppConfig(), []);
+  const [efforts, setEfforts] = useState<string[]>([]);
+  const [seeded, setSeeded] = useState(false);
+
+  useEffect(() => {
+    if (config && !seeded) {
+      setEfforts(config.reasoningEfforts ?? DEFAULT_REASONING_EFFORTS);
+      setSeeded(true);
+    }
+  }, [config, seeded]);
+
+  const commit = (next: string[]) => {
+    setEfforts(next);
+    void updateAppConfig({
+      reasoningEfforts: [...new Set(next.map((s) => s.trim()).filter(Boolean))],
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="label-mono text-muted-foreground">Options</span>
+        <Marginalia onClick={() => commit([...efforts, ''])}>Add</Marginalia>
+      </div>
+      {efforts.map((value, i) => (
+        <div key={i} className="flex items-center gap-1.5">
+          <Input
+            value={value}
+            spellCheck={false}
+            placeholder="e.g. minimal, low, medium, high"
+            onChange={(e) =>
+              commit(efforts.map((v, j) => (j === i ? e.target.value : v)))
+            }
+          />
+          <button
+            type="button"
+            title="Remove option"
+            onClick={() => commit(efforts.filter((_, j) => j !== i))}
+            className="flex size-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -265,9 +323,7 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
               </option>
             ))}
           </FlatSelect>
-          <p className="text-xs text-muted-foreground">
-            Edit these choices in Settings → Chats.
-          </p>
+          <EffortOptions />
         </div>
       )}
 

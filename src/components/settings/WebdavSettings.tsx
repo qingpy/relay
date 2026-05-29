@@ -28,7 +28,7 @@ const BLANK: WebDavConfig = {
   pass: '',
   path: 'relay',
   enabled: false,
-  intervalMinutes: 15,
+  intervalHours: 1,
 };
 
 export function WebdavSettings() {
@@ -101,11 +101,6 @@ export function WebdavSettings() {
   return (
     <section className="flex flex-col gap-6">
       <SectionLabel>WebDAV sync</SectionLabel>
-      <p className="text-xs text-muted-foreground">
-        Mirror everything to your own WebDAV server so other devices stay in
-        sync. Relay stays local-first — this runs on a schedule while the app is
-        open, and on open it pulls the latest.
-      </p>
 
       <div className={FIELD}>
         <span className={LABEL}>Server URL</span>
@@ -146,14 +141,12 @@ export function WebdavSettings() {
           />
         </div>
         <div className={FIELD}>
-          <span className={LABEL}>Every (minutes)</span>
+          <span className={LABEL}>Every (hours)</span>
           <Input
             type="number"
             min={1}
-            value={form.intervalMinutes ?? 15}
-            onChange={(e) =>
-              set({ intervalMinutes: Number(e.target.value) || 15 })
-            }
+            value={form.intervalHours ?? 1}
+            onChange={(e) => set({ intervalHours: Number(e.target.value) || 1 })}
           />
         </div>
       </div>

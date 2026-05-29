@@ -27,12 +27,6 @@ export function DataStoreSettings() {
   return (
     <section className="flex flex-col gap-3">
       <SectionLabel>Local data store</SectionLabel>
-      <p className="text-xs text-muted-foreground">
-        Your chats and settings live in this file on disk — off the browser, so
-        they don’t grow your browser profile. The proxy owns it; WebDAV (below)
-        mirrors it to your other devices. Set the path with{' '}
-        <code className="font-mono">RELAY_DATA_FILE</code> when you start Relay.
-      </p>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
