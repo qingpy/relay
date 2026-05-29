@@ -259,11 +259,11 @@ Identical SPA + proxy for all targets. Pick later.
   (inline error + **Retry** on a failed turn; `role=alert`/`role=status`/`aria-busy` cues). ✅
   **keyboard help** (`?` or the header **Keys** link; ⌘/Ctrl+B toggles the sidebar). ✅
   **responsive** (the sidebar overlays the chat below `md`, starts closed there, auto-dismisses on
-  open). ✅ **per-model reasoning effort** (free-typed; see §9). ✅ **deploy configured** — target
-  is the user's **Oracle Cloud Ampere VPS + Caddy**; an HTTP Basic **auth gate** (env-gated) was
-  added to the proxy and the artifacts shipped (`deploy/relay.service`, `deploy/Caddyfile`,
-  `deploy/relay.env.example`, and a beginner `DEPLOY.md`). Remaining: the user runs the guide on
-  the box (their infra/secrets) — M7 is otherwise complete.
+  open). ✅ **per-model reasoning effort** (free-typed; see §9). ✅ **deployed & live** at
+  **https://163.192.26.239.nip.io** on the user's Oracle Cloud Ampere VPS — Caddy auto-HTTPS in
+  front of the Hono server (SPA + `/api`, one origin), HTTP Basic auth gate, systemd-managed,
+  agent-managed from the dev machine (`deploy/update.sh`; runbook in `deploy/SERVER.md`).
+  **M7 is complete.**
 - **Deferred — WebDAV sync**: largely superseded by local backup/restore; revisit if cross-device
   sync is wanted.
 
@@ -285,12 +285,13 @@ Working tree clean; all work pushed to `origin/main`.
   prompting user message; streaming/error states carry aria cues.
 - ✅ Keyboard help & responsive — a `?` shortcut sheet (also the header **Keys** link) plus
   ⌘/Ctrl+B; the sidebar overlays the chat on narrow screens.
-- ✅ **Deploy** — target chosen: the user's **Oracle Cloud Ampere (4/24) VPS + Caddy**. Added an
-  env-gated HTTP Basic **auth gate** to the proxy (`RELAY_AUTH_USER`/`RELAY_AUTH_PASS`; open when
-  unset) and shipped `deploy/relay.service`, `deploy/Caddyfile`, `deploy/relay.env.example`, and a
-  step-by-step `DEPLOY.md` (covers Oracle's two firewall layers, ARM Node install, systemd, Caddy
-  auto-HTTPS). Verified locally: 401 without creds / 200 with, SPA + `/api` on one origin. The user
-  runs the guide on the box.
+- ✅ **Deployed & live** on the user's **Oracle Cloud Ampere (4/24) VPS** at
+  **https://163.192.26.239.nip.io**. Caddy (auto-HTTPS, `nip.io` hostname) reverse-proxies the Hono
+  server, which serves the SPA + `/api` on one origin (`127.0.0.1:8787`) under an env-gated HTTP
+  Basic auth gate; both `relay` and `caddy` run as enabled systemd units. Code is shipped from the
+  dev machine via `git archive` over SSH (no GitHub creds on the box) — `deploy/update.sh` does it
+  in one command; the live runbook is `deploy/SERVER.md`. Verified end-to-end: 401→200 through the
+  gate, SPA serves, HTTP 308→HTTPS. (`DEPLOY.md` remains the generic from-scratch guide.)
 
 Chose **not** to add a toast library or skeletons: errors surface inline + retry, transient
 feedback is already contextual (Copy → "Copied", backup/connection-test statuses), and the lazy

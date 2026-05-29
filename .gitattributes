@@ -1,0 +1,2 @@
+# Shell scripts must stay LF — they run under bash (Git Bash + the Linux VPS).
+*.sh text eol=lf
