@@ -140,7 +140,7 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
                 type="button"
                 onPointerDown={stop}
                 onClick={stop}
-                title="Chat options"
+                aria-label="Chat options"
                 className="absolute right-0 flex size-6 shrink-0 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
               >
                 <MoreHorizontal className="size-4" />

@@ -136,16 +136,16 @@ export function MessageList({ sessionId }: { sessionId: string }) {
 
       {messages.length > 2 && (
         <div className="absolute bottom-3 right-3 flex flex-col gap-1 border border-border bg-card/90 p-1 backdrop-blur">
-          <NavButton onClick={jumpTop} title="First · Ctrl+Home">
+          <NavButton onClick={jumpTop} label="First message">
             <ChevronsUp />
           </NavButton>
-          <NavButton onClick={prevUser} title="Previous turn · Alt+↑">
+          <NavButton onClick={prevUser} label="Previous turn">
             <ChevronUp />
           </NavButton>
-          <NavButton onClick={nextUser} title="Next turn · Alt+↓">
+          <NavButton onClick={nextUser} label="Next turn">
             <ChevronDown />
           </NavButton>
-          <NavButton onClick={jumpBottom} title="Latest · Ctrl+End">
+          <NavButton onClick={jumpBottom} label="Latest message">
             <ChevronsDown />
           </NavButton>
         </div>
@@ -195,15 +195,15 @@ function SelectableRow({
 
 function NavButton({
   onClick,
-  title,
+  label,
   children,
 }: {
   onClick: () => void;
-  title: string;
+  label: string;
   children: React.ReactNode;
 }) {
   return (
-    <Button variant="ghost" size="icon-sm" onClick={onClick} title={title}>
+    <Button variant="ghost" size="icon-sm" onClick={onClick} aria-label={label}>
       {children}
     </Button>
   );

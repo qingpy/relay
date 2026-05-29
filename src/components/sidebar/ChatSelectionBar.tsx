@@ -50,21 +50,13 @@ export function ChatSelectionBar() {
 
   return (
     <div className="flex items-center gap-3 px-8 pb-4">
-      <span
-        className="label-mono tabular-nums text-muted-foreground"
-        title="Click a preset to select its chats"
-      >
+      <span className="label-mono tabular-nums text-muted-foreground">
         {count} selected
       </span>
       <div className="ml-auto flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Marginalia
-              disabled={!count || folders.length === 0}
-              title="Move to preset"
-            >
-              Move
-            </Marginalia>
+            <Marginalia disabled={!count || folders.length === 0}>Move</Marginalia>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {folders.map((f) => (
@@ -75,13 +67,11 @@ export function ChatSelectionBar() {
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia disabled={!count} onClick={() => void remove()} title="Delete selected">
+        <Marginalia disabled={!count} onClick={() => void remove()}>
           Delete
         </Marginalia>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia onClick={toggleChatSelectMode} title="Done">
-          Done
-        </Marginalia>
+        <Marginalia onClick={toggleChatSelectMode}>Done</Marginalia>
       </div>
     </div>
   );

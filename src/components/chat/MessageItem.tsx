@@ -93,7 +93,7 @@ export const MessageItem = memo(function MessageItem({
           <button
             type="button"
             onClick={() => void spliceMessage(message.id)}
-            title="Restore context"
+            aria-label="Restore context"
             className="flex size-4 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
           >
             <X className="size-3" />
@@ -196,9 +196,7 @@ export const MessageItem = memo(function MessageItem({
               <span className="whitespace-pre-wrap">{message.error}</span>
             </div>
             {message.parentId && (
-              <Marginalia onClick={retry} title="Retry this turn">
-                Retry
-              </Marginalia>
+              <Marginalia onClick={retry}>Retry</Marginalia>
             )}
           </div>
         )}

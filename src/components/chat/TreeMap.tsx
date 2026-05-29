@@ -113,7 +113,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
             onClick={() => toggle(node.id)}
             role="checkbox"
             aria-checked={checked}
-            title="Select"
+            aria-label="Select message"
             className="mr-2"
           >
             <CheckSquare checked={checked} />
@@ -137,10 +137,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
             </span>
             <span className="min-w-0 flex-1 truncate">{label(node)}</span>
             {kids.length > 1 && (
-              <span
-                className="shrink-0 rounded bg-secondary px-1 text-[10px] text-muted-foreground"
-                title={`${kids.length} branches`}
-              >
+              <span className="shrink-0 rounded bg-secondary px-1 text-[10px] text-muted-foreground">
                 {kids.length}
               </span>
             )}
@@ -154,7 +151,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   return (
     <Dialog open={open} onOpenChange={setOpenReset}>
       <DialogTrigger asChild>
-        <Marginalia title="Branch map">Map</Marginalia>
+        <Marginalia>Map</Marginalia>
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>

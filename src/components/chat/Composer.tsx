@@ -223,17 +223,8 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
               e.target.value = '';
             }}
           />
-          <Marginalia
-            onClick={() => fileInput.current?.click()}
-            title="Attach files"
-          >
-            Attach
-          </Marginalia>
-          <Marginalia
-            onClick={() => setExpanded((v) => !v)}
-            active={expanded}
-            title={expanded ? 'Shrink input' : 'Expand input'}
-          >
+          <Marginalia onClick={() => fileInput.current?.click()}>Attach</Marginalia>
+          <Marginalia onClick={() => setExpanded((v) => !v)} active={expanded}>
             {expanded ? 'Shrink' : 'Expand'}
           </Marginalia>
           {sessionId && (
@@ -242,15 +233,11 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
                 <Marginalia
                   onClick={() => void setSessionWebSearch(sessionId, !webSearch)}
                   active={webSearch}
-                  title={webSearch ? 'Web search on' : 'Web search off'}
                 >
                   Web
                 </Marginalia>
               )}
-              <Marginalia
-                onClick={() => void clearContext(sessionId)}
-                title="Clear context"
-              >
+              <Marginalia onClick={() => void clearContext(sessionId)}>
                 Clear
               </Marginalia>
             </>
@@ -260,7 +247,6 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
             <button
               type="button"
               onClick={() => sessionId && useChatStore.getState().stop(sessionId)}
-              title="Stop generating"
               className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground"
             >
               Stop
@@ -270,7 +256,6 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
               type="button"
               onClick={() => void submit()}
               disabled={!value.trim() && files.length === 0}
-              title="Send (Ctrl/⌘ + Enter)"
               className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/40"
             >
               Send
@@ -310,7 +295,7 @@ function PendingChip({ file, onRemove }: { file: File; onRemove: () => void }) {
       <button
         type="button"
         onClick={onRemove}
-        title="Remove"
+        aria-label="Remove attachment"
         className="flex size-5 items-center justify-center text-muted-foreground transition hover:bg-background hover:text-foreground"
       >
         <X className="size-3" />

@@ -37,11 +37,7 @@ export function SessionControls({ sessionId }: { sessionId: string }) {
         onSelect={onSelect}
       />
 
-      <Marginalia
-        onClick={() => setEditing(true)}
-        disabled={!folder}
-        title="Model, parameters & instructions"
-      >
+      <Marginalia onClick={() => setEditing(true)} disabled={!folder}>
         Tune
       </Marginalia>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Brain, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Reasoning({
@@ -43,8 +43,7 @@ export function Reasoning({
         <ChevronRight
           className={cn('size-3.5 transition-transform', open && 'rotate-90')}
         />
-        <Brain className={cn('size-3.5', thinking && 'animate-pulse text-primary')} />
-        <span>{label}</span>
+        <span className={cn(thinking && 'animate-pulse text-primary')}>{label}</span>
       </button>
       {open && (
         <div className="whitespace-pre-wrap border-t border-border px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">

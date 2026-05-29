@@ -23,7 +23,6 @@ export function ChatPane() {
           <button
             type="button"
             onClick={toggleSidebar}
-            title="Open sidebar"
             aria-label="Open sidebar"
             className="font-mono text-base leading-none text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -37,26 +36,15 @@ export function ChatPane() {
         )}
         <div className="ml-auto flex items-center gap-4">
           {activeId && <ContextMeter sessionId={activeId} />}
+          {activeId && <TreeMap sessionId={activeId} />}
           {activeId && (
-            <Marginalia
-              onClick={toggleSelectionMode}
-              active={selectionMode}
-              title="Select messages"
-            >
+            <Marginalia onClick={toggleSelectionMode} active={selectionMode}>
               Select
             </Marginalia>
           )}
-          {activeId && <TreeMap sessionId={activeId} />}
           {activeId && <ExportMenu sessionId={activeId} />}
-          <Marginalia
-            onClick={() => setShortcutsOpen(true)}
-            title="Keyboard shortcuts (?)"
-          >
-            Keys
-          </Marginalia>
-          <Marginalia onClick={() => setSettingsOpen(true)} title="Settings">
-            Settings
-          </Marginalia>
+          <Marginalia onClick={() => setShortcutsOpen(true)}>Keys</Marginalia>
+          <Marginalia onClick={() => setSettingsOpen(true)}>Settings</Marginalia>
         </div>
       </header>
 

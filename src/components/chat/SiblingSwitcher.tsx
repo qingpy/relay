@@ -24,7 +24,7 @@ export function SiblingSwitcher({
         type="button"
         onClick={() => go(index - 1)}
         disabled={index <= 0}
-        title="Previous branch"
+        aria-label="Previous branch"
         className="flex size-4 items-center justify-center transition hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
       >
         <ChevronLeft className="size-3.5" />
@@ -36,7 +36,7 @@ export function SiblingSwitcher({
         type="button"
         onClick={() => go(index + 1)}
         disabled={index >= sibs.length - 1}
-        title="Next branch"
+        aria-label="Next branch"
         className="flex size-4 items-center justify-center transition hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
       >
         <ChevronRight className="size-3.5" />

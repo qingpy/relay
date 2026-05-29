@@ -219,7 +219,7 @@ export function BackupSettings() {
               <button
                 type="button"
                 onClick={() => void restore(b.name)}
-                title="Restore"
+                aria-label="Restore"
                 className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-foreground"
               >
                 <RotateCcw className="size-3.5" />
@@ -227,7 +227,7 @@ export function BackupSettings() {
               <button
                 type="button"
                 onClick={() => void remove(b.name)}
-                title="Delete"
+                aria-label="Delete"
                 className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition hover:bg-background hover:text-destructive"
               >
                 <Trash2 className="size-3.5" />

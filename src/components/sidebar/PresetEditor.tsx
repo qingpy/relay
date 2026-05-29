@@ -142,7 +142,7 @@ function EffortOptions() {
           />
           <button
             type="button"
-            title="Remove option"
+            aria-label="Remove option"
             onClick={() => commit(efforts.filter((_, j) => j !== i))}
             className="flex size-9 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground"
           >
