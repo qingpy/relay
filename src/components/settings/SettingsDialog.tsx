@@ -15,14 +15,15 @@ import { BackupSettings } from './BackupSettings';
 import { ConnectionsManager } from './ConnectionsManager';
 import { PromptsManager } from './PromptsManager';
 import { SectionLabel } from './SectionLabel';
+import { WebdavSettings } from './WebdavSettings';
 
-type PanelId = 'connections' | 'prompts' | 'chats' | 'backup';
+type PanelId = 'connections' | 'prompts' | 'chats' | 'sync';
 
 const ITEMS: { id: PanelId; title: string }[] = [
   { id: 'connections', title: 'Connections' },
   { id: 'prompts', title: 'Quick prompts' },
   { id: 'chats', title: 'Chats' },
-  { id: 'backup', title: 'Backup' },
+  { id: 'sync', title: 'Sync & backup' },
 ];
 
 export function SettingsDialog() {
@@ -72,7 +73,12 @@ export function SettingsDialog() {
                   <ExportSettings />
                 </>
               )}
-              {panel === 'backup' && <BackupSettings />}
+              {panel === 'sync' && (
+                <>
+                  <WebdavSettings />
+                  <BackupSettings />
+                </>
+              )}
             </div>
           )}
         </div>

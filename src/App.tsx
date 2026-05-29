@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { ConfirmDialog } from '@/components/ui/confirm';
 import { ensureDefaultPreset } from '@/db/repo';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
+import { initWebdavSync, maybeRunScheduledWebdavSync } from '@/lib/webdav';
 import { useUiStore } from '@/store/ui';
 
 // Settings (with its connection/backup/prompt managers) loads on first open.
@@ -19,15 +20,22 @@ export default function App() {
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const setSidebarOpen = useUiStore((s) => s.setSidebarOpen);
 
-  // Guarantee a connection and a preset exist (chats always live in a preset).
+  // Ensure base data exists, then start WebDAV sync (pulls the latest on open).
   useEffect(() => {
-    void ensureDefaultPreset();
+    void (async () => {
+      await ensureDefaultPreset();
+      await initWebdavSync();
+    })();
   }, []);
 
-  // Run scheduled local backups while the app is open.
+  // Background work while the app is open: local backups + WebDAV sync. Each
+  // call no-ops until its own interval is due, so a 1-min tick is cheap.
   useEffect(() => {
     void maybeRunScheduledBackup();
-    const id = setInterval(() => void maybeRunScheduledBackup(), 5 * 60 * 1000);
+    const id = setInterval(() => {
+      void maybeRunScheduledBackup();
+      void maybeRunScheduledWebdavSync();
+    }, 60_000);
     return () => clearInterval(id);
   }, []);
 

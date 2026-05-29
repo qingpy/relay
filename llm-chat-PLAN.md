@@ -260,11 +260,16 @@ Identical SPA + proxy for all targets. Pick later.
   **keyboard help** (`?` or the header **Keys** link; ⌘/Ctrl+B toggles the sidebar).
   **responsive** (the sidebar overlays the chat below `md`, starts closed there, auto-dismisses on
   open). **per-model reasoning effort** (free-typed; see §9).
-- **M8 — Local + WebDAV sync** ⏳ (current): Relay stays **local-first and run locally** — a public
-  server deployment was built then **reverted** (see §9): requiring a network round-trip to a VPS
-  just to open the chat app runs against the local-first principle. Instead, cross-device continuity
-  comes from **WebDAV sync** through the local proxy (`/api/sync`, plan §6) to the user's own WebDAV
-  store — used opportunistically (works offline, syncs when reachable), not required to use the app.
+- **M8 — Local + WebDAV sync** ⏳ (built; pending the user's live test): Relay stays **local-first
+  and run locally** — a public server deployment was built then **reverted** (see §9): requiring a
+  network round-trip to a VPS just to open the chat app runs against the local-first principle.
+  Cross-device continuity comes from **WebDAV sync** through the local proxy (`/api/sync`): a
+  stateless WebDAV forwarder (`server/sync.ts`, GET/PUT/PROPFIND with the user's creds, MKCOL the
+  folder on first push); a client engine (`src/lib/webdav.ts`) that mirrors the whole DB as one
+  snapshot file — pull on open, scheduled push while open, last-write-wins with guards so a fresh
+  device can't clobber the cloud nor the cloud clobber unsynced local edits; configured on the page
+  (**Settings → Sync & backup**: URL/user/pass/folder/interval, Test, Sync now, Back up, Restore).
+  Proxy verified end-to-end against a stub; the user wires their own WebDAV server + tests live.
 
 The functional build is complete through **M7** (and verified by the user); **M8** (local + WebDAV
 sync) is the remaining stage.

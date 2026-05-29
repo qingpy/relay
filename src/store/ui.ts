@@ -52,6 +52,10 @@ interface UiState {
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
 
+  /** WebDAV sync state for the Settings readout (`off` = not configured). */
+  syncStatus: 'off' | 'syncing' | 'synced' | 'error';
+  setSyncStatus: (s: UiState['syncStatus']) => void;
+
   collapsedFolders: Record<string, boolean>;
   toggleFolder: (id: string) => void;
 }
@@ -109,6 +113,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   shortcutsOpen: false,
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
+
+  syncStatus: 'off',
+  setSyncStatus: (s) => set({ syncStatus: s }),
 
   collapsedFolders: loadCollapsed(),
   toggleFolder: (id) =>
