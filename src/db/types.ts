@@ -1,5 +1,5 @@
 /**
- * Domain model for Relay. Mirrors plan §4 (Data Model).
+ * Domain model for Relay. Mirrors ARCHITECTURE.md §3 (Data model).
  *
  * IDs are app-generated strings (crypto.randomUUID) so records can be created
  * offline and synced without a server assigning keys.

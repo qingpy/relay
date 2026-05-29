@@ -2,7 +2,7 @@ import { USE_LOCAL_STORE, db, openPersistentRelayDB } from '@/db/db';
 import { exportAll, importAll, type BackupFile } from '@/lib/backup';
 
 /**
- * Local data store engine (plan §9 "Local data store (option 3)").
+ * Local data store engine (ARCHITECTURE.md §4 "Storage & sync").
  *
  * The app's DB is an in-memory IndexedDB (see `db.ts`); this module makes a
  * single snapshot file on disk — owned by the proxy at `/api/data` — its

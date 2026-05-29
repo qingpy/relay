@@ -16,7 +16,7 @@ import { DEFAULT_BASE_URL, seedModelsFor } from '@/lib/models';
 import type { ConnectionType } from './types.ts';
 
 /**
- * Relay's store (plan §9 "Local data store"). The browser keeps the data only
+ * Relay's store (ARCHITECTURE.md §4 "Storage & sync"). The browser keeps the data only
  * in an **in-memory IndexedDB** — nothing persists to the browser profile / C:.
  * The durable copy is a single snapshot file owned by the proxy (`/api/data`,
  * see `src/lib/localstore.ts`), loaded into this DB on boot and written back on

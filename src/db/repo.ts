@@ -382,7 +382,7 @@ export async function deleteSubtree(id: string): Promise<void> {
 }
 
 /** Insert a context divider under the active tip and follow it. Messages before
- *  the divider stay on the page but leave the model context (plan §4/§7). */
+ *  the divider stay on the page but leave the model context (ARCHITECTURE.md §3). */
 export async function clearContext(sessionId: string): Promise<void> {
   const session = await getSession(sessionId);
   const divider = await addMessage({

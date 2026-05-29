@@ -11,7 +11,7 @@ export function partsText(content: Part[]): string {
     .join('');
 }
 
-/** Messages after the *latest* divider (plan §4/§7 "clear context, keep page"). */
+/** Messages after the *latest* divider (ARCHITECTURE.md §3 "context divider"). */
 export function activeWindow(messages: Message[]): Message[] {
   let start = 0;
   for (let i = messages.length - 1; i >= 0; i--) {

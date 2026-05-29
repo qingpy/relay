@@ -12,7 +12,7 @@ import { models } from './models.ts';
 import { sync } from './sync.ts';
 
 /**
- * Relay proxy — a thin, stateless request forwarder (plan §6).
+ * Relay proxy — a thin, stateless request forwarder (ARCHITECTURE.md §6).
  *
  * In dev, Vite serves the SPA and forwards `/api/*` here. In production
  * (`npm run build && npm run serve`) this same process also serves the built
