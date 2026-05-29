@@ -136,13 +136,24 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
         setDismissed(true);
         return;
       }
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (
+        e.key === 'Enter' &&
+        !e.shiftKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.nativeEvent.isComposing
+      ) {
         e.preventDefault();
         insertPrompt(matches[activeIndex]);
         return;
       }
     }
-    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+    // Send with Ctrl/⌘+Enter; a plain Enter just inserts a newline.
+    if (
+      e.key === 'Enter' &&
+      (e.ctrlKey || e.metaKey) &&
+      !e.nativeEvent.isComposing
+    ) {
       e.preventDefault();
       void submit();
     }
@@ -259,7 +270,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
               type="button"
               onClick={() => void submit()}
               disabled={!value.trim() && files.length === 0}
-              title="Send (Enter)"
+              title="Send (Ctrl/⌘ + Enter)"
               className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/40"
             >
               Send
