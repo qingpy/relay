@@ -13,8 +13,8 @@ export function SlashPalette({
   if (prompts.length === 0) return null;
 
   return (
-    <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-md">
-      <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="absolute bottom-full left-0 mb-2 w-full overflow-hidden border border-border bg-popover">
+      <div className="label-mono px-3 pb-1 pt-2 text-muted-foreground">
         Quick prompts
       </div>
       <ul className="max-h-64 overflow-y-auto pb-1">

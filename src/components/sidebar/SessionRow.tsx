@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, Copy, FolderInput, MessageSquare, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Check, Copy, FolderInput, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { CheckSquare } from '@/components/ui/check-square';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -26,13 +27,7 @@ import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
 
-export function SessionRow({
-  session,
-  nested,
-}: {
-  session: Session;
-  nested?: boolean;
-}) {
+export function SessionRow({ session }: { session: Session; nested?: boolean }) {
   const activeId = useUiStore((s) => s.activeSessionId);
   const setActive = useUiStore((s) => s.setActiveSession);
   const setActivePreset = useUiStore((s) => s.setActivePreset);
@@ -75,6 +70,8 @@ export function SessionRow({
     }
   };
 
+  const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+
   return (
     <div
       ref={setNodeRef}
@@ -87,45 +84,53 @@ export function SessionRow({
       onDoubleClick={() => !selecting && setEditing(true)}
       onKeyDown={(e) => e.key === 'Enter' && onRowClick()}
       className={cn(
-        'group flex h-8 cursor-pointer items-center gap-1.5 rounded-md pr-1 text-sm outline-none transition-colors',
-        nested ? 'pl-7' : 'pl-2',
+        'group flex cursor-pointer items-center justify-between gap-3 py-2.5 pl-12 pr-6 outline-none transition-colors',
         isDragging && 'opacity-50',
-        (selecting ? checked : isActive)
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-foreground',
       )}
     >
-      {selecting ? (
-        <span
-          className={cn(
-            'flex size-3.5 shrink-0 items-center justify-center rounded border',
-            checked ? 'border-primary bg-primary text-primary-foreground' : 'border-input',
-          )}
-        >
-          {checked && <Check className="size-2.5" />}
-        </span>
-      ) : (
-        <MessageSquare className="size-3.5 shrink-0 opacity-70" />
-      )}
-      {editing ? (
-        <InlineEdit
-          value={session.title}
-          onCommit={(v) => {
-            void renameSession(session.id, v);
-            setEditing(false);
-          }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <span className="min-w-0 flex-1 truncate">{session.title}</span>
-      )}
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {selecting ? (
+          <CheckSquare checked={checked} />
+        ) : (
+          <span
+            className={cn(
+              'size-2 shrink-0 border transition-colors',
+              isActive
+                ? 'border-primary bg-primary'
+                : 'border-muted-foreground/40',
+            )}
+          />
+        )}
+
+        {editing ? (
+          <InlineEdit
+            value={session.title}
+            onCommit={(v) => {
+              void renameSession(session.id, v);
+              setEditing(false);
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <span
+            className={cn(
+              'min-w-0 flex-1 truncate text-[15px] transition-colors',
+              isActive
+                ? 'font-medium text-foreground'
+                : 'text-muted-foreground group-hover:text-foreground',
+            )}
+          >
+            {session.title}
+          </span>
+        )}
+      </div>
 
       {!editing && !selecting && (
-        <div className="relative ml-1 flex min-w-[2.75rem] shrink-0 items-center justify-end">
+        <div className="relative flex shrink-0 items-center justify-end">
           <time
             dateTime={new Date(session.updatedAt).toISOString()}
             title={formatDateTime(session.updatedAt)}
-            className="whitespace-nowrap text-[10px] tabular-nums text-muted-foreground transition-opacity group-hover:opacity-0"
+            className="label-mono whitespace-nowrap tabular-nums text-muted-foreground/50 transition-opacity group-hover:opacity-0"
           >
             {formatStamp(session.updatedAt)}
           </time>
@@ -133,10 +138,10 @@ export function SessionRow({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
+                onPointerDown={stop}
+                onClick={stop}
                 title="Chat options"
-                className="absolute right-0 flex size-6 shrink-0 items-center justify-center rounded bg-sidebar-accent text-muted-foreground opacity-0 transition hover:bg-background hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+                className="absolute right-0 flex size-6 shrink-0 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
               >
                 <MoreHorizontal className="size-4" />
               </button>
@@ -163,11 +168,13 @@ export function SessionRow({
                       <DropdownMenuItem
                         key={f.id}
                         disabled={f.id === session.folderId}
-                        onSelect={() =>
-                          void moveSessionToFolder(session.id, f.id)
-                        }
+                        onSelect={() => void moveSessionToFolder(session.id, f.id)}
                       >
-                        {f.id === session.folderId ? <Check /> : <span className="size-4" />}
+                        {f.id === session.folderId ? (
+                          <Check />
+                        ) : (
+                          <span className="size-4" />
+                        )}
                         <span className="min-w-0 truncate">{f.name}</span>
                       </DropdownMenuItem>
                     ))}

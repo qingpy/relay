@@ -1,84 +1,57 @@
 @import 'tailwindcss';
 
-@custom-variant dark (&:is(.dark *));
-
 /* ---------------------------------------------------------------------------
-   Design tokens — Linear / Vercel-style minimalism.
-   Light is the default; `.dark` on <html> flips to the dark palette.
-   Accent is a single indigo. Borders are subtle, surfaces are near-neutral.
+   Relay — "Unboxed Stationery" design system.
+
+   A strictly-flat, airy, editorial look: a light grey canvas, pure-white only
+   for elevated surfaces (the input strip, menus, dialogs), delicate hairline
+   dividers, a single calm slate-blue accent, and monospace for labels/metadata.
+
+   Palette is deliberately limited to black · white · grey · slate-blue.
+   No rounded corners, no shadows — separation comes from hairlines and the
+   white/grey surface contrast. Light theme only.
 --------------------------------------------------------------------------- */
 :root {
-  --radius: 0.625rem;
+  --radius: 0;
 
-  --background: oklch(0.99 0 0);
-  --foreground: oklch(0.205 0 0);
+  /* Core surfaces & ink */
+  --background: #f4f5f6;          /* airy canvas grey */
+  --foreground: #1a1c20;          /* soft, highly readable ink */
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0 0);
+  --card: #ffffff;                /* elevated surfaces */
+  --card-foreground: #1a1c20;
 
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0 0);
+  --popover: #ffffff;
+  --popover-foreground: #1a1c20;
 
-  --primary: oklch(0.585 0.233 277.1);
-  --primary-foreground: oklch(0.985 0 0);
+  /* The one accent — a calm slate-blue */
+  --primary: #425a70;
+  --primary-foreground: #ffffff;
 
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
+  /* Subtle grey fills */
+  --secondary: #eaecee;
+  --secondary-foreground: #1a1c20;
 
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
+  --muted: #edeef0;
+  --muted-foreground: #828a94;    /* mid-grey for metadata */
 
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --accent: #e8eaec;              /* hover wash */
+  --accent-foreground: #1a1c20;
 
-  --destructive: oklch(0.577 0.245 27.3);
-  --destructive-foreground: oklch(0.985 0 0);
+  /* No red in the palette — "destructive" reads as final, high-contrast ink. */
+  --destructive: #1a1c20;
+  --destructive-foreground: #ffffff;
 
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.585 0.233 277.1);
+  --border: #e2e4e6;              /* delicate fineliner */
+  --input: #e2e4e6;
+  --ring: #425a70;
 
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-accent: oklch(0.955 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-}
-
-.dark {
-  --background: oklch(0.165 0 0);
-  --foreground: oklch(0.96 0 0);
-
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.96 0 0);
-
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.96 0 0);
-
-  --primary: oklch(0.68 0.18 277.1);
-  --primary-foreground: oklch(0.18 0 0);
-
-  --secondary: oklch(0.25 0 0);
-  --secondary-foreground: oklch(0.96 0 0);
-
-  --muted: oklch(0.25 0 0);
-  --muted-foreground: oklch(0.68 0 0);
-
-  --accent: oklch(0.27 0 0);
-  --accent-foreground: oklch(0.96 0 0);
-
-  --destructive: oklch(0.65 0.2 25);
-  --destructive-foreground: oklch(0.985 0 0);
-
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 14%);
-  --ring: oklch(0.68 0.18 277.1);
-
-  --sidebar: oklch(0.195 0 0);
-  --sidebar-foreground: oklch(0.96 0 0);
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-accent: oklch(0.25 0 0);
-  --sidebar-accent-foreground: oklch(0.96 0 0);
+  /* Sidebar shares the canvas; a single hairline separates it from the work area. */
+  --sidebar: #f4f5f6;
+  --sidebar-foreground: #1a1c20;
+  --sidebar-border: #e2e4e6;
+  --sidebar-accent: #e8eaec;
+  --sidebar-accent-foreground: #1a1c20;
 }
 
 @theme inline {
@@ -108,15 +81,31 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Strictly flat: every named radius scale collapses to 0. `rounded-full`
+     is intentionally left untouched for genuinely circular indicators (dots). */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
+  --radius-3xl: 0;
+  --radius-4xl: 0;
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI',
-    Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
-    monospace;
+  /* No shadows anywhere — separation is by hairline + surface contrast. */
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-xl: none;
+  --shadow-2xl: none;
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo,
+    Consolas, monospace;
 }
 
 @layer base {
@@ -139,7 +128,7 @@
     text-rendering: optimizeLegibility;
   }
 
-  /* Quiet, thin scrollbars to match the minimal aesthetic. */
+  /* Quiet, thin, flat scrollbars to match the minimal aesthetic. */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-border) transparent;
@@ -150,7 +139,6 @@
   }
   *::-webkit-scrollbar-thumb {
     background-color: var(--color-border);
-    border-radius: 9999px;
     border: 3px solid transparent;
     background-clip: content-box;
   }
@@ -160,12 +148,22 @@
 }
 
 /* ---------------------------------------------------------------------------
-   Markdown ("prose") — a compact, hand-rolled style instead of a typography
-   plugin, tuned for chat density and the minimal aesthetic.
+   Editorial label — the signature uppercase monospace used for roles, section
+   headers, metadata, and marginalia actions throughout the UI.
+--------------------------------------------------------------------------- */
+@utility label-mono {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* ---------------------------------------------------------------------------
+   Markdown ("prose") — compact, tuned for chat density and the flat aesthetic.
 --------------------------------------------------------------------------- */
 .md {
-  font-size: 0.9375rem;
-  line-height: 1.7;
+  font-size: 1rem;
+  line-height: 1.75;
   word-wrap: break-word;
 }
 .md > :first-child { margin-top: 0; }
@@ -192,7 +190,7 @@
 .md blockquote {
   margin: 0.9em 0;
   padding: 0.1em 1em;
-  border-left: 3px solid var(--color-border);
+  border-left: 2px solid var(--color-primary);
   color: var(--color-muted-foreground);
 }
 .md hr { margin: 1.5em 0; border: 0; border-top: 1px solid var(--color-border); }
@@ -201,15 +199,13 @@
   font-size: 0.86em;
   background: var(--color-muted);
   padding: 0.15em 0.4em;
-  border-radius: var(--radius-sm);
 }
 .md pre {
   margin: 0.9em 0;
   padding: 0.9em 1em;
   overflow-x: auto;
-  background: var(--color-muted);
+  background: var(--color-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
   font-size: 0.86em;
   line-height: 1.6;
 }
@@ -230,34 +226,24 @@
   text-align: left;
 }
 .md th { background: var(--color-muted); font-weight: 600; }
-.md img { max-width: 100%; border-radius: var(--radius-md); }
+.md img { max-width: 100%; }
 
 /* ---------------------------------------------------------------------------
-   Syntax highlighting (highlight.js classes) — token colors driven by theme
-   variables so light/dark adapt automatically.
+   Syntax highlighting — kept calm and on-palette: ink, grey, and slate only,
+   so code blocks read as quiet stationery rather than a rainbow.
 --------------------------------------------------------------------------- */
 :root {
-  --hl-comment: oklch(0.6 0.02 250);
-  --hl-keyword: oklch(0.5 0.2 295);
-  --hl-string: oklch(0.52 0.15 145);
-  --hl-number: oklch(0.55 0.16 40);
-  --hl-title: oklch(0.5 0.18 255);
-  --hl-attr: oklch(0.55 0.13 200);
-  --hl-builtin: oklch(0.55 0.16 25);
-  --hl-literal: oklch(0.55 0.16 40);
-}
-.dark {
-  --hl-comment: oklch(0.62 0.02 250);
-  --hl-keyword: oklch(0.78 0.14 300);
-  --hl-string: oklch(0.8 0.15 145);
-  --hl-number: oklch(0.82 0.12 60);
-  --hl-title: oklch(0.78 0.12 240);
-  --hl-attr: oklch(0.8 0.11 200);
-  --hl-builtin: oklch(0.8 0.12 30);
-  --hl-literal: oklch(0.82 0.12 60);
+  --hl-comment: #9aa1ab;
+  --hl-keyword: #425a70;
+  --hl-string: #5f6b78;
+  --hl-number: #1a1c20;
+  --hl-title: #34506b;
+  --hl-attr: #5f6b78;
+  --hl-builtin: #425a70;
+  --hl-literal: #1a1c20;
 }
 .hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
-.hljs-keyword, .hljs-selector-tag, .hljs-meta-keyword, .hljs-doctag { color: var(--hl-keyword); }
+.hljs-keyword, .hljs-selector-tag, .hljs-meta-keyword, .hljs-doctag { color: var(--hl-keyword); font-weight: 600; }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-meta-string { color: var(--hl-string); }
 .hljs-number, .hljs-literal { color: var(--hl-number); }
 .hljs-title, .hljs-title.function_, .hljs-section, .hljs-name { color: var(--hl-title); }
@@ -267,8 +253,7 @@
 .hljs-strong { font-weight: 600; }
 
 /* KaTeX should inherit the surface size, not balloon. Vertical padding keeps
-   tall constructs (fractions, roots, big operators) from being clipped at the
-   top when the display box scrolls horizontally. */
+   tall constructs from being clipped when the display box scrolls. */
 .md .katex { font-size: 1.05em; }
 .md .katex-display {
   margin: 0.9em 0;

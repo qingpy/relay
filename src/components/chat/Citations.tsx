@@ -13,10 +13,8 @@ export function Citations({ citations }: { citations: Citation[] }) {
   if (citations.length === 0) return null;
 
   return (
-    <div className="mt-3 border-t border-border/60 pt-2.5">
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Sources
-      </div>
+    <div className="mt-1 border-t border-border/60 pt-2.5">
+      <div className="label-mono mb-2 text-muted-foreground">Sources</div>
       <ol className="flex flex-col gap-1.5">
         {citations.map((c, i) => (
           <li key={`${c.url}-${i}`} className="flex items-start gap-2 text-xs">

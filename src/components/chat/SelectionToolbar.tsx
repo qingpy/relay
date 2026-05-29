@@ -1,5 +1,4 @@
-import { CheckCheck, Copy, Download, Trash2, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Marginalia } from '@/components/ui/marginalia';
 import { confirm } from '@/components/ui/confirm';
 import { getAppConfig } from '@/db/db';
 import { deleteSubtree } from '@/db/repo';
@@ -59,54 +58,35 @@ export function SelectionToolbar({
   };
 
   return (
-    <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-2 border-b border-border bg-card/95 px-4 py-2 backdrop-blur">
-      <span className="text-sm font-medium tabular-nums">{count} selected</span>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="gap-1.5"
-        onClick={() => (allSelected ? clearSelection() : setSelection(assistantIds))}
+    <div className="absolute inset-x-0 top-0 z-10 flex items-center gap-3 border-b border-border bg-card/95 px-6 py-2.5 backdrop-blur">
+      <span className="label-mono tabular-nums text-muted-foreground">
+        {count} selected
+      </span>
+      <span className="text-muted-foreground/30">·</span>
+      <Marginalia
         disabled={assistantIds.length === 0}
+        onClick={() =>
+          allSelected ? clearSelection() : setSelection(assistantIds)
+        }
       >
-        <CheckCheck className="size-3.5" />
         {allSelected ? 'Deselect all' : 'Select all'}
-      </Button>
-      <div className="ml-auto flex items-center gap-0.5">
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void copy()}
-          disabled={!count}
-          title="Copy as markdown"
-        >
-          <Copy />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void exportMd()}
-          disabled={!count}
-          title="Export .md"
-        >
-          <Download />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void remove()}
-          disabled={!count}
-          title="Delete selected"
-        >
-          <Trash2 />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={toggleSelectionMode}
-          title="Done"
-        >
-          <X />
-        </Button>
+      </Marginalia>
+      <div className="ml-auto flex items-center gap-3">
+        <Marginalia disabled={!count} onClick={() => void copy()} title="Copy as markdown">
+          Copy
+        </Marginalia>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia disabled={!count} onClick={() => void exportMd()} title="Export .md">
+          Export
+        </Marginalia>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia disabled={!count} onClick={() => void remove()} title="Delete selected">
+          Delete
+        </Marginalia>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia onClick={toggleSelectionMode} title="Done">
+          Done
+        </Marginalia>
       </div>
     </div>
   );

@@ -1,12 +1,9 @@
-import { FolderPlus, ListChecks, PanelLeftClose, Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Marginalia } from '@/components/ui/marginalia';
 import { createFolder } from '@/db/repo';
 import { startNewSession } from '@/lib/session-actions';
-import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { ChatSelectionBar } from '@/components/sidebar/ChatSelectionBar';
 import { SessionTree } from '@/components/sidebar/SessionTree';
-import { ThemeToggle } from './ThemeToggle';
 
 export function Sidebar() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
@@ -14,68 +11,43 @@ export function Sidebar() {
   const toggleChatSelectMode = useUiStore((s) => s.toggleChatSelectMode);
 
   return (
-    <aside className="flex h-full w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center justify-between px-3">
-        <div className="flex items-center gap-2 px-1">
-          <span className="flex size-6 items-center justify-center rounded-md bg-primary text-[13px] font-bold text-primary-foreground">
-            R
-          </span>
-          <span className="text-sm font-semibold tracking-tight">Relay</span>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-sm"
+    <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-6 text-sidebar-foreground">
+      <div className="flex items-center justify-between px-8 pb-6">
+        <span className="label-mono text-primary">Relay</span>
+        <button
+          type="button"
           onClick={toggleSidebar}
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
+          className="font-mono text-base leading-none text-muted-foreground transition-colors hover:text-foreground"
         >
-          <PanelLeftClose />
-        </Button>
+          ◂
+        </button>
       </div>
 
-      <div className="flex items-center gap-1.5 px-3 pb-2">
-        <Button
-          variant="secondary"
-          className="flex-1 justify-start gap-2"
-          onClick={() => void startNewSession()}
-        >
-          <Plus />
+      <div className="flex items-center gap-3 px-8 pb-8">
+        <Marginalia onClick={() => void startNewSession()} title="New chat">
           New chat
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon"
-          onClick={() => void createFolder()}
-          title="New preset"
-          aria-label="New preset"
-        >
-          <FolderPlus />
-        </Button>
-        <Button
-          variant="secondary"
-          size="icon"
+        </Marginalia>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia onClick={() => void createFolder()} title="New preset">
+          New preset
+        </Marginalia>
+        <span className="text-muted-foreground/30">·</span>
+        <Marginalia
           onClick={toggleChatSelectMode}
+          active={chatSelectMode}
           title="Select chats"
-          aria-label="Select chats"
-          aria-pressed={chatSelectMode}
-          className={cn(
-            chatSelectMode &&
-              'bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary',
-          )}
         >
-          <ListChecks />
-        </Button>
+          Select
+        </Marginalia>
       </div>
 
       {chatSelectMode && <ChatSelectionBar />}
 
-      <nav className="flex-1 overflow-y-auto px-2 py-1">
+      <nav className="flex-1 overflow-y-auto">
         <SessionTree />
       </nav>
-
-      <div className="flex items-center border-t border-sidebar-border px-3 py-2">
-        <ThemeToggle />
-      </div>
     </aside>
   );
 }

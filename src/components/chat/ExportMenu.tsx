@@ -1,5 +1,4 @@
-import { Download } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Marginalia } from '@/components/ui/marginalia';
 import { getAppConfig } from '@/db/db';
 import { getMessages, getSession } from '@/db/repo';
 import { downloadText, sessionToMarkdown, slugify } from '@/lib/export';
@@ -21,14 +20,8 @@ export function ExportMenu({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      onClick={() => void run()}
-      title="Export chat as markdown"
-      aria-label="Export chat"
-    >
-      <Download />
-    </Button>
+    <Marginalia onClick={() => void run()} title="Export chat as markdown">
+      Export
+    </Marginalia>
   );
 }

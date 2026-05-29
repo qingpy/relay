@@ -13,7 +13,7 @@ export function MessageAttachments({ fileIds }: { fileIds: string[] }) {
   if (files.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap justify-end gap-2">
+    <div className="flex flex-wrap gap-2">
       {files.map((f) => (
         <FileThumb key={f.id} file={f} />
       ))}

@@ -1,14 +1,5 @@
 import { useState } from 'react';
-import {
-  Check,
-  Copy,
-  Download,
-  GitFork,
-  Pencil,
-  RefreshCw,
-  Trash2,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Marginalia } from '@/components/ui/marginalia';
 import { confirm } from '@/components/ui/confirm';
 import { getAppConfig } from '@/db/db';
 import { deleteSubtree, setCurrentLeaf } from '@/db/repo';
@@ -18,6 +9,11 @@ import { downloadText, messageToMarkdown, slugify } from '@/lib/export';
 import { childrenOf } from '@/lib/tree';
 import { useChatStore } from '@/store/chat';
 
+/**
+ * The marginalia action row beneath a message — quiet uppercase text links
+ * rather than icon buttons. User turns get Edit/Regenerate; assistant turns get
+ * Download; both share Copy/Branch/Delete.
+ */
 export function MessageActions({
   message,
   allMessages,
@@ -64,55 +60,30 @@ export function MessageActions({
   };
 
   return (
-    <div className="flex items-center gap-0.5 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => void copy()}
-        title="Copy as markdown"
-      >
-        {copied ? <Check className="text-primary" /> : <Copy />}
-      </Button>
+    <div className="flex items-center gap-4">
+      <Marginalia onClick={() => void copy()} title="Copy as markdown">
+        {copied ? 'Copied' : 'Copy'}
+      </Marginalia>
       {isUser ? (
         <>
-          <Button variant="ghost" size="icon-sm" onClick={onEdit} title="Edit">
-            <Pencil />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={regenerate}
-            title="Regenerate reply"
-          >
-            <RefreshCw />
-          </Button>
+          <Marginalia onClick={onEdit} title="Edit & resend">
+            Edit
+          </Marginalia>
+          <Marginalia onClick={regenerate} title="Regenerate reply">
+            Regenerate
+          </Marginalia>
         </>
       ) : (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={() => void download()}
-          title="Download .md"
-        >
-          <Download />
-        </Button>
+        <Marginalia onClick={() => void download()} title="Download .md">
+          Download
+        </Marginalia>
       )}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={fork}
-        title="Branch from here"
-      >
-        <GitFork />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={() => void remove()}
-        title="Delete"
-      >
-        <Trash2 />
-      </Button>
+      <Marginalia onClick={fork} title="Branch from here">
+        Branch
+      </Marginalia>
+      <Marginalia onClick={() => void remove()} title="Delete">
+        Delete
+      </Marginalia>
     </div>
   );
 }

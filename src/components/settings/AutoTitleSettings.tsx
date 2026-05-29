@@ -1,10 +1,9 @@
 import { useLiveQuery } from 'dexie-react-hooks';
+import { FlatSelect } from '@/components/ui/flat-select';
 import { Input } from '@/components/ui/input';
 import { DEFAULT_TITLE_PROMPT, getAppConfig, updateAppConfig } from '@/db/db';
 import { listConnections } from '@/db/repo';
-
-const labelClass =
-  'text-[11px] font-semibold uppercase tracking-wide text-muted-foreground';
+import { SectionLabel } from './SectionLabel';
 
 export function AutoTitleSettings() {
   const config = useLiveQuery(() => getAppConfig(), []);
@@ -15,31 +14,30 @@ export function AutoTitleSettings() {
 
   return (
     <section className="flex flex-col gap-2">
-      <h3 className={labelClass}>Auto-title</h3>
-      <p className="text-xs text-muted-foreground">
-        Name new chats from their first exchange. Off uses the first message as
-        the title.
-      </p>
+      <SectionLabel>Auto-title</SectionLabel>
       <div className="flex gap-2">
-        <select
-          value={config.titleConnectionId ?? ''}
-          onChange={(e) => {
-            const id = e.target.value || undefined;
-            const c = connections.find((x) => x.id === id);
-            void updateAppConfig({
-              titleConnectionId: id,
-              titleModel: id ? config.titleModel ?? c?.models[0]?.id ?? '' : undefined,
-            });
-          }}
-          className="h-9 flex-1 rounded-md border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <option value="">Off (use first message)</option>
-          {connections.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <div className="flex-1">
+          <FlatSelect
+            value={config.titleConnectionId ?? ''}
+            onChange={(e) => {
+              const id = e.target.value || undefined;
+              const c = connections.find((x) => x.id === id);
+              void updateAppConfig({
+                titleConnectionId: id,
+                titleModel: id
+                  ? config.titleModel ?? c?.models[0]?.id ?? ''
+                  : undefined,
+              });
+            }}
+          >
+            <option value="">Off · use first message</option>
+            {connections.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </FlatSelect>
+        </div>
         {config.titleConnectionId && (
           <Input
             list="title-models"

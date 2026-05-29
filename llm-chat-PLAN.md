@@ -252,9 +252,10 @@ Identical SPA + proxy for all targets. Pick later.
   connections (Custom OpenAI-style + Vertex) with per-model capabilities & test; presets (model +
   settings + system prompt) with active-preset switching; backup & restore (file + local server +
   scheduled); auto-title; multi-select (messages, branch map, sidebar chats). See §9 decisions.
-- **M7 — UI/design polish & deploy** ⏳ (next): visual/design pass, empty states, error/loading
-  states, keyboard shortcuts, bundle **code-splitting** (currently one ~1.1 MB chunk), then deploy
-  to VPS (Caddy) or Cloudflare.
+- **M7 — UI/design polish & deploy** ⏳: ✅ **visual redesign** ("Unboxed Stationery": strictly-flat,
+  slate-on-grey, light-only, block-style messages, uppercase-mono labels, "input horizon" composer;
+  see §9). Remaining: error/loading affordances (toasts, skeletons, retry), keyboard-shortcut pass,
+  bundle **code-splitting** (currently one ~1.2 MB chunk), then deploy to VPS (Caddy) or Cloudflare.
 - **Deferred — WebDAV sync**: largely superseded by local backup/restore; revisit if cross-device
   sync is wanted.
 
@@ -268,9 +269,9 @@ clean. Verified in-session via fake-indexeddb tests (Dexie migrations v2–v5, c
 backup round-trip) and server smokes (chat proxy, Vertex token mint, model listing, backup CRUD).
 Working tree clean; all work pushed to `origin/main`.
 
-**Next session — M7 (UI/design, then final polish):**
-- Visual/design pass toward the Linear/Vercel north star; empty states; responsive layout; theme
-  (light/dark) polish.
+**Next session — M7 (remaining polish, then deploy):**
+- ✅ Visual redesign done — the flat "Unboxed Stationery" light theme (see §9). Remaining visual
+  work: responsive/narrow-width layout; revisit any surfaces only seen with seeded chat data.
 - Error/loading affordances (toasts, skeletons, retry).
 - **Code-splitting**: the bundle is one ~1.1 MB chunk — lazy-load KaTeX / markdown / highlight and
   the dialogs to cut it down.
@@ -292,10 +293,25 @@ Working tree clean; all work pushed to `origin/main`.
 
 Resolved:
 - **Project name**: **Relay**.
-- **Theme**: **light + dark from the start** (CSS variables + `.dark`, `system` default).
+- **Theme**: **light only** as of the M7 redesign (2026-05-28). The dark palette
+  and the theme toggle were removed at the user's request; the app is the flat
+  "Unboxed Stationery" light theme (CSS variables, no `.dark`).
 - **Default provider/model**: **OpenRouter**, model `openai/gpt-4o-mini`. Provider ids
   are `openrouter | openai | gemini | vertex`; OpenRouter and OpenAI share
   `OpenAICompatProvider` (differ by base URL).
+
+- **UI redesign — "Unboxed Stationery"** (user request, M7, 2026-05-28): replaced the indigo
+  Linear/Vercel look with a **strictly-flat editorial** aesthetic — airy grey canvas, hairline
+  borders, **no shadows or rounded corners**, a single calm **slate-blue** accent, and
+  **uppercase-monospace** labels/metadata. Messages render as **left-aligned labeled blocks** (role
+  marker + label + metadata header, indented content, marginalia action links) for both roles; the
+  composer is a white **"input horizon"** strip with a monospace SEND. Palette is limited to
+  **black / white / grey / slate-blue** (indigo and red dropped → "destructive" renders as ink, with
+  the trash icon + confirm dialog carrying the danger cue). **Dark mode removed** (light only). New
+  favicon (flat slate mark). Repetition removed via shared primitives: `CheckSquare` (one selection
+  box for sidebar/message/model-picker/branch-map), `Marginalia` (uppercase-mono text actions), and
+  `SectionLabel` (settings headings). All re-skin flows through `src/index.css` tokens (a `--radius`
+  of 0, neutralized shadow scale, and a `label-mono` utility), so the palette/finish live in one file.
 
 - **WebDAV sync deferred** (user request, 2026-05-28). M6 is now *message actions & branching*;
   sync moves to a post-M7 "Deferred" milestone.

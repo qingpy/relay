@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
-  Check,
   ChevronDown,
   ChevronsDown,
   ChevronsUp,
   ChevronUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { CheckSquare } from '@/components/ui/check-square';
 import { getMessages, getSession } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { activePath } from '@/lib/tree';
@@ -114,7 +114,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
         <SelectionToolbar messages={messages} assistantIds={assistantIds} />
       )}
       <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
           {messages.map((m) =>
             selectionMode && m.role === 'assistant' ? (
               <SelectableRow
@@ -135,17 +135,17 @@ export function MessageList({ sessionId }: { sessionId: string }) {
       </div>
 
       {messages.length > 2 && (
-        <div className="absolute bottom-3 right-3 flex flex-col gap-1 rounded-lg border border-border bg-card/90 p-1 shadow-sm backdrop-blur">
-          <NavButton onClick={jumpTop} title="First (Ctrl+Home)">
+        <div className="absolute bottom-3 right-3 flex flex-col gap-1 border border-border bg-card/90 p-1 backdrop-blur">
+          <NavButton onClick={jumpTop} title="First · Ctrl+Home">
             <ChevronsUp />
           </NavButton>
-          <NavButton onClick={prevUser} title="Previous turn (Alt+↑)">
+          <NavButton onClick={prevUser} title="Previous turn · Alt+↑">
             <ChevronUp />
           </NavButton>
-          <NavButton onClick={nextUser} title="Next turn (Alt+↓)">
+          <NavButton onClick={nextUser} title="Next turn · Alt+↓">
             <ChevronDown />
           </NavButton>
-          <NavButton onClick={jumpBottom} title="Latest (Ctrl+End)">
+          <NavButton onClick={jumpBottom} title="Latest · Ctrl+End">
             <ChevronsDown />
           </NavButton>
         </div>
@@ -170,8 +170,10 @@ function SelectableRow({
       data-role={message.role}
       onClick={onToggle}
       className={cn(
-        'flex cursor-pointer gap-3 rounded-lg p-2 transition-colors',
-        checked ? 'bg-primary/5 ring-1 ring-inset ring-primary/30' : 'hover:bg-accent/40',
+        'flex cursor-pointer gap-3 p-2 transition-colors',
+        checked
+          ? 'bg-primary/5 ring-1 ring-inset ring-primary/30'
+          : 'hover:bg-accent/40',
       )}
     >
       <button
@@ -182,14 +184,9 @@ function SelectableRow({
         }}
         role="checkbox"
         aria-checked={checked}
-        className={cn(
-          'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border transition-colors',
-          checked
-            ? 'border-primary bg-primary text-primary-foreground'
-            : 'border-input',
-        )}
+        className="mt-1"
       >
-        {checked && <Check className="size-3" />}
+        <CheckSquare checked={checked} />
       </button>
       <div className="pointer-events-none min-w-0 flex-1">{children}</div>
     </div>
