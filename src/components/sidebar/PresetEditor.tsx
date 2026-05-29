@@ -14,7 +14,13 @@ import {
   updateFolderConfig,
 } from '@/db/repo';
 import type { Folder, ModelSettings, Session } from '@/db/types';
-import { decodeModelChoice, encodeModelChoice, modelGroups } from '@/lib/models';
+import {
+  decodeModelChoice,
+  encodeModelChoice,
+  findModel,
+  modelGroups,
+  reasoningKind,
+} from '@/lib/models';
 
 const FIELD = 'flex flex-col gap-3';
 const FLAT_INPUT =
@@ -74,6 +80,9 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
   const groups = modelGroups(connections);
   const temperature = settings.temperature ?? 1;
   const topP = settings.topP ?? 1;
+  const reasoning = conn
+    ? reasoningKind(conn.type, findModel(conn, model).capabilities)
+    : 'none';
 
   const saveSettings = (patch: Partial<ModelSettings>) => {
     const next = { ...settings, ...patch };
@@ -155,7 +164,7 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
         />
       </div>
 
-      {conn?.type === 'vertex' ? (
+      {reasoning === 'budget' && (
         <div className={FIELD}>
           <GroupHeader label="Thinking budget" />
           <input
@@ -173,25 +182,19 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
             className={FLAT_INPUT}
           />
         </div>
-      ) : (
+      )}
+
+      {reasoning === 'effort' && (
         <div className={FIELD}>
           <GroupHeader label="Reasoning effort" />
-          <FlatSelect
-            value={settings.reasoningEffort ?? 'off'}
+          <input
+            value={settings.reasoningEffort ?? ''}
             onChange={(e) =>
-              saveSettings({
-                reasoningEffort:
-                  e.target.value === 'off'
-                    ? undefined
-                    : (e.target.value as 'low' | 'medium' | 'high'),
-              })
+              saveSettings({ reasoningEffort: e.target.value.trim() || undefined })
             }
-          >
-            <option value="off">Off</option>
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-          </FlatSelect>
+            placeholder="Default — e.g. minimal, low, medium, high"
+            className={FLAT_INPUT}
+          />
         </div>
       )}
 

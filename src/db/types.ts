@@ -97,8 +97,12 @@ export interface ModelSettings {
   temperature?: number;
   topP?: number;
   maxTokens?: number;
-  /** OpenAI-style reasoning effort. */
-  reasoningEffort?: 'low' | 'medium' | 'high';
+  /**
+   * OpenAI-style reasoning effort. Free text, because the accepted set varies
+   * by model (GPT-5 adds `minimal`, xAI mini reasoners only do `low`/`high`,
+   * some reason always with no knob) — the user types what their model accepts.
+   */
+  reasoningEffort?: string;
   /** Gemini-style thinking token budget. */
   thinkingBudget?: number;
 }
