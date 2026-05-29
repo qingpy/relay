@@ -55,9 +55,7 @@ export function resolveConfig(
   const capabilities =
     connection && model ? findModel(connection, model).capabilities : NO_CAPS;
 
-  const kind = connection
-    ? reasoningKind(connection.type, capabilities)
-    : 'none';
+  const kind = reasoningKind(capabilities);
 
   const settings: ProviderSettings = {
     ...sanitizeReasoning(folder?.settings ?? {}, kind),

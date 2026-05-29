@@ -99,13 +99,12 @@ export interface ModelSettings {
   topP?: number;
   maxTokens?: number;
   /**
-   * OpenAI-style reasoning effort. Free text, because the accepted set varies
-   * by model (GPT-5 adds `minimal`, xAI mini reasoners only do `low`/`high`,
-   * some reason always with no knob) — the user types what their model accepts.
+   * Reasoning effort. Free text, because the accepted set varies by model and
+   * protocol — OpenAI-compatible models take it as `reasoning_effort`,
+   * Vertex/Gemini as `thinkingLevel` (e.g. `low` / `medium` / `high`). The user
+   * types what their model accepts.
    */
   reasoningEffort?: string;
-  /** Gemini-style thinking token budget. */
-  thinkingBudget?: number;
 }
 
 /** The full settings object handed to a provider's `buildRequest`. */

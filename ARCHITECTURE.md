@@ -166,11 +166,12 @@ The proxy streams the upstream SSE straight back; `src/lib/sse.ts` parses it and
 
 **Capabilities & reasoning.** Each saved model carries `{vision, pdf, reasoning,
 webSearch, toolUse}` (inferred in `models.ts`, user-editable in Connections), used
-to gate the composer and the reasoning control. `reasoningKind(type, caps)` →
-`none` (no knob) / `budget` (Vertex numeric `thinkingBudget`) / `effort`
-(OpenAI-style string, chosen from the global `appConfig.reasoningEfforts` list).
-`sanitizeReasoning()` strips the inapplicable knob at the resolve boundary so a
-stale value is never sent.
+to gate the composer and the reasoning control. `reasoningKind(caps)` → `none`
+(no knob) / `effort` (a string chosen from the global `appConfig.reasoningEfforts`
+list). Every reasoning-capable model uses the same effort knob — OpenAI-compatible
+endpoints send it as `reasoning_effort`, Vertex/Gemini as `thinkingConfig.thinkingLevel`.
+`sanitizeReasoning()` strips it at the resolve boundary when the model can't reason,
+so a stale value is never sent.
 
 **Config resolution.** `src/lib/resolve.ts` (`resolveConfig`, live via
 `useResolved.ts`) turns a session + its preset + connections into the effective
