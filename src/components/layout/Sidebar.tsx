@@ -11,7 +11,7 @@ export function Sidebar() {
   const toggleChatSelectMode = useUiStore((s) => s.toggleChatSelectMode);
 
   return (
-    <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-6 text-sidebar-foreground">
+    <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-6 text-sidebar-foreground max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40">
       <div className="flex items-center justify-between px-8 pb-6">
         <span className="label-mono text-primary">Relay</span>
         <button

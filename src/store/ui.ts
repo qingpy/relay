@@ -2,6 +2,10 @@ import { create } from 'zustand';
 
 const COLLAPSED_KEY = 'relay.collapsedFolders';
 
+/** Below `md` the sidebar overlays the chat, so it starts closed and dismisses
+ *  itself once a chat is opened. */
+const isNarrow = () => window.matchMedia('(max-width: 767px)').matches;
+
 function loadCollapsed(): Record<string, boolean> {
   try {
     return JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? '{}');
@@ -45,6 +49,9 @@ interface UiState {
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
 
+  shortcutsOpen: boolean;
+  setShortcutsOpen: (open: boolean) => void;
+
   collapsedFolders: Record<string, boolean>;
   toggleFolder: (id: string) => void;
 }
@@ -52,7 +59,13 @@ interface UiState {
 export const useUiStore = create<UiState>((set) => ({
   activeSessionId: null,
   setActiveSession: (id) =>
-    set({ activeSessionId: id, selectionMode: false, selected: {} }),
+    set({
+      activeSessionId: id,
+      selectionMode: false,
+      selected: {},
+      // On a narrow screen the sidebar is an overlay — get out of the way.
+      ...(id && isNarrow() ? { sidebarOpen: false } : {}),
+    }),
 
   activePresetId: null,
   setActivePreset: (id) => set({ activePresetId: id }),
@@ -87,12 +100,15 @@ export const useUiStore = create<UiState>((set) => ({
     set({ selectedChats: Object.fromEntries(ids.map((id) => [id, true])) }),
   clearChatSelection: () => set({ selectedChats: {} }),
 
-  sidebarOpen: true,
+  sidebarOpen: !isNarrow(),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 
   settingsOpen: false,
   setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+  shortcutsOpen: false,
+  setShortcutsOpen: (open) => set({ shortcutsOpen: open }),
 
   collapsedFolders: loadCollapsed(),
   toggleFolder: (id) =>

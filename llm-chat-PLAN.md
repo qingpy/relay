@@ -254,8 +254,13 @@ Identical SPA + proxy for all targets. Pick later.
   scheduled); auto-title; multi-select (messages, branch map, sidebar chats). See §9 decisions.
 - **M7 — UI/design polish & deploy** ⏳: ✅ **visual redesign** ("Unboxed Stationery": strictly-flat,
   slate-on-grey, light-only, block-style messages, uppercase-mono labels, "input horizon" composer;
-  see §9). Remaining: error/loading affordances (toasts, skeletons, retry), keyboard-shortcut pass,
-  bundle **code-splitting** (currently one ~1.2 MB chunk), then deploy to VPS (Caddy) or Cloudflare.
+  see §9). ✅ **code-splitting** (one ~1.19 MB chunk → ~540 KB initial; the markdown stack —
+  KaTeX/highlight.js/remark/rehype — and Settings load on demand). ✅ **error/retry & a11y**
+  (inline error + **Retry** on a failed turn; `role=alert`/`role=status`/`aria-busy` cues). ✅
+  **keyboard help** (`?` or the header **Keys** link; ⌘/Ctrl+B toggles the sidebar). ✅
+  **responsive** (the sidebar overlays the chat below `md`, starts closed there, auto-dismisses on
+  open). ✅ **per-model reasoning effort** (free-typed; see §9). Remaining: **deploy** to VPS
+  (Caddy) or Cloudflare — target still open (the only open M7 item).
 - **Deferred — WebDAV sync**: largely superseded by local backup/restore; revisit if cross-device
   sync is wanted.
 
@@ -269,14 +274,20 @@ clean. Verified in-session via fake-indexeddb tests (Dexie migrations v2–v5, c
 backup round-trip) and server smokes (chat proxy, Vertex token mint, model listing, backup CRUD).
 Working tree clean; all work pushed to `origin/main`.
 
-**Next session — M7 (remaining polish, then deploy):**
-- ✅ Visual redesign done — the flat "Unboxed Stationery" light theme (see §9). Remaining visual
-  work: responsive/narrow-width layout; revisit any surfaces only seen with seeded chat data.
-- Error/loading affordances (toasts, skeletons, retry).
-- **Code-splitting**: the bundle is one ~1.1 MB chunk — lazy-load KaTeX / markdown / highlight and
-  the dialogs to cut it down.
-- Keyboard-shortcut pass and accessibility.
-- Deploy (target still open: VPS+Caddy vs Cloudflare).
+**Next session — M7: only deploy remains.** The polish is done:
+- ✅ Visual redesign — the flat "Unboxed Stationery" light theme (see §9).
+- ✅ Code-splitting — lazy Markdown (+ KaTeX as its own parallel chunk) and lazy SettingsDialog;
+  `manualChunks` peels React out for caching. Initial JS ~540 KB (was one ~1.19 MB chunk).
+- ✅ Error/retry & a11y — failed turns show an inline error with a **Retry** that re-runs from the
+  prompting user message; streaming/error states carry aria cues.
+- ✅ Keyboard help & responsive — a `?` shortcut sheet (also the header **Keys** link) plus
+  ⌘/Ctrl+B; the sidebar overlays the chat on narrow screens.
+- ⏳ **Deploy** — target still open (VPS+Caddy vs Cloudflare); this is the only remaining M7 work.
+
+Chose **not** to add a toast library or skeletons: errors surface inline + retry, transient
+feedback is already contextual (Copy → "Copied", backup/connection-test statuses), and the lazy
+Markdown fallback renders raw text immediately — so a toast/skeleton layer would be redundant
+weight against the "light footprint" principle.
 
 **Carry-over notes / caveats:**
 - Backups contain API keys in plaintext (gitignored); on a VPS protect the backup dir and put the
@@ -299,6 +310,15 @@ Resolved:
 - **Default provider/model**: **OpenRouter**, model `openai/gpt-4o-mini`. Provider ids
   are `openrouter | openai | gemini | vertex`; OpenRouter and OpenAI share
   `OpenAICompatProvider` (differ by base URL).
+
+- **Reasoning effort is free-typed, per model** (user request, M7, 2026-05-28): the accepted set
+  varies by model (GPT-5 adds `minimal`, xAI mini reasoners only do `low`/`high`, DeepSeek-R1 /
+  grok-4 / QwQ reason with no knob), so a fixed Off/Low/Medium/High dropdown was wrong. The preset
+  editor now shows a **text field** the user types (`reasoningEffort: string`); the control is
+  **gated on the model's saved `reasoning` capability** and split by protocol via
+  `reasoningKind(type, caps)` — `none` (no knob), `budget` (Vertex numeric `thinkingBudget`), or
+  `effort` (the typed string). `sanitizeReasoning()` strips the inapplicable knob at the resolve
+  boundary, so a stale value (after a model switch / backup import / migration) is never sent.
 
 - **UI redesign — "Unboxed Stationery"** (user request, M7, 2026-05-28): replaced the indigo
   Linear/Vercel look with a **strictly-flat editorial** aesthetic — airy grey canvas, hairline
