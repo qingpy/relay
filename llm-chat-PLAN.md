@@ -252,23 +252,22 @@ Identical SPA + proxy for all targets. Pick later.
   connections (Custom OpenAI-style + Vertex) with per-model capabilities & test; presets (model +
   settings + system prompt) with active-preset switching; backup & restore (file + local server +
   scheduled); auto-title; multi-select (messages, branch map, sidebar chats). See §9 decisions.
-- **M7 — UI/design polish & deploy** ⏳: ✅ **visual redesign** ("Unboxed Stationery": strictly-flat,
+- **M7 — UI/design polish** ✅: **visual redesign** ("Unboxed Stationery": strictly-flat,
   slate-on-grey, light-only, block-style messages, uppercase-mono labels, "input horizon" composer;
-  see §9). ✅ **code-splitting** (one ~1.19 MB chunk → ~540 KB initial; the markdown stack —
-  KaTeX/highlight.js/remark/rehype — and Settings load on demand). ✅ **error/retry & a11y**
-  (inline error + **Retry** on a failed turn; `role=alert`/`role=status`/`aria-busy` cues). ✅
-  **keyboard help** (`?` or the header **Keys** link; ⌘/Ctrl+B toggles the sidebar). ✅
+  see §9). **code-splitting** (one ~1.19 MB chunk → ~540 KB initial; the markdown stack —
+  KaTeX/highlight.js/remark/rehype — and Settings load on demand). **error/retry & a11y**
+  (inline error + **Retry** on a failed turn; `role=alert`/`role=status`/`aria-busy` cues).
+  **keyboard help** (`?` or the header **Keys** link; ⌘/Ctrl+B toggles the sidebar).
   **responsive** (the sidebar overlays the chat below `md`, starts closed there, auto-dismisses on
-  open). ✅ **per-model reasoning effort** (free-typed; see §9). ✅ **deployed & live** at
-  **https://163.192.26.239.nip.io** on the user's Oracle Cloud Ampere VPS — Caddy auto-HTTPS in
-  front of the Hono server (SPA + `/api`, one origin), HTTP Basic auth gate, systemd-managed,
-  agent-managed from the dev machine (`deploy/update.sh`; runbook in `deploy/SERVER.md`).
-  **M7 is complete.**
-- **Deferred — WebDAV sync**: largely superseded by local backup/restore; revisit if cross-device
-  sync is wanted.
+  open). **per-model reasoning effort** (free-typed; see §9).
+- **M8 — Local + WebDAV sync** ⏳ (current): Relay stays **local-first and run locally** — a public
+  server deployment was built then **reverted** (see §9): requiring a network round-trip to a VPS
+  just to open the chat app runs against the local-first principle. Instead, cross-device continuity
+  comes from **WebDAV sync** through the local proxy (`/api/sync`, plan §6) to the user's own WebDAV
+  store — used opportunistically (works offline, syncs when reachable), not required to use the app.
 
-The functional build is complete through **M6.5** and verified by the user; **M7** (design + deploy)
-is the remaining stage.
+The functional build is complete through **M7** (and verified by the user); **M8** (local + WebDAV
+sync) is the remaining stage.
 
 ### Status & handoff (2026-05-28)
 
@@ -277,7 +276,7 @@ clean. Verified in-session via fake-indexeddb tests (Dexie migrations v2–v5, c
 backup round-trip) and server smokes (chat proxy, Vertex token mint, model listing, backup CRUD).
 Working tree clean; all work pushed to `origin/main`.
 
-**Next session — M7: only deploy remains.** The polish is done:
+**M7 polish is done:**
 - ✅ Visual redesign — the flat "Unboxed Stationery" light theme (see §9).
 - ✅ Code-splitting — lazy Markdown (+ KaTeX as its own parallel chunk) and lazy SettingsDialog;
   `manualChunks` peels React out for caching. Initial JS ~540 KB (was one ~1.19 MB chunk).
@@ -285,22 +284,24 @@ Working tree clean; all work pushed to `origin/main`.
   prompting user message; streaming/error states carry aria cues.
 - ✅ Keyboard help & responsive — a `?` shortcut sheet (also the header **Keys** link) plus
   ⌘/Ctrl+B; the sidebar overlays the chat on narrow screens.
-- ✅ **Deployed & live** on the user's **Oracle Cloud Ampere (4/24) VPS** at
-  **https://163.192.26.239.nip.io**. Caddy (auto-HTTPS, `nip.io` hostname) reverse-proxies the Hono
-  server, which serves the SPA + `/api` on one origin (`127.0.0.1:8787`) under an env-gated HTTP
-  Basic auth gate; both `relay` and `caddy` run as enabled systemd units. Code is shipped from the
-  dev machine via `git archive` over SSH (no GitHub creds on the box) — `deploy/update.sh` does it
-  in one command; the live runbook is `deploy/SERVER.md`. Verified end-to-end: 401→200 through the
-  gate, SPA serves, HTTP 308→HTTPS. (`DEPLOY.md` remains the generic from-scratch guide.)
+- ✅ Per-model reasoning effort — free-typed, gated by capability (see §9).
 
-Chose **not** to add a toast library or skeletons: errors surface inline + retry, transient
-feedback is already contextual (Copy → "Copied", backup/connection-test statuses), and the lazy
-Markdown fallback renders raw text immediately — so a toast/skeleton layer would be redundant
-weight against the "light footprint" principle.
+**Deployment reverted (2026-05-29).** A public VPS deployment (Oracle Ampere + Caddy auto-HTTPS +
+HTTP Basic gate, served from the Hono server) was built and went live, then **torn down at the
+user's request** — needing to reach a server over the internet just to open the chat app conflicts
+with the local-first design. The VPS was returned to its pre-deploy state (Node/Caddy/app removed)
+and the deploy kit (`DEPLOY.md`, `deploy/`, the proxy auth gate) was removed from the repo.
+
+**Next — M8: local + WebDAV sync.** Relay runs locally (`npm run dev`, or `npm run build` + `npm run
+serve`). Cross-device continuity + backup come from **WebDAV** through the local proxy (`/api/sync`):
+the browser holds the data (IndexedDB), and a whole-DB snapshot syncs to the user's WebDAV store
+opportunistically (last-write-wins, single user). The proxy mediates so there's no CORS/credential
+exposure in the browser. WebDAV target/credentials are the user's to provide (Nextcloud, a NAS, a
+hosted WebDAV, etc.).
 
 **Carry-over notes / caveats:**
-- Backups contain API keys in plaintext (gitignored); on a VPS protect the backup dir and put the
-  proxy behind auth — the proxy currently has **no auth** (fine for local only).
+- Backups contain API keys in plaintext (gitignored). The proxy has **no auth** — fine for the
+  intended **local** use; do not expose it publicly without a gate.
 - Scheduled backups run only while a tab is open (data lives in the browser).
 - An empty preset is configured after it has a chat (header gear); new presets auto-seed the first
   enabled connection's first model.
@@ -342,8 +343,10 @@ Resolved:
   `SectionLabel` (settings headings). All re-skin flows through `src/index.css` tokens (a `--radius`
   of 0, neutralized shadow scale, and a `label-mono` utility), so the palette/finish live in one file.
 
-- **WebDAV sync deferred** (user request, 2026-05-28). M6 is now *message actions & branching*;
-  sync moves to a post-M7 "Deferred" milestone.
+- **WebDAV sync — reinstated as M8** (user request, 2026-05-29). Originally M6, then deferred in
+  favor of local backup; now the chosen path for cross-device continuity after the public-server
+  deployment was reverted (below). Local-first stays the model; WebDAV is opportunistic sync/backup
+  through the local proxy (`/api/sync`, §6) to the user's own WebDAV store.
 - **Connections & presets redesign** (user request, 2026-05-28): fixed providers replaced by
   user-defined **connections** (multiple per protocol, custom name/URL/key, saved model catalog with
   per-model capabilities); folders became **Presets** that fix the model/settings/system-prompt for
@@ -410,12 +413,16 @@ Resolved:
     each session's last message.
 
 Still open:
-- ✅ **Deploy target** decided (2026-05-28): the user's **Oracle Cloud Ampere (4/24) VPS** behind
-  **Caddy** (auto-HTTPS), single origin via the Hono server, gated by env-set HTTP Basic auth. See
-  `DEPLOY.md` + `deploy/`. (Cloudflare Pages/Functions remains a possible fallback; Vertex token
-  minting would need adapting to the Workers runtime there.)
+- **Public deployment — tried then reverted** (user decision, 2026-05-29): a VPS deploy (Oracle
+  Ampere + Caddy auto-HTTPS + env-gated HTTP Basic auth, served from the Hono server) was built,
+  verified live, then torn down — requiring a server round-trip to *use* a local-first chat app is
+  the wrong model. The VPS was restored to its pre-deploy state and the deploy kit removed from the
+  repo. Relay stays **run-locally**; cross-device needs are met by **WebDAV sync** (M8). A public
+  host is not planned; if ever revisited, the gate + single-origin Hono approach is the template.
 - Confirm **Vertex** project/location/region and that a service-account JSON is available
   (Vertex provider is registered but not yet implemented).
+- **WebDAV target** (M8) — the user's WebDAV server URL + credentials (Nextcloud / NAS / hosted /
+  the VPS repurposed as a WebDAV host); needed to wire and test sync.
 
 ## 10. First Steps (when you open the new session)
 
