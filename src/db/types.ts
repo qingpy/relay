@@ -191,11 +191,17 @@ export interface Prompt {
 }
 
 export interface WebDavConfig {
+  /** Base WebDAV URL, e.g. https://dav.example.com/remote.php/dav/files/me/ */
   url: string;
   user: string;
   pass: string;
+  /** Folder under the base URL to keep Relay's snapshot in (default `relay`). */
   path: string;
   enabled: boolean;
+  /** How often to sync while the app is open, in minutes (default 15). */
+  intervalMinutes?: number;
+  /** Last successful sync (push or pull), for the Settings readout. */
+  lastSyncAt?: number;
 }
 
 export interface AppConfig {
