@@ -1,4 +1,4 @@
-import { memo, useLayoutEffect, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useLayoutEffect, useRef, useState } from 'react';
 import { AlertCircle, X } from 'lucide-react';
 import { Marginalia } from '@/components/ui/marginalia';
 import type { Message } from '@/db/types';
@@ -8,7 +8,6 @@ import { formatStamp, formatDateTime } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
-import { Markdown } from './Markdown';
 import { MessageActions } from './MessageActions';
 import { MessageAttachments } from './MessageAttachments';
 import { Reasoning } from './Reasoning';
@@ -17,6 +16,23 @@ import { ToolCard } from './ToolCard';
 
 /** Indent that lines content/actions up under the role label (marker + gap). */
 const INDENT = 'pl-[22px]';
+
+/**
+ * The markdown renderer pulls in KaTeX + highlight.js + the remark/rehype stack
+ * (the bulk of the bundle), so it loads on demand. Until the chunk arrives the
+ * raw text shows in the same `.md` box — readable instantly, no layout flash.
+ */
+const Markdown = lazy(() =>
+  import('./Markdown').then((m) => ({ default: m.Markdown })),
+);
+
+function MessageBody({ text }: { text: string }) {
+  return (
+    <Suspense fallback={<div className="md whitespace-pre-wrap">{text}</div>}>
+      <Markdown>{text}</Markdown>
+    </Suspense>
+  );
+}
 
 function RoleTag({ role }: { role: 'user' | 'assistant' }) {
   const assistant = role === 'assistant';
@@ -161,7 +177,7 @@ export const MessageItem = memo(function MessageItem({
         {toolCalls.map((tc, i) => (
           <ToolCard key={tc.id || i} call={tc} />
         ))}
-        {text ? <Markdown>{text}</Markdown> : showDots ? <StreamingDots /> : null}
+        {text ? <MessageBody text={text} /> : showDots ? <StreamingDots /> : null}
         {message.error && (
           <div className="flex items-start gap-2 border border-border border-l-2 border-l-primary bg-card px-3 py-2 text-sm">
             <AlertCircle className="mt-0.5 size-4 shrink-0 text-primary" />

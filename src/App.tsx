@@ -1,14 +1,21 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { ChatPane } from '@/components/layout/ChatPane';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { SettingsDialog } from '@/components/settings/SettingsDialog';
 import { ConfirmDialog } from '@/components/ui/confirm';
 import { ensureDefaultPreset } from '@/db/repo';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
 import { useUiStore } from '@/store/ui';
 
+// Settings (with its connection/backup/prompt managers) loads on first open.
+const SettingsDialog = lazy(() =>
+  import('@/components/settings/SettingsDialog').then((m) => ({
+    default: m.SettingsDialog,
+  })),
+);
+
 export default function App() {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
 
   // Guarantee a connection and a preset exist (chats always live in a preset).
   useEffect(() => {
@@ -26,7 +33,11 @@ export default function App() {
     <div className="flex h-full w-full overflow-hidden">
       {sidebarOpen && <Sidebar />}
       <ChatPane />
-      <SettingsDialog />
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsDialog />
+        </Suspense>
+      )}
       <ConfirmDialog />
     </div>
   );
