@@ -5,7 +5,7 @@ import type {
   ProviderSettings,
   Session,
 } from '@/db/types';
-import { findModel } from '@/lib/models';
+import { findModel, reasoningKind, sanitizeReasoning } from '@/lib/models';
 
 export interface ResolvedConfig {
   connection?: Connection;
@@ -52,14 +52,18 @@ export function resolveConfig(
       .filter((s): s is string => !!s)
       .join('\n\n') || undefined;
 
+  const capabilities =
+    connection && model ? findModel(connection, model).capabilities : NO_CAPS;
+
+  const kind = connection
+    ? reasoningKind(connection.type, capabilities)
+    : 'none';
+
   const settings: ProviderSettings = {
-    ...(folder?.settings ?? {}),
+    ...sanitizeReasoning(folder?.settings ?? {}, kind),
     systemPrompt,
     webSearch: session?.webSearch ?? false,
   };
-
-  const capabilities =
-    connection && model ? findModel(connection, model).capabilities : NO_CAPS;
 
   return { connection, model, settings, capabilities };
 }

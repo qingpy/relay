@@ -2,6 +2,7 @@ import type {
   Connection,
   ConnectionType,
   ModelCapabilities,
+  ModelSettings,
   SavedModel,
 } from '@/db/types';
 
@@ -36,6 +37,40 @@ export function inferCapabilities(
 
 export function toSavedModel(id: string, type: ConnectionType): SavedModel {
   return { id, capabilities: inferCapabilities(id, type) };
+}
+
+/**
+ * How a model exposes its "thinking" knob:
+ * - `none`   — the model doesn't reason (or the capability is turned off).
+ * - `budget` — a numeric token budget (Gemini / Vertex `thinkingBudget`).
+ * - `effort` — an OpenAI-style effort string the user types (the accepted set
+ *   varies per model, so we don't constrain it).
+ */
+export type ReasoningKind = 'none' | 'budget' | 'effort';
+
+/** Which reasoning control a model exposes — gated by the saved capability so a
+ *  non-reasoning model shows no knob, and split by protocol (Vertex = budget). */
+export function reasoningKind(
+  type: ConnectionType,
+  caps: ModelCapabilities,
+): ReasoningKind {
+  if (!caps.reasoning) return 'none';
+  return type === 'vertex' ? 'budget' : 'effort';
+}
+
+/**
+ * Strip the reasoning knob that doesn't apply to the resolved model so a stale
+ * value (left over after a model switch, a backup import, or a migration) is
+ * never sent upstream — e.g. a thinking budget to an OpenAI model.
+ */
+export function sanitizeReasoning(
+  settings: ModelSettings,
+  kind: ReasoningKind,
+): ModelSettings {
+  const out = { ...settings };
+  if (kind !== 'effort') delete out.reasoningEffort;
+  if (kind !== 'budget') delete out.thinkingBudget;
+  return out;
 }
 
 /** Curated starter models per flavor (used when seeding a fresh connection). */
