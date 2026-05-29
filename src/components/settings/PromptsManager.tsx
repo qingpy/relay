@@ -94,7 +94,7 @@ function Editor({ prompt, onDelete }: { prompt: Prompt; onDelete: () => void }) 
         <button
           type="button"
           onClick={onDelete}
-          title="Delete prompt"
+          aria-label="Delete prompt"
           className="flex size-9 shrink-0 items-center justify-center border border-input text-muted-foreground transition-colors hover:border-foreground hover:text-primary"
         >
           <Trash2 className="size-4" />

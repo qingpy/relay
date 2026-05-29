@@ -28,18 +28,8 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
   if (usage.tokens === 0 && usage.files === 0) return null;
 
   return (
-    <span
-      className="label-mono hidden shrink-0 text-muted-foreground sm:inline"
-      title={
-        `≈ ${usage.tokens.toLocaleString()} tokens across ${usage.turns} ` +
-        `message${usage.turns === 1 ? '' : 's'} in context (after the last ` +
-        `divider), estimated from text` +
-        (usage.files
-          ? ` · ${usage.files} attachment${usage.files === 1 ? '' : 's'} not counted`
-          : '')
-      }
-    >
-      ~{formatTokens(usage.tokens)} ctx
+    <span className="label-mono hidden shrink-0 text-muted-foreground sm:inline">
+      {formatTokens(usage.tokens)} ctx
       {usage.files > 0 && ` · ${usage.files} file${usage.files === 1 ? '' : 's'}`}
     </span>
   );

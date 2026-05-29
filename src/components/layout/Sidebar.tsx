@@ -17,7 +17,6 @@ export function Sidebar() {
         <button
           type="button"
           onClick={toggleSidebar}
-          title="Collapse sidebar"
           aria-label="Collapse sidebar"
           className="font-mono text-base leading-none text-muted-foreground transition-colors hover:text-foreground"
         >
@@ -26,19 +25,11 @@ export function Sidebar() {
       </div>
 
       <div className="flex items-center gap-3 px-8 pb-8">
-        <Marginalia onClick={() => void startNewSession()} title="New chat">
-          New chat
-        </Marginalia>
+        <Marginalia onClick={() => void startNewSession()}>New chat</Marginalia>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia onClick={() => void createFolder()} title="New preset">
-          New preset
-        </Marginalia>
+        <Marginalia onClick={() => void createFolder()}>New preset</Marginalia>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia
-          onClick={toggleChatSelectMode}
-          active={chatSelectMode}
-          title="Select chats"
-        >
+        <Marginalia onClick={toggleChatSelectMode} active={chatSelectMode}>
           Select
         </Marginalia>
       </div>

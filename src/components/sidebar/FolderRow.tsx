@@ -101,7 +101,7 @@ export function FolderRow({
     >
       <button
         type="button"
-        title={collapsed ? 'Expand' : 'Collapse'}
+        aria-label={collapsed ? 'Expand preset' : 'Collapse preset'}
         onPointerDown={stop}
         onClick={(e) => {
           stop(e);
@@ -142,7 +142,7 @@ export function FolderRow({
                 type="button"
                 onPointerDown={stop}
                 onClick={stop}
-                title="Preset options"
+                aria-label="Preset options"
                 className="hidden size-6 shrink-0 items-center justify-center text-muted-foreground transition hover:text-foreground focus-visible:opacity-100 group-hover:flex data-[state=open]:flex"
               >
                 <MoreHorizontal className="size-4" />

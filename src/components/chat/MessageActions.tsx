@@ -61,29 +61,19 @@ export function MessageActions({
 
   return (
     <div className="flex items-center gap-4">
-      <Marginalia onClick={() => void copy()} title="Copy as markdown">
+      <Marginalia onClick={() => void copy()}>
         {copied ? 'Copied' : 'Copy'}
       </Marginalia>
       {isUser ? (
         <>
-          <Marginalia onClick={onEdit} title="Edit & resend">
-            Edit
-          </Marginalia>
-          <Marginalia onClick={regenerate} title="Regenerate reply">
-            Regenerate
-          </Marginalia>
+          <Marginalia onClick={onEdit}>Edit</Marginalia>
+          <Marginalia onClick={regenerate}>Regenerate</Marginalia>
         </>
       ) : (
-        <Marginalia onClick={() => void download()} title="Download .md">
-          Download
-        </Marginalia>
+        <Marginalia onClick={() => void download()}>Download</Marginalia>
       )}
-      <Marginalia onClick={fork} title="Branch from here">
-        Branch
-      </Marginalia>
-      <Marginalia onClick={() => void remove()} title="Delete">
-        Delete
-      </Marginalia>
+      <Marginalia onClick={fork}>Branch</Marginalia>
+      <Marginalia onClick={() => void remove()}>Delete</Marginalia>
     </div>
   );
 }

@@ -34,7 +34,6 @@ export function ModelSelect({
         <button
           type="button"
           disabled={disabled || groups.length === 0}
-          title="Model"
           className="group flex min-w-0 items-center gap-2 outline-none disabled:opacity-50"
         >
           <span className="label-mono text-muted-foreground">Model</span>

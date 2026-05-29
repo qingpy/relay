@@ -72,21 +72,19 @@ export function SelectionToolbar({
         {allSelected ? 'Deselect all' : 'Select all'}
       </Marginalia>
       <div className="ml-auto flex items-center gap-3">
-        <Marginalia disabled={!count} onClick={() => void copy()} title="Copy as markdown">
+        <Marginalia disabled={!count} onClick={() => void copy()}>
           Copy
         </Marginalia>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia disabled={!count} onClick={() => void exportMd()} title="Export .md">
+        <Marginalia disabled={!count} onClick={() => void exportMd()}>
           Export
         </Marginalia>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia disabled={!count} onClick={() => void remove()} title="Delete selected">
+        <Marginalia disabled={!count} onClick={() => void remove()}>
           Delete
         </Marginalia>
         <span className="text-muted-foreground/30">·</span>
-        <Marginalia onClick={toggleSelectionMode} title="Done">
-          Done
-        </Marginalia>
+        <Marginalia onClick={toggleSelectionMode}>Done</Marginalia>
       </div>
     </div>
   );

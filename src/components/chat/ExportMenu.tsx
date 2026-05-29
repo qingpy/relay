@@ -20,8 +20,6 @@ export function ExportMenu({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <Marginalia onClick={() => void run()} title="Export chat as markdown">
-      Export
-    </Marginalia>
+    <Marginalia onClick={() => void run()}>Export</Marginalia>
   );
 }
