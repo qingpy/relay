@@ -1,4 +1,8 @@
 import Dexie, { type EntityTable, type Transaction } from 'dexie';
+import {
+  IDBFactory as FakeIDBFactory,
+  IDBKeyRange as FakeIDBKeyRange,
+} from 'fake-indexeddb';
 import type {
   AppConfig,
   Connection,
@@ -12,12 +16,26 @@ import { DEFAULT_BASE_URL, seedModelsFor } from '@/lib/models';
 import type { ConnectionType } from './types.ts';
 
 /**
- * Relay's local-first store. IndexedDB is the source of truth; the network is
- * only for LLM calls and optional WebDAV sync.
+ * Relay's store (plan §9 "Local data store"). The browser keeps the data only
+ * in an **in-memory IndexedDB** — nothing persists to the browser profile / C:.
+ * The durable copy is a single snapshot file owned by the proxy (`/api/data`,
+ * see `src/lib/localstore.ts`), loaded into this DB on boot and written back on
+ * change. Set `USE_LOCAL_STORE = false` to fall back to the browser's
+ * persistent IndexedDB (the pre-M9 behaviour).
  *
  * Indexes list only the fields we query/sort on — not every property.
  */
-class RelayDB extends Dexie {
+export const USE_LOCAL_STORE = true;
+
+type DexieOptions = ConstructorParameters<typeof Dexie>[1];
+
+// One in-memory IndexedDB factory, shared by the app DB. Created once so the
+// whole app talks to the same off-disk store.
+const memoryBackend: DexieOptions | undefined = USE_LOCAL_STORE
+  ? { indexedDB: new FakeIDBFactory(), IDBKeyRange: FakeIDBKeyRange }
+  : undefined;
+
+export class RelayDB extends Dexie {
   folders!: EntityTable<Folder, 'id'>;
   sessions!: EntityTable<Session, 'id'>;
   messages!: EntityTable<Message, 'id'>;
@@ -26,8 +44,8 @@ class RelayDB extends Dexie {
   connections!: EntityTable<Connection, 'id'>;
   appConfig!: EntityTable<AppConfig, 'id'>;
 
-  constructor() {
-    super('relay');
+  constructor(options?: DexieOptions) {
+    super('relay', options);
     this.version(1).stores({
       folders: 'id, parentId, order',
       sessions: 'id, folderId, updatedAt, order',
@@ -200,7 +218,16 @@ async function migrateToPresets(tx: Transaction): Promise<void> {
   }
 }
 
-export const db = new RelayDB();
+export const db = new RelayDB(memoryBackend);
+
+/**
+ * Open the browser's PERSISTENT `relay` IndexedDB (the pre-M9 on-disk store),
+ * for the one-time migration into the local data file. Always the real browser
+ * backend, regardless of `USE_LOCAL_STORE`.
+ */
+export function openPersistentRelayDB(): RelayDB {
+  return new RelayDB(undefined);
+}
 
 export const APP_CONFIG_ID = 'singleton' as const;
 
@@ -212,6 +239,9 @@ export const DEFAULT_APP_CONFIG: AppConfig = {
 export const DEFAULT_TITLE_PROMPT =
   'Summarize this conversation as a short, specific title of at most 6 words. ' +
   'Reply with the title only — no quotes, no trailing punctuation.';
+
+/** Starter reasoning-effort choices (user-editable; see AppConfig.reasoningEfforts). */
+export const DEFAULT_REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'];
 
 /** Read the singleton config, creating it (and a starter connection) on first run. */
 export async function getAppConfig(): Promise<AppConfig> {

@@ -213,6 +213,9 @@ export interface AppConfig {
   titleConnectionId?: string;
   titleModel?: string;
   titlePrompt?: string;
+  /** Global, user-editable reasoning-effort choices offered in preset settings
+   *  (the accepted set varies by model, so the list is yours to curate). */
+  reasoningEfforts?: string[];
   /** Scheduled local backups (run while the app is open). */
   backup?: BackupSettings;
   webdav?: WebDavConfig;

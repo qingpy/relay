@@ -27,6 +27,7 @@
     "clsx": "^2.1.1",
     "dexie": "^4.0.10",
     "dexie-react-hooks": "^1.1.7",
+    "fake-indexeddb": "^6.2.5",
     "hono": "^4.6.14",
     "katex": "^0.16.11",
     "lucide-react": "^0.468.0",
