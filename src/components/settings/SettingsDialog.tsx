@@ -15,7 +15,6 @@ import { BackupSettings } from './BackupSettings';
 import { ConnectionsManager } from './ConnectionsManager';
 import { DataStoreSettings } from './DataStoreSettings';
 import { PromptsManager } from './PromptsManager';
-import { ReasoningEffortSettings } from './ReasoningEffortSettings';
 import { SectionLabel } from './SectionLabel';
 import { WebdavSettings } from './WebdavSettings';
 
@@ -74,7 +73,6 @@ export function SettingsDialog() {
               {panel === 'chats' && (
                 <>
                   <AutoTitleSettings />
-                  <ReasoningEffortSettings />
                   <ExportSettings />
                 </>
               )}
