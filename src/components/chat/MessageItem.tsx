@@ -265,7 +265,7 @@ function UserEditor({
               onClose();
             } else if (
               e.key === 'Enter' &&
-              !e.shiftKey &&
+              (e.ctrlKey || e.metaKey) &&
               !e.nativeEvent.isComposing
             ) {
               e.preventDefault();

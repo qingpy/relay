@@ -17,8 +17,8 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
   {
     title: 'Composer',
     items: [
-      ['Enter', 'Send message'],
-      ['Shift Enter', 'New line'],
+      [`${MOD} Enter`, 'Send message'],
+      ['Enter', 'New line'],
       ['/', 'Quick-prompt palette'],
       ['Esc', 'Close palette · cancel edit'],
     ],
