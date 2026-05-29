@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" fill="#425a70"/>
-  <path d="M10 22V10h6a4 4 0 0 1 1.2 7.8L20 22h-3l-2.6-4H13v4h-3Zm3-6.6h2.8a1.6 1.6 0 0 0 0-3.2H13v3.2Z" fill="#fff"/>
+  <text x="16" y="17" text-anchor="middle" dominant-baseline="central"
+        font-family="'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="28" font-weight="700" fill="#425a70">R</text>
 </svg>
