@@ -1,0 +1,22 @@
+[Unit]
+Description=Relay — LLM chat (SPA + proxy)
+Documentation=https://github.com/qingpy/relay
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Oracle Ubuntu image: default login is "ubuntu". Oracle Linux: use "opc".
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/relay
+# Secrets/config — copied from deploy/relay.env.example (see DEPLOY.md).
+EnvironmentFile=/opt/relay/.env
+# tsx runs the TypeScript server directly (the repo isn't pre-compiled).
+ExecStart=/usr/bin/env node --import tsx server/index.ts
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

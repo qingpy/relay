@@ -259,8 +259,11 @@ Identical SPA + proxy for all targets. Pick later.
   (inline error + **Retry** on a failed turn; `role=alert`/`role=status`/`aria-busy` cues). ✅
   **keyboard help** (`?` or the header **Keys** link; ⌘/Ctrl+B toggles the sidebar). ✅
   **responsive** (the sidebar overlays the chat below `md`, starts closed there, auto-dismisses on
-  open). ✅ **per-model reasoning effort** (free-typed; see §9). Remaining: **deploy** to VPS
-  (Caddy) or Cloudflare — target still open (the only open M7 item).
+  open). ✅ **per-model reasoning effort** (free-typed; see §9). ✅ **deploy configured** — target
+  is the user's **Oracle Cloud Ampere VPS + Caddy**; an HTTP Basic **auth gate** (env-gated) was
+  added to the proxy and the artifacts shipped (`deploy/relay.service`, `deploy/Caddyfile`,
+  `deploy/relay.env.example`, and a beginner `DEPLOY.md`). Remaining: the user runs the guide on
+  the box (their infra/secrets) — M7 is otherwise complete.
 - **Deferred — WebDAV sync**: largely superseded by local backup/restore; revisit if cross-device
   sync is wanted.
 
@@ -282,7 +285,12 @@ Working tree clean; all work pushed to `origin/main`.
   prompting user message; streaming/error states carry aria cues.
 - ✅ Keyboard help & responsive — a `?` shortcut sheet (also the header **Keys** link) plus
   ⌘/Ctrl+B; the sidebar overlays the chat on narrow screens.
-- ⏳ **Deploy** — target still open (VPS+Caddy vs Cloudflare); this is the only remaining M7 work.
+- ✅ **Deploy** — target chosen: the user's **Oracle Cloud Ampere (4/24) VPS + Caddy**. Added an
+  env-gated HTTP Basic **auth gate** to the proxy (`RELAY_AUTH_USER`/`RELAY_AUTH_PASS`; open when
+  unset) and shipped `deploy/relay.service`, `deploy/Caddyfile`, `deploy/relay.env.example`, and a
+  step-by-step `DEPLOY.md` (covers Oracle's two firewall layers, ARM Node install, systemd, Caddy
+  auto-HTTPS). Verified locally: 401 without creds / 200 with, SPA + `/api` on one origin. The user
+  runs the guide on the box.
 
 Chose **not** to add a toast library or skeletons: errors surface inline + retry, transient
 feedback is already contextual (Copy → "Copied", backup/connection-test statuses), and the lazy
@@ -401,7 +409,10 @@ Resolved:
     each session's last message.
 
 Still open:
-- **Deploy target** to optimize for first (local vs VPS vs Cloudflare) — affects only deploy config.
+- ✅ **Deploy target** decided (2026-05-28): the user's **Oracle Cloud Ampere (4/24) VPS** behind
+  **Caddy** (auto-HTTPS), single origin via the Hono server, gated by env-set HTTP Basic auth. See
+  `DEPLOY.md` + `deploy/`. (Cloudflare Pages/Functions remains a possible fallback; Vertex token
+  minting would need adapting to the Workers runtime there.)
 - Confirm **Vertex** project/location/region and that a service-account JSON is available
   (Vertex provider is registered but not yet implemented).
 

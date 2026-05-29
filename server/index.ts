@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono } from 'hono';
+import { basicAuth } from 'hono/basic-auth';
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,23 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST_DIR = join(__dirname, '..', 'dist');
 
 const app = new Hono();
+
+/**
+ * Optional auth gate for public deploys. When `RELAY_AUTH_USER` and
+ * `RELAY_AUTH_PASS` are set, every request — the SPA and the API — needs HTTP
+ * Basic credentials (the browser remembers them and attaches them to the app's
+ * own fetches, so no client changes are needed). Unset = open, for local use.
+ * The proxy holds the API keys and backup access, so a public host must set it.
+ */
+if (process.env.RELAY_AUTH_USER && process.env.RELAY_AUTH_PASS) {
+  app.use(
+    '*',
+    basicAuth({
+      username: process.env.RELAY_AUTH_USER,
+      password: process.env.RELAY_AUTH_PASS,
+    }),
+  );
+}
 
 const api = new Hono();
 api.get('/health', (c) =>
