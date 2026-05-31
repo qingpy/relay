@@ -289,6 +289,14 @@ utility). Shared primitives avoid repetition: `Marginalia` (mono text actions),
   needing a server round-trip just to open a local-first chat app is the wrong
   model. Cross-device needs are met by WebDAV sync. If a public host is ever
   revisited, the template is a single-origin Hono server behind a gate.
+- **Distribution = a local Docker image.** For others to run Relay without the
+  repo, the build is shipped as a multi-arch image (`Dockerfile` → GHCR via
+  `.github/workflows/docker.yml`). The proxy is bundled to one JS file
+  (`npm run build:server`, esbuild), so the runtime image is Node + `dist/` +
+  that bundle, with **no `node_modules`**. All state lives in one `/data` volume
+  (`RELAY_DATA_FILE`/`RELAY_SECRETS_FILE`/`RELAY_BACKUP_DIR` point there). Still
+  local-only — the proxy has no auth, so the image is for self-hosting on your
+  own machine, not a public host.
 
 ---
 

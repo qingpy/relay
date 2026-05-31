@@ -9,7 +9,25 @@ OpenAI-compatible providers (OpenRouter / OpenAI / Groq / local / Gemini AI
 Studio) and Google **Vertex AI**, with streaming, branching conversations,
 markdown + code + math, file uploads, web search, presets, and export.
 
-## Run it
+## Run with Docker (no clone)
+
+The quickest way to run Relay without cloning the repo — one command, no Node
+toolchain:
+
+```bash
+docker run -d --name relay -p 8787:8787 -v relay-data:/data \
+  ghcr.io/qingpy/relay:latest
+```
+
+Open `http://localhost:8787`. Everything you own — the data snapshot, your API
+keys, and backups — lives in the `relay-data` volume (use a bind mount like
+`-v /path/on/host:/data` if you'd rather keep it in a folder you can see).
+
+> **Run it locally.** The proxy has no authentication — it's built to run on
+> your own machine, not on a public host. Don't expose port 8787 to the
+> internet, or your stored keys are reachable by anyone who finds it.
+
+## Run from source
 
 Requires Node 20+ (developed on Node 24).
 
