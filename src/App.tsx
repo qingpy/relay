@@ -1,8 +1,10 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { ChatPane } from '@/components/layout/ChatPane';
 import { KeyboardShortcuts } from '@/components/layout/KeyboardShortcuts';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { ConfirmDialog } from '@/components/ui/confirm';
+import { APP_CONFIG_ID, db } from '@/db/db';
 import { ensureDefaultPreset } from '@/db/repo';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
 import { initLocalStore } from '@/lib/localstore';
@@ -58,6 +60,18 @@ export default function App() {
     started.current = true;
     start();
   }, []);
+
+  // Code-block line wrapping is a global preference, applied once as a root
+  // class so every rendered block follows it without per-block state. This reads
+  // the config table directly (not getAppConfig, which *writes* a default when
+  // absent) so it stays a safe read-only observer even before the store hydrates.
+  const wrapCode = useLiveQuery(
+    () => db.appConfig.get(APP_CONFIG_ID).then((c) => c?.wrapCodeBlocks ?? true),
+    [],
+  );
+  useEffect(() => {
+    document.documentElement.classList.toggle('code-nowrap', wrapCode === false);
+  }, [wrapCode]);
 
   // Background work while the app is open: local backups + WebDAV sync. Each
   // call no-ops until its own interval is due, so a 1-min tick is cheap.

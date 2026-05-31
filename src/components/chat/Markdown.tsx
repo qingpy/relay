@@ -8,11 +8,13 @@ import rehypeHighlight from 'rehype-highlight';
 import 'katex/dist/katex.min.css';
 // Installs a global copy handler: selecting rendered math copies its LaTeX source.
 import 'katex/dist/contrib/copy-tex.mjs';
+import { CodeBlock } from './CodeBlock';
 
 const components: Components = {
   a: ({ node: _node, ...props }) => (
     <a {...props} target="_blank" rel="noopener noreferrer" />
   ),
+  pre: CodeBlock,
 };
 
 const remarkPlugins: PluggableList = [remarkGfm, remarkMath];

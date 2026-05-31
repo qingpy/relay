@@ -73,6 +73,7 @@ export function SettingsDialog() {
               {panel === 'chats' && (
                 <>
                   <AutoTitleSettings />
+                  <CodeBlockSettings />
                   <ExportSettings />
                 </>
               )}
@@ -88,6 +89,22 @@ export function SettingsDialog() {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CodeBlockSettings() {
+  const config = useLiveQuery(() => getAppConfig(), []);
+  return (
+    <section className="flex flex-col gap-3">
+      <SectionLabel>Code blocks</SectionLabel>
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span>Wrap long lines</span>
+        <Switch
+          checked={config?.wrapCodeBlocks ?? true}
+          onCheckedChange={(v) => void updateAppConfig({ wrapCodeBlocks: v })}
+        />
+      </label>
+    </section>
   );
 }
 
