@@ -1,110 +1,98 @@
 # Relay
 
 A light, fast, browser-based multi-provider LLM chat app for personal use — a
-quieter, prettier alternative to Cherry Studio. **Local-first:** your data lives
-in a single file on your own disk; the network is only for LLM calls and optional
-WebDAV sync.
+quieter, prettier alternative to Cherry Studio. Local-first: your data lives in a
+single JSON file on your own disk, and the network is used only for LLM calls and
+optional WebDAV sync.
 
-OpenAI-compatible providers (OpenRouter / OpenAI / Groq / local / Gemini AI
-Studio) and Google **Vertex AI**, with streaming, branching conversations,
-markdown + code + math, file uploads, web search, presets, and export.
+Works with any OpenAI-compatible provider (OpenRouter, OpenAI, Groq, local
+servers, Gemini AI Studio) and Google Vertex AI. Streaming, branching
+conversations, markdown/code/math, file uploads, web search, presets, and export.
 
-## Run with Docker (no clone)
+![Demo](demo.jpeg)
 
-The quickest way to run Relay without cloning the repo — one command, no Node
-toolchain:
+## Run with Docker
+
+One command, no clone and no Node toolchain:
 
 ```bash
 docker run -d --name relay -p 8787:8787 -v relay-data:/data \
   ghcr.io/qingpy/relay:latest
 ```
 
-Open `http://localhost:8787`. Everything you own — the data snapshot, your API
-keys, and backups — lives in the `relay-data` volume (use a bind mount like
-`-v /path/on/host:/data` if you'd rather keep it in a folder you can see).
+Open http://localhost:8787. All your data — the snapshot, API keys, and backups —
+lives in the `relay-data` volume. To keep it in a folder you can see, use a bind
+mount instead: `-v /path/on/host:/data`.
 
-> **Run it locally.** The proxy has no authentication — it's built to run on
-> your own machine, not on a public host. Don't expose port 8787 to the
-> internet, or your stored keys are reachable by anyone who finds it.
+Run it locally only. The proxy has no authentication, so don't expose port 8787
+to the internet — anyone who reaches it can use your stored keys.
 
 ## Run from source
 
-Requires Node 20+ (developed on Node 24).
+Requires Node 20+.
 
 ```bash
 npm install
-npm run dev          # Vite + proxy together; open http://localhost:5173
+npm run dev      # Vite + proxy; open http://localhost:5173
 ```
 
-Production-style single-origin run:
+Production single-origin build:
 
 ```bash
 npm run build
-npm run serve        # serves the built app + /api; open http://localhost:8787
+npm run serve    # serves the built app + API; open http://localhost:8787
 ```
 
-The proxy must be running — it owns your data file. If the page shows *"Can't
-reach the local data service"*, start `npm run dev` (or `npm run serve`).
-
-Other scripts: `npm run typecheck` (tsc), `npm run dev:web` / `npm run dev:server`
-(run one half).
+The proxy must be running — it owns your data file. Other scripts: `npm run
+typecheck`, and `npm run dev:web` / `npm run dev:server` to run one half.
 
 ## Your data
 
-Relay's source of truth is **one JSON file on disk**, owned by the proxy — not
-the browser's IndexedDB. The browser runs an in-memory store, so nothing persists
-to your browser profile.
+The source of truth is one JSON file on disk, owned by the proxy. The browser uses
+an in-memory store, so nothing persists to your browser profile.
 
-- Default path: `./data/relay.json` (gitignored). With the repo on D:, that's
-  already off your C: drive.
-- Change it: set `RELAY_DATA_FILE`, e.g. `RELAY_DATA_FILE=D:\Relay\relay.json`.
-- The exact path/size shows in **Settings → Sync & backup**.
+- Default path: `./data/relay.json`; override with `RELAY_DATA_FILE`.
+- The exact path and size show in Settings → Sync & backup.
 
-**Secrets are kept out of that file.** Your API keys, the Vertex private key, and
-the WebDAV password live in a separate store owned by the proxy
-(`RELAY_SECRETS_FILE`, default a per-user config dir outside the repo). The data
-file, backups, and the WebDAV mirror are credential-free, so they're safe to copy
-around — and your keys aren't sitting in plaintext where a tool or coding agent
-working in the repo would read them. (Restoring on a new device re-enters keys.)
+Secrets stay out of that file. API keys, the Vertex private key, and the WebDAV
+password live in a separate proxy-owned store (`RELAY_SECRETS_FILE`, a per-user
+config dir by default). The data file, backups, and WebDAV mirror are
+credential-free and safe to copy around; restoring on a new device re-enters keys.
 
-For cross-device use, mirror the same snapshot to your own **WebDAV** server in
-the same panel (optional, last-write-wins, syncs while the app is open). WebDAV
-can also keep a rolling set of **timestamped backups** — choose how many to keep,
-and restore any one from the list. Portable JSON **backups** (file download or
-on-disk) live there too.
+For cross-device use, mirror the snapshot to your own WebDAV server (optional,
+last-write-wins, syncs while the app is open). WebDAV can also keep a rolling set
+of timestamped backups. Portable JSON backups, by download or on disk, are
+available too.
 
 ## Providers
 
-No login. In **Settings → Connections**, add a connection:
+No login. In Settings → Connections, add a connection:
 
-- **Custom** — paste the full API URL (e.g. `…/v1/chat/completions`) + API key
-  (OpenRouter, OpenAI, Groq, a local server, or Gemini's OpenAI-compatible
-  endpoint). Any OpenAI-compatible endpoint works — every part of the URL is editable.
-- **Vertex AI** — upload/paste a service-account JSON (project, region, key); the
-  key stays server-side.
+- Custom: paste a full OpenAI-compatible API URL (e.g. `…/v1/chat/completions`)
+  and an API key. Covers OpenRouter, OpenAI, Groq, local servers, and Gemini's
+  OpenAI-compatible endpoint.
+- Vertex AI: upload or paste a service-account JSON; the key stays server-side.
 
-Then a **preset** (sidebar) fixes the model, parameters, and system prompt for the
-chats inside it. Per-model capabilities (vision / PDF / reasoning / web / tools)
-gate the composer.
+A preset then fixes the model, parameters, and system prompt for its chats.
+Per-model capabilities (vision, PDF, reasoning, web, tools) gate the composer.
 
-## Environment variables (all optional)
+## Environment variables
 
-| Var | Purpose | Default |
-|---|---|---|
-| `RELAY_DATA_FILE` | Path to the data snapshot | `./data/relay.json` |
-| `RELAY_SECRETS_FILE` | Path to the secret store (keys + WebDAV password) | per-user config dir |
-| `API_PORT` | Proxy port | `8787` |
-| `RELAY_BACKUP_DIR` | Folder for on-disk backups | `./backups` |
-| `OPENROUTER_KEY` / `OPENAI_KEY` | Fallback key for OpenAI-style connections | — |
-| `GOOGLE_VERTEX_CREDENTIALS` / `_FILE` | Fallback Vertex service-account | — |
+All optional.
+
+| Variable                              | Purpose                                   | Default             |
+| ------------------------------------- | ----------------------------------------- | ------------------- |
+| `RELAY_DATA_FILE`                     | Data snapshot path                        | `./data/relay.json` |
+| `RELAY_SECRETS_FILE`                  | Secret store (keys + WebDAV password)     | per-user config dir |
+| `API_PORT`                            | Proxy port                                | `8787`              |
+| `RELAY_BACKUP_DIR`                    | On-disk backup folder                     | `./backups`         |
+| `OPENROUTER_KEY` / `OPENAI_KEY`       | Fallback key for OpenAI-style connections | —                   |
+| `GOOGLE_VERTEX_CREDENTIALS` / `_FILE` | Fallback Vertex service-account           | —                   |
 
 ## Stack
 
-React 19 + TypeScript (strict) · Vite 6 · Tailwind v4 · shadcn/Radix · Dexie over
-an in-memory IndexedDB · Zustand · Hono proxy (Node via `tsx`). Light footprint —
-prefer the platform over libraries.
+React 19, TypeScript (strict), Vite 6, Tailwind v4, shadcn/Radix, Dexie over an
+in-memory IndexedDB, Zustand, and a Hono proxy on Node. Few dependencies — prefer
+the platform over libraries.
 
-## More
-
-- **`ARCHITECTURE.md`** — how Relay is built (data model, providers, proxy, the
-  local store + sync, decisions, file map).
+See ARCHITECTURE.md for how Relay is built.
