@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { FlatSelect } from '@/components/ui/flat-select';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,23 @@ import { SectionLabel } from './SectionLabel';
 export function AutoTitleSettings() {
   const config = useLiveQuery(() => getAppConfig(), []);
   const connections = useLiveQuery(() => listConnections(), [], []);
+
+  // Local buffers for the free-text fields. Binding them straight to the live
+  // Dexie query round-tripped every keystroke through the DB before the value
+  // came back, which reset the caret to the end and broke IME composition. We
+  // edit locally and persist in the background. `null` means "not seeded yet".
+  const [titleModel, setTitleModel] = useState<string | null>(null);
+  const [titlePrompt, setTitlePrompt] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (config && titleModel === null) setTitleModel(config.titleModel ?? '');
+  }, [config, titleModel]);
+  useEffect(() => {
+    if (config && titlePrompt === null) {
+      setTitlePrompt(config.titlePrompt ?? DEFAULT_TITLE_PROMPT);
+    }
+  }, [config, titlePrompt]);
+
   if (!config) return null;
 
   const conn = connections.find((c) => c.id === config.titleConnectionId);
@@ -22,11 +40,11 @@ export function AutoTitleSettings() {
             onChange={(e) => {
               const id = e.target.value || undefined;
               const c = connections.find((x) => x.id === id);
+              const nextModel = id ? config.titleModel ?? c?.models[0]?.id ?? '' : '';
+              setTitleModel(nextModel);
               void updateAppConfig({
                 titleConnectionId: id,
-                titleModel: id
-                  ? config.titleModel ?? c?.models[0]?.id ?? ''
-                  : undefined,
+                titleModel: id ? nextModel : undefined,
               });
             }}
           >
@@ -44,8 +62,11 @@ export function AutoTitleSettings() {
             className="flex-1"
             spellCheck={false}
             placeholder="model id"
-            value={config.titleModel ?? ''}
-            onChange={(e) => void updateAppConfig({ titleModel: e.target.value })}
+            value={titleModel ?? ''}
+            onChange={(e) => {
+              setTitleModel(e.target.value);
+              void updateAppConfig({ titleModel: e.target.value });
+            }}
           />
         )}
         <datalist id="title-models">
@@ -56,10 +77,11 @@ export function AutoTitleSettings() {
       </div>
       {config.titleConnectionId && (
         <textarea
-          value={config.titlePrompt ?? DEFAULT_TITLE_PROMPT}
-          onChange={(e) =>
-            void updateAppConfig({ titlePrompt: e.target.value })
-          }
+          value={titlePrompt ?? DEFAULT_TITLE_PROMPT}
+          onChange={(e) => {
+            setTitlePrompt(e.target.value);
+            void updateAppConfig({ titlePrompt: e.target.value });
+          }}
           rows={3}
           className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
