@@ -96,3 +96,7 @@ in-memory IndexedDB, Zustand, and a Hono proxy on Node. Few dependencies — pre
 the platform over libraries.
 
 See ARCHITECTURE.md for how Relay is built.
+
+---
+
+Thanks to the [linux.do](https://linux.do/) community.
