@@ -218,6 +218,8 @@ export interface AppConfig {
   theme: 'light' | 'dark' | 'system';
   /** Include the model's "thinking" in markdown export/download (default off). */
   exportIncludeThinking?: boolean;
+  /** Wrap long lines in chat code blocks rather than scrolling them (default on). */
+  wrapCodeBlocks?: boolean;
   /** Auto-titling: which connection/model and the instruction prompt. */
   titleConnectionId?: string;
   titleModel?: string;
