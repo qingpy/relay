@@ -61,6 +61,9 @@ export interface SavedModel {
   id: string;
   label?: string;
   capabilities: ModelCapabilities;
+  /** Max context window in tokens. When set, the context meter reports usage as
+   *  a percentage of this; when unset, it shows the absolute token estimate. */
+  contextWindow?: number;
 }
 
 /**

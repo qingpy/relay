@@ -21,6 +21,7 @@ import type {
   SavedModel,
 } from '@/db/types';
 import { testConnection, type TestResult } from '@/lib/connTest';
+import { formatTokens, parseTokenCount } from '@/lib/context';
 import { detectModels } from '@/lib/detect';
 import { toSavedModel } from '@/lib/models';
 import {
@@ -349,12 +350,8 @@ function Editor({ conn }: { conn: Connection }) {
             <ModelRow
               key={m.id}
               model={m}
-              onChange={(caps) =>
-                setModels(
-                  conn.models.map((x) =>
-                    x.id === m.id ? { ...x, capabilities: caps } : x,
-                  ),
-                )
+              onChange={(next) =>
+                setModels(conn.models.map((x) => (x.id === m.id ? next : x)))
               }
               onRemove={() => setModels(conn.models.filter((x) => x.id !== m.id))}
             />
@@ -439,11 +436,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const CAPS: { key: keyof ModelCapabilities; letter: string; title: string }[] = [
-  { key: 'vision', letter: 'V', title: 'Vision (images)' },
-  { key: 'pdf', letter: 'P', title: 'PDF files' },
-  { key: 'reasoning', letter: 'R', title: 'Reasoning / thinking' },
-  { key: 'webSearch', letter: 'W', title: 'Web search' },
-  { key: 'toolUse', letter: 'T', title: 'Tool use' },
+  { key: 'vision', letter: 'V', title: 'Vision' },
+  { key: 'pdf', letter: 'P', title: 'PDF' },
+  { key: 'reasoning', letter: 'R', title: 'Reasoning' },
+  { key: 'webSearch', letter: 'W', title: 'Web' },
+  { key: 'toolUse', letter: 'T', title: 'Tools' },
 ];
 
 function ModelRow({
@@ -452,22 +449,55 @@ function ModelRow({
   onRemove,
 }: {
   model: SavedModel;
-  onChange: (caps: ModelCapabilities) => void;
+  onChange: (model: SavedModel) => void;
   onRemove: () => void;
 }) {
+  const [ctx, setCtx] = useState(
+    model.contextWindow != null ? formatTokens(model.contextWindow) : '',
+  );
+
+  const commitCtx = () => {
+    const parsed = parseTokenCount(ctx);
+    // Echo the normalized value back into the field (e.g. "128000" → "128k").
+    setCtx(parsed != null ? formatTokens(parsed) : '');
+    if (parsed !== model.contextWindow) onChange({ ...model, contextWindow: parsed });
+  };
+
   return (
     <div className="flex items-center gap-2 px-2 py-1.5">
       <span className="min-w-0 flex-1 truncate text-xs" title={model.id}>
         {model.id}
       </span>
+      <input
+        value={ctx}
+        spellCheck={false}
+        placeholder="ctx"
+        title="Max context window — e.g. 128k, 1m. Blank shows absolute token usage."
+        onChange={(e) => setCtx(e.target.value)}
+        onBlur={commitCtx}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+        className="h-5 w-12 shrink-0 rounded bg-muted px-1 text-center text-[10px] tabular-nums outline-none placeholder:text-muted-foreground/40 focus-visible:ring-1 focus-visible:ring-ring"
+      />
       <div className="flex shrink-0 items-center gap-0.5">
         {CAPS.map(({ key, letter, title }) => (
           <button
             key={key}
             type="button"
+            title={title}
             aria-label={title}
             onClick={() =>
-              onChange({ ...model.capabilities, [key]: !model.capabilities[key] })
+              onChange({
+                ...model,
+                capabilities: {
+                  ...model.capabilities,
+                  [key]: !model.capabilities[key],
+                },
+              })
             }
             className={cn(
               'flex size-5 items-center justify-center rounded text-[10px] font-semibold transition-colors',
