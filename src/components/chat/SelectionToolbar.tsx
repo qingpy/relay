@@ -6,25 +6,25 @@ import type { Message } from '@/db/types';
 import { downloadText, messagesToMarkdown, slugify } from '@/lib/export';
 import { useUiStore } from '@/store/ui';
 
-/** Bulk actions for multi-selected assistant messages. */
+/** Bulk actions for multi-selected messages (you + assistant turns). */
 export function SelectionToolbar({
   messages,
-  assistantIds,
+  selectableIds,
 }: {
   messages: Message[];
-  assistantIds: string[];
+  selectableIds: string[];
 }) {
   const selected = useUiStore((s) => s.selected);
   const setSelection = useUiStore((s) => s.setSelection);
   const clearSelection = useUiStore((s) => s.clearSelection);
   const toggleSelectionMode = useUiStore((s) => s.toggleSelectionMode);
 
-  const ids = assistantIds.filter((id) => selected[id]);
+  const ids = selectableIds.filter((id) => selected[id]);
   const count = ids.length;
-  const allSelected = count > 0 && count === assistantIds.length;
+  const allSelected = count > 0 && count === selectableIds.length;
 
   const chosen = (): Message[] =>
-    messages.filter((m) => selected[m.id] && m.role === 'assistant');
+    messages.filter((m) => selected[m.id] && m.role !== 'divider');
 
   const copy = async () => {
     if (!count) return;
@@ -48,7 +48,7 @@ export function SelectionToolbar({
     const ok = await confirm({
       title: `Delete ${count} message${count > 1 ? 's' : ''}?`,
       description:
-        'Selected replies and everything below them on their branch will be removed.',
+        'Selected messages and everything below them on their branch will be removed.',
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -64,9 +64,9 @@ export function SelectionToolbar({
       </span>
       <span className="text-muted-foreground/30">·</span>
       <Marginalia
-        disabled={assistantIds.length === 0}
+        disabled={selectableIds.length === 0}
         onClick={() =>
-          allSelected ? clearSelection() : setSelection(assistantIds)
+          allSelected ? clearSelection() : setSelection(selectableIds)
         }
       >
         {allSelected ? 'Deselect all' : 'Select all'}

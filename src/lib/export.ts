@@ -47,15 +47,19 @@ export function sessionToMarkdown(
   return lines.join('\n').trim() + '\n';
 }
 
-/** Markdown for a set of messages (used by multi-select copy/export). */
+/** Markdown for a set of messages (used by multi-select copy/export). Each turn
+ *  gets a role heading so a mixed You/Assistant selection reads as a transcript. */
 export function messagesToMarkdown(
   messages: Message[],
   opts: ExportOptions = {},
 ): string {
-  return messages
-    .map((m) => messageToMarkdown(m, opts))
-    .filter(Boolean)
-    .join('\n\n---\n\n');
+  const lines: string[] = [];
+  for (const m of messages) {
+    if (m.role !== 'user' && m.role !== 'assistant') continue;
+    lines.push(m.role === 'user' ? '## You' : '## Assistant', '');
+    lines.push(messageToMarkdown(m, opts), '');
+  }
+  return lines.join('\n').trim() + '\n';
 }
 
 export function slugify(s: string): string {
