@@ -1,7 +1,6 @@
 import { Marginalia } from '@/components/ui/marginalia';
-import { confirm } from '@/components/ui/confirm';
 import { getAppConfig } from '@/db/db';
-import { deleteSubtree } from '@/db/repo';
+import { spliceMessage } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { downloadText, messagesToMarkdown, slugify } from '@/lib/export';
 import { useUiStore } from '@/store/ui';
@@ -43,17 +42,11 @@ export function SelectionToolbar({
     downloadText(`${slugify('selection')}.md`, md);
   };
 
+  // Remove only the selected messages — each is spliced out and its replies are
+  // re-parented, so nothing below them is lost.
   const remove = async () => {
     if (!count) return;
-    const ok = await confirm({
-      title: `Delete ${count} message${count > 1 ? 's' : ''}?`,
-      description:
-        'Selected messages and everything below them on their branch will be removed.',
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    for (const id of ids) await deleteSubtree(id);
+    for (const id of ids) await spliceMessage(id);
     clearSelection();
   };
 

@@ -4,7 +4,7 @@ import { Marginalia } from '@/components/ui/marginalia';
 import type { Message } from '@/db/types';
 import { spliceMessage, textPart, updateMessage } from '@/db/repo';
 import { partsText } from '@/lib/conversation';
-import { formatStamp, formatDateTime } from '@/lib/time';
+import { formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
 import { Citations } from './Citations';
@@ -53,9 +53,7 @@ function RoleTag({ role }: { role: 'user' | 'assistant' }) {
 
 function Stamp({ at }: { at: number }) {
   return (
-    <time dateTime={new Date(at).toISOString()} title={formatDateTime(at)}>
-      {formatStamp(at)}
-    </time>
+    <time dateTime={new Date(at).toISOString()}>{formatStamp(at)}</time>
   );
 }
 
@@ -140,11 +138,7 @@ export const MessageItem = memo(function MessageItem({
         )}
         <div className={cn('mt-3 flex items-center gap-4', INDENT)}>
           <SiblingSwitcher message={message} allMessages={siblings} />
-          <MessageActions
-            message={message}
-            allMessages={siblings}
-            onEdit={() => setEditing(true)}
-          />
+          <MessageActions message={message} onEdit={() => setEditing(true)} />
         </div>
       </article>
     );
@@ -206,7 +200,7 @@ export const MessageItem = memo(function MessageItem({
       {!streaming && (
         <div className={cn('mt-3 flex items-center gap-4', INDENT)}>
           <SiblingSwitcher message={message} allMessages={siblings} />
-          <MessageActions message={message} allMessages={siblings} />
+          <MessageActions message={message} />
         </div>
       )}
     </article>

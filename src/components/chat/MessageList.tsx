@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
   ChevronDown,
@@ -28,6 +28,10 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const selectionMode = useUiStore((s) => s.selectionMode);
   const selected = useUiStore((s) => s.selected);
   const setMessageSelected = useUiStore((s) => s.setMessageSelected);
+  const addSelection = useUiStore((s) => s.addSelection);
+  const locateId = useUiStore((s) => s.locateId);
+  const requestLocate = useUiStore((s) => s.requestLocate);
+  const [flashId, setFlashId] = useState<string | null>(null);
 
   const activeId = useChatStore((s) => s.activeBySession[sessionId]);
   const streamLen = useChatStore((s) => {
@@ -38,6 +42,8 @@ export function MessageList({ sessionId }: { sessionId: string }) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
+  // Anchor for shift-range selection (the last plainly-clicked message).
+  const anchorRef = useRef<string | null>(null);
 
   const onScroll = () => {
     const el = scrollRef.current;
@@ -46,9 +52,32 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   };
 
   useEffect(() => {
+    // Don't yank to the bottom while we're trying to land on a specific message.
     const el = scrollRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages, streamLen]);
+    if (el && stick.current && !locateId) el.scrollTop = el.scrollHeight;
+  }, [messages, streamLen, locateId]);
+
+  // Scroll to a message requested from the branch map. The target may not be on
+  // the active path yet (the map switches the branch first), so we wait — when
+  // `messages` updates to include it, this re-runs, finds it, and scrolls.
+  useEffect(() => {
+    if (!locateId) return;
+    const el = scrollRef.current?.querySelector<HTMLElement>(
+      `[data-mid="${locateId}"]`,
+    );
+    if (!el) return;
+    stick.current = false;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setFlashId(locateId);
+    requestLocate(null);
+  }, [locateId, messages, requestLocate]);
+
+  // Fade the located-message highlight out on its own timer.
+  useEffect(() => {
+    if (!flashId) return;
+    const t = setTimeout(() => setFlashId(null), 1500);
+    return () => clearTimeout(t);
+  }, [flashId]);
 
   // --- Long-chat navigation ---
   const userTops = useCallback(() => {
@@ -108,6 +137,28 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     [messages],
   );
 
+  // Reset the range anchor whenever selection mode is entered/left.
+  useEffect(() => {
+    anchorRef.current = null;
+  }, [selectionMode]);
+
+  // Click toggles one message; shift-click extends the selection to cover the
+  // whole run between the anchor and the clicked message (Explorer-style).
+  const selectAt = (id: string, shift: boolean) => {
+    if (shift && anchorRef.current) {
+      const a = selectableIds.indexOf(anchorRef.current);
+      const b = selectableIds.indexOf(id);
+      if (a !== -1 && b !== -1) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        addSelection(selectableIds.slice(lo, hi + 1));
+        anchorRef.current = id;
+        return;
+      }
+    }
+    setMessageSelected(id, !selected[id]);
+    anchorRef.current = id;
+  };
+
   return (
     <div className="relative min-h-0 flex-1">
       {selectionMode && (
@@ -121,12 +172,20 @@ export function MessageList({ sessionId }: { sessionId: string }) {
                 key={m.id}
                 message={m}
                 checked={!!selected[m.id]}
-                onToggle={() => setMessageSelected(m.id, !selected[m.id])}
+                onSelect={(shift) => selectAt(m.id, shift)}
               >
                 <MessageItem message={m} siblings={all} />
               </SelectableRow>
             ) : (
-              <div key={m.id} data-role={m.role}>
+              <div
+                key={m.id}
+                data-role={m.role}
+                data-mid={m.id}
+                className={cn(
+                  'transition-shadow duration-700',
+                  flashId === m.id && 'ring-2 ring-primary/40',
+                )}
+              >
                 <MessageItem message={m} siblings={all} />
               </div>
             ),
@@ -157,20 +216,21 @@ export function MessageList({ sessionId }: { sessionId: string }) {
 function SelectableRow({
   message,
   checked,
-  onToggle,
+  onSelect,
   children,
 }: {
   message: Message;
   checked: boolean;
-  onToggle: () => void;
+  onSelect: (shift: boolean) => void;
   children: React.ReactNode;
 }) {
   return (
     <div
       data-role={message.role}
-      onClick={onToggle}
+      data-mid={message.id}
+      onClick={(e) => onSelect(e.shiftKey)}
       className={cn(
-        'flex cursor-pointer gap-3 p-2 transition-colors',
+        'flex cursor-pointer select-none gap-3 p-2 transition-colors',
         checked
           ? 'bg-primary/5 ring-1 ring-inset ring-primary/30'
           : 'hover:bg-accent/40',
@@ -180,7 +240,7 @@ function SelectableRow({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          onToggle();
+          onSelect(e.shiftKey);
         }}
         role="checkbox"
         aria-checked={checked}

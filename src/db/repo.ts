@@ -328,49 +328,22 @@ export async function setCurrentLeaf(
   await db.sessions.update(sessionId, { currentLeafId: leafId });
 }
 
-/** Remove a node, re-parenting its children to its parent (used to restore a
- *  divider). The rest of the branch is preserved. */
+/** Remove a single message, re-parenting its children to its parent so the rest
+ *  of the branch (its replies) is preserved — used both to restore a divider and
+ *  to delete one message without dropping everything below it. The message's own
+ *  attachments are cleaned up. */
 export async function spliceMessage(id: string): Promise<void> {
   const msg = await db.messages.get(id);
   if (!msg) return;
-  await db.transaction('rw', db.sessions, db.messages, async () => {
+  await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
     await db.messages
       .where('parentId')
       .equals(id)
       .modify({ parentId: msg.parentId });
     await db.messages.delete(id);
+    await db.files.where('messageId').equals(id).delete();
     const session = await db.sessions.get(msg.sessionId);
     if (session?.currentLeafId === id) {
-      await db.sessions.update(msg.sessionId, {
-        currentLeafId: msg.parentId ?? undefined,
-      });
-    }
-  });
-}
-
-/** Remove a message and its entire subtree (a whole branch). */
-export async function deleteSubtree(id: string): Promise<void> {
-  const msg = await db.messages.get(id);
-  if (!msg) return;
-  const all = await getMessages(msg.sessionId);
-  const childrenOf = new Map<string | null, string[]>();
-  for (const m of all) {
-    const list = childrenOf.get(m.parentId) ?? [];
-    list.push(m.id);
-    childrenOf.set(m.parentId, list);
-  }
-  const toDelete = new Set<string>();
-  const stack = [id];
-  while (stack.length) {
-    const n = stack.pop()!;
-    toDelete.add(n);
-    for (const c of childrenOf.get(n) ?? []) stack.push(c);
-  }
-  await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
-    await db.messages.bulkDelete([...toDelete]);
-    await db.files.where('messageId').anyOf([...toDelete]).delete();
-    const session = await db.sessions.get(msg.sessionId);
-    if (session?.currentLeafId && toDelete.has(session.currentLeafId)) {
       await db.sessions.update(msg.sessionId, {
         currentLeafId: msg.parentId ?? undefined,
       });

@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { Marginalia } from '@/components/ui/marginalia';
-import { confirm } from '@/components/ui/confirm';
 import { getAppConfig } from '@/db/db';
-import { deleteSubtree, setCurrentLeaf } from '@/db/repo';
+import { setCurrentLeaf, spliceMessage } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { partsText, deriveTitle } from '@/lib/conversation';
 import { downloadText, messageToMarkdown, slugify } from '@/lib/export';
-import { childrenOf } from '@/lib/tree';
 import { useChatStore } from '@/store/chat';
 
 /**
@@ -16,11 +14,9 @@ import { useChatStore } from '@/store/chat';
  */
 export function MessageActions({
   message,
-  allMessages,
   onEdit,
 }: {
   message: Message;
-  allMessages: Message[];
   onEdit?: () => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -46,18 +42,8 @@ export function MessageActions({
   const regenerate = () =>
     void useChatStore.getState().regenerate(message.sessionId, message.id);
 
-  const remove = async () => {
-    if (childrenOf(allMessages, message.id).length > 0) {
-      const ok = await confirm({
-        title: 'Delete this branch?',
-        description: 'This message and every reply below it will be removed.',
-        confirmLabel: 'Delete',
-        destructive: true,
-      });
-      if (!ok) return;
-    }
-    await deleteSubtree(message.id);
-  };
+  // Remove just this message — its replies are re-parented, not deleted.
+  const remove = () => void spliceMessage(message.id);
 
   return (
     <div className="flex items-center gap-4">
