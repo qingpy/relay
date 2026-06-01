@@ -32,7 +32,14 @@ interface UiState {
   toggleSelectionMode: () => void;
   setMessageSelected: (id: string, on: boolean) => void;
   setSelection: (ids: string[]) => void;
+  /** Turn a set of messages on without clearing the rest (shift-range select). */
+  addSelection: (ids: string[]) => void;
   clearSelection: () => void;
+
+  /** A message the list should scroll to (set by the branch map; the list clears
+   *  it once it has located the message). */
+  locateId: string | null;
+  requestLocate: (id: string | null) => void;
 
   /** Multi-select mode for sidebar chats (bulk delete / move to preset). */
   chatSelectMode: boolean;
@@ -67,6 +74,7 @@ export const useUiStore = create<UiState>((set) => ({
       activeSessionId: id,
       selectionMode: false,
       selected: {},
+      locateId: null,
       // On a narrow screen the sidebar is an overlay — get out of the way.
       ...(id && isNarrow() ? { sidebarOpen: false } : {}),
     }),
@@ -87,7 +95,16 @@ export const useUiStore = create<UiState>((set) => ({
     }),
   setSelection: (ids) =>
     set({ selected: Object.fromEntries(ids.map((id) => [id, true])) }),
+  addSelection: (ids) =>
+    set((s) => {
+      const selected = { ...s.selected };
+      for (const id of ids) selected[id] = true;
+      return { selected };
+    }),
   clearSelection: () => set({ selected: {} }),
+
+  locateId: null,
+  requestLocate: (id) => set({ locateId: id }),
 
   chatSelectMode: false,
   selectedChats: {},
