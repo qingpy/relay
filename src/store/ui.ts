@@ -26,7 +26,7 @@ interface UiState {
   activePresetId: string | null;
   setActivePreset: (id: string | null) => void;
 
-  /** Multi-select mode for assistant messages (bulk copy/export/delete). */
+  /** Multi-select mode for messages — you + assistant (bulk copy/export/delete). */
   selectionMode: boolean;
   selected: Record<string, true>;
   toggleSelectionMode: () => void;

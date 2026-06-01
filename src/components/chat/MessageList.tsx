@@ -103,20 +103,20 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [prevUser, nextUser, jumpTop, jumpBottom]);
 
-  const assistantIds = useMemo(
-    () => messages.filter((m) => m.role === 'assistant').map((m) => m.id),
+  const selectableIds = useMemo(
+    () => messages.filter((m) => m.role !== 'divider').map((m) => m.id),
     [messages],
   );
 
   return (
     <div className="relative min-h-0 flex-1">
       {selectionMode && (
-        <SelectionToolbar messages={messages} assistantIds={assistantIds} />
+        <SelectionToolbar messages={messages} selectableIds={selectableIds} />
       )}
       <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
           {messages.map((m) =>
-            selectionMode && m.role === 'assistant' ? (
+            selectionMode && m.role !== 'divider' ? (
               <SelectableRow
                 key={m.id}
                 message={m}
