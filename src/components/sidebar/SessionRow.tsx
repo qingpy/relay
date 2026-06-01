@@ -22,7 +22,7 @@ import {
   renameSession,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
-import { formatDateTime, formatStamp } from '@/lib/time';
+import { formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
@@ -84,110 +84,112 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
       onDoubleClick={() => !selecting && setEditing(true)}
       onKeyDown={(e) => e.key === 'Enter' && onRowClick()}
       className={cn(
-        'group flex cursor-pointer items-center justify-between gap-3 py-2.5 pl-12 pr-6 outline-none transition-colors',
+        'group flex cursor-pointer items-start justify-between gap-2 py-2 pl-12 pr-6 outline-none transition-colors',
         isDragging && 'opacity-50',
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        {selecting ? (
-          <CheckSquare checked={checked} />
-        ) : (
-          <span
-            className={cn(
-              'size-2 shrink-0 border transition-colors',
-              isActive
-                ? 'border-primary bg-primary'
-                : 'border-muted-foreground/40',
-            )}
-          />
-        )}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 items-center gap-3">
+          {selecting ? (
+            <CheckSquare checked={checked} />
+          ) : (
+            <span
+              className={cn(
+                'size-2 shrink-0 border transition-colors',
+                isActive
+                  ? 'border-primary bg-primary'
+                  : 'border-muted-foreground/40',
+              )}
+            />
+          )}
 
-        {editing ? (
-          <InlineEdit
-            value={session.title}
-            onCommit={(v) => {
-              void renameSession(session.id, v);
-              setEditing(false);
-            }}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <span
-            className={cn(
-              'min-w-0 flex-1 truncate text-[15px] transition-colors',
-              isActive
-                ? 'font-medium text-foreground'
-                : 'text-muted-foreground group-hover:text-foreground',
-            )}
+          {editing ? (
+            <InlineEdit
+              value={session.title}
+              onCommit={(v) => {
+                void renameSession(session.id, v);
+                setEditing(false);
+              }}
+              onCancel={() => setEditing(false)}
+            />
+          ) : (
+            <span
+              className={cn(
+                'min-w-0 flex-1 truncate text-[15px] transition-colors',
+                isActive
+                  ? 'font-medium text-foreground'
+                  : 'text-muted-foreground group-hover:text-foreground',
+              )}
+            >
+              {session.title}
+            </span>
+          )}
+        </div>
+
+        {!editing && !selecting && (
+          <time
+            dateTime={new Date(session.updatedAt).toISOString()}
+            className="label-mono whitespace-nowrap pl-5 tabular-nums text-muted-foreground/50"
           >
-            {session.title}
-          </span>
+            {formatStamp(session.updatedAt)}
+          </time>
         )}
       </div>
 
       {!editing && !selecting && (
-        <div className="relative flex shrink-0 items-center justify-end">
-          <time
-            dateTime={new Date(session.updatedAt).toISOString()}
-            title={formatDateTime(session.updatedAt)}
-            className="label-mono whitespace-nowrap tabular-nums text-muted-foreground/50 transition-opacity group-hover:opacity-0"
-          >
-            {formatStamp(session.updatedAt)}
-          </time>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                onPointerDown={stop}
-                onClick={stop}
-                aria-label="Chat options"
-                className="absolute right-0 flex size-6 shrink-0 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
-              >
-                <MoreHorizontal className="size-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={() => setTimeout(() => setEditing(true), 0)}
-              >
-                <Pencil />
-                Rename
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => void onDuplicate()}>
-                <Copy />
-                Duplicate
-              </DropdownMenuItem>
-              {folders.length > 1 && (
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <FolderInput />
-                    Move to preset
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                    {folders.map((f) => (
-                      <DropdownMenuItem
-                        key={f.id}
-                        disabled={f.id === session.folderId}
-                        onSelect={() => void moveSessionToFolder(session.id, f.id)}
-                      >
-                        {f.id === session.folderId ? (
-                          <Check />
-                        ) : (
-                          <span className="size-4" />
-                        )}
-                        <span className="min-w-0 truncate">{f.name}</span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-              )}
-              <DropdownMenuItem destructive onSelect={() => void onDelete()}>
-                <Trash2 />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              onPointerDown={stop}
+              onClick={stop}
+              aria-label="Chat options"
+              className="flex size-6 shrink-0 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 data-[state=open]:opacity-100"
+            >
+              <MoreHorizontal className="size-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onSelect={() => setTimeout(() => setEditing(true), 0)}
+            >
+              <Pencil />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => void onDuplicate()}>
+              <Copy />
+              Duplicate
+            </DropdownMenuItem>
+            {folders.length > 1 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <FolderInput />
+                  Move to preset
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {folders.map((f) => (
+                    <DropdownMenuItem
+                      key={f.id}
+                      disabled={f.id === session.folderId}
+                      onSelect={() => void moveSessionToFolder(session.id, f.id)}
+                    >
+                      {f.id === session.folderId ? (
+                        <Check />
+                      ) : (
+                        <span className="size-4" />
+                      )}
+                      <span className="min-w-0 truncate">{f.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
+            <DropdownMenuItem destructive onSelect={() => void onDelete()}>
+              <Trash2 />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
     </div>
   );
