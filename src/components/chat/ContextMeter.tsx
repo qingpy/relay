@@ -27,9 +27,23 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
 
   if (usage.tokens === 0 && usage.files === 0) return null;
 
+  // With a context window configured for the model, report usage as a share of
+  // it; otherwise fall back to the absolute token estimate.
+  const window = resolved?.contextWindow;
+  const showPct = !!window && usage.tokens > 0;
+  const ratio = showPct ? (usage.tokens / window!) * 100 : 0;
+  const pct = ratio > 0 && ratio < 1 ? '<1' : String(Math.round(ratio));
+
   return (
-    <span className="label-mono hidden shrink-0 text-muted-foreground sm:inline">
-      {formatTokens(usage.tokens)} ctx
+    <span
+      className="label-mono hidden shrink-0 text-muted-foreground sm:inline"
+      title={
+        showPct
+          ? `${formatTokens(usage.tokens)} of ${formatTokens(window!)} tokens`
+          : undefined
+      }
+    >
+      {showPct ? `${pct}% ctx` : `${formatTokens(usage.tokens)} ctx`}
       {usage.files > 0 && ` · ${usage.files} file${usage.files === 1 ? '' : 's'}`}
     </span>
   );

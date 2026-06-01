@@ -13,6 +13,8 @@ export interface ResolvedConfig {
   /** Effective settings for the provider (preset knobs + system prompt + web search). */
   settings: ProviderSettings;
   capabilities: ModelCapabilities;
+  /** Max context window (tokens) saved for the resolved model, if any. */
+  contextWindow?: number;
 }
 
 const NO_CAPS: ModelCapabilities = {
@@ -52,8 +54,8 @@ export function resolveConfig(
       .filter((s): s is string => !!s)
       .join('\n\n') || undefined;
 
-  const capabilities =
-    connection && model ? findModel(connection, model).capabilities : NO_CAPS;
+  const saved = connection && model ? findModel(connection, model) : undefined;
+  const capabilities = saved?.capabilities ?? NO_CAPS;
 
   const kind = reasoningKind(capabilities);
 
@@ -63,5 +65,11 @@ export function resolveConfig(
     webSearch: session?.webSearch ?? false,
   };
 
-  return { connection, model, settings, capabilities };
+  return {
+    connection,
+    model,
+    settings,
+    capabilities,
+    contextWindow: saved?.contextWindow,
+  };
 }
