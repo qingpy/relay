@@ -4,20 +4,22 @@ import { activePath } from '@/lib/tree';
 
 /**
  * Context-size readout for a chat (the "how big is this conversation getting"
- * indicator). We deliberately avoid a tokenizer dependency: the count is a
- * deterministic ~4-chars-per-token estimate over exactly what gets sent next
- * turn — the system prompt plus the user/assistant turns after the latest
- * divider. Attachments can't be token-counted without the provider, so they're
- * surfaced as a separate file count rather than guessed.
+ * indicator). We count what we can count and measure what we can't: text is a
+ * deterministic ~4-chars-per-token estimate, while each message's files/images
+ * carry a real token cost the provider reported (`message.fileTokens`, captured
+ * once when a turn including them is measured — see `store/chat.ts`).
+ *
+ * Both are summed over the *current* window, so editing or deleting a message
+ * updates the figure immediately: drop a message and its text and its stored
+ * file cost both leave the sum. Attachments no turn has measured yet can't be
+ * priced, so they're surfaced as a separate count rather than guessed.
  */
 
 export interface ContextUsage {
-  /** Estimated tokens of the text actually sent (system prompt + active turns). */
+  /** Estimated tokens the next turn will send: text (chars/4) + measured files. */
   tokens: number;
-  /** Attachments in the active window (not included in `tokens`). */
+  /** Attachments not yet folded into `tokens` (no turn has measured them). */
   files: number;
-  /** Number of user/assistant turns in the active window. */
-  turns: number;
 }
 
 export function contextUsage(
@@ -26,16 +28,21 @@ export function contextUsage(
   systemPrompt?: string,
 ): ContextUsage {
   const window = activeWindow(activePath(messages, leafId));
-  let chars = systemPrompt?.length ?? 0;
-  let files = 0;
-  let turns = 0;
+  let textChars = systemPrompt?.length ?? 0;
+  let fileTokens = 0;
+  let unmeasuredFiles = 0;
   for (const m of window) {
     if (m.role !== 'user' && m.role !== 'assistant') continue;
-    chars += partsText(m.content).length;
-    files += m.attachments?.length ?? 0;
-    turns++;
+    textChars += partsText(m.content).length;
+    const attachments = m.attachments?.length ?? 0;
+    if (!attachments) continue;
+    if (m.fileTokens != null) fileTokens += m.fileTokens;
+    else unmeasuredFiles += attachments;
   }
-  return { tokens: Math.ceil(chars / 4), files, turns };
+  return {
+    tokens: Math.ceil(textChars / 4) + fileTokens,
+    files: unmeasuredFiles,
+  };
 }
 
 /** Compact token label: 950 / 3.2k / 12k / 1M / 1.5M. */
