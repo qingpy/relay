@@ -14,7 +14,12 @@ import {
   updateSession,
 } from '@/db/repo';
 import type { Citation, Message, Session, ToolCall, Usage } from '@/db/types';
-import { buildChatMessages, deriveTitle } from '@/lib/conversation';
+import {
+  activeWindow,
+  buildChatMessages,
+  deriveTitle,
+  partsText,
+} from '@/lib/conversation';
 import { resolveConfig } from '@/lib/resolve';
 import { activePath } from '@/lib/tree';
 import { readSSE } from '@/lib/sse';
@@ -52,6 +57,41 @@ interface ChatState {
 
 const controllers = new Map<string, AbortController>();
 const PERSIST_INTERVAL = 400;
+
+/**
+ * Price a turn's attachments from the provider's real `promptTokens`: subtract
+ * our text estimate of everything sent, then split the leftover input tokens
+ * across the files that don't yet have a measured cost. Stored per message
+ * (`fileTokens`) so the context meter can count files for real and still update
+ * live as messages are added or removed. Idempotent — once a message is priced,
+ * later turns skip it.
+ */
+async function captureFileTokens(
+  history: Message[],
+  systemPrompt: string | undefined,
+  usage: Usage | undefined,
+): Promise<void> {
+  const prompt = usage?.promptTokens;
+  if (prompt == null) return;
+  let textLen = systemPrompt?.length ?? 0;
+  const withFiles: Message[] = [];
+  for (const m of activeWindow(history)) {
+    if (m.role !== 'user' && m.role !== 'assistant') continue;
+    textLen += partsText(m.content).length;
+    if (m.attachments?.length) withFiles.push(m);
+  }
+  const unmeasured = withFiles.filter((m) => m.fileTokens == null);
+  if (unmeasured.length === 0) return;
+
+  const known = withFiles.reduce((sum, m) => sum + (m.fileTokens ?? 0), 0);
+  const overhead = Math.max(0, prompt - Math.ceil(textLen / 4) - known);
+  const newFiles = unmeasured.reduce((sum, m) => sum + (m.attachments?.length ?? 0), 0);
+  if (newFiles === 0) return;
+  for (const m of unmeasured) {
+    const share = Math.round((overhead * (m.attachments?.length ?? 0)) / newFiles);
+    await updateMessage(m.id, { fileTokens: share });
+  }
+}
 
 export const useChatStore = create<ChatState>((set, get) => {
   const setBuffer = (id: string, buf: StreamBuffer) =>
@@ -219,6 +259,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         };
       }
       await persist(true);
+      await captureFileTokens(history, resolved.settings.systemPrompt, usage);
       if (errored) await updateMessage(messageId, { error: errored });
       controllers.delete(sessionId);
       clearStream(sessionId, messageId);

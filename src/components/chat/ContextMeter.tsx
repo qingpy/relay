@@ -5,10 +5,12 @@ import { contextUsage, formatTokens } from '@/lib/context';
 import { useResolvedConfig } from '@/lib/useResolved';
 
 /**
- * Quiet readout of how much context this chat is using — an estimate of the
- * tokens sent next turn (system prompt + the turns after the latest divider).
- * Attachments are shown as a separate count (their token cost is provider-
- * specific, so it isn't folded into the estimate).
+ * Quiet readout of how much context this chat is using — a live estimate of the
+ * tokens the next turn will send, recomputed from the current window so edits
+ * and deletions show up immediately. Text is a ~4-chars/token estimate; files
+ * are priced from the provider's last measurement (so they count too). Under 1%
+ * the share is shown to one decimal (".3%"); a trailing file count only appears
+ * for attachments no turn has measured yet.
  */
 export function ContextMeter({ sessionId }: { sessionId: string }) {
   const session = useLiveQuery(() => getSession(sessionId), [sessionId]);
@@ -32,7 +34,13 @@ export function ContextMeter({ sessionId }: { sessionId: string }) {
   const window = resolved?.contextWindow;
   const showPct = !!window && usage.tokens > 0;
   const ratio = showPct ? (usage.tokens / window!) * 100 : 0;
-  const pct = ratio > 0 && ratio < 1 ? '<1' : String(Math.round(ratio));
+  // Whole numbers at or above 1%; below it, one decimal with no leading zero
+  // (".3%"), floored at ".1%" so any real usage still registers.
+  const oneDec = Math.round(ratio * 10) / 10;
+  const pct =
+    oneDec >= 1
+      ? String(Math.round(ratio))
+      : Math.max(0.1, oneDec).toFixed(1).replace(/^0/, '');
 
   return (
     <span
