@@ -12,7 +12,8 @@ const MOD =
     ? '⌘'
     : 'Ctrl';
 
-/** [chord, description]. A chord is space-separated keys; `/` is a separator. */
+/** [chord, description]. A chord is space-separated keys; `|` renders as a `/`
+ *  that separates alternatives, so a literal `/` is always shown as a key. */
 const GROUPS: { title: string; items: [string, string][] }[] = [
   {
     title: 'Composer',
@@ -20,38 +21,30 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       [`${MOD} Enter`, 'Send message'],
       ['Enter', 'New line'],
       ['/', 'Quick-prompt palette'],
-      ['Esc', 'Close palette · cancel edit'],
+      ['Esc', 'Close palette · cancel edit · exit selection'],
     ],
   },
   {
     title: 'Conversation',
     items: [
-      ['Alt ↑ / ↓', 'Previous / next of your turns'],
-      ['Ctrl Home / End', 'Jump to top / bottom'],
+      ['Alt ↑ | ↓', 'Previous / next of your turns'],
+      ['Ctrl Home | End', 'Jump to top / bottom'],
     ],
   },
   {
     title: 'App',
     items: [
       [`${MOD} B`, 'Toggle sidebar'],
-      ['?', 'Keyboard shortcuts'],
+      [`${MOD} /`, 'Keyboard shortcuts'],
     ],
   },
 ];
-
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  return (
-    !!el &&
-    (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)
-  );
-}
 
 function Kbd({ combo }: { combo: string }) {
   return (
     <span className="flex shrink-0 items-center gap-1">
       {combo.split(' ').map((k, i) =>
-        k === '/' ? (
+        k === '|' ? (
           <span key={i} className="px-0.5 text-muted-foreground">
             /
           </span>
@@ -69,30 +62,48 @@ function Kbd({ combo }: { combo: string }) {
 }
 
 /**
- * App-wide keyboard help. A global listener opens this sheet on `?` and toggles
- * the sidebar on ⌘/Ctrl+B; the dialog itself just documents what's wired up.
+ * App-wide keyboard handling. A global listener toggles the sidebar on ⌘/Ctrl+B,
+ * opens this sheet on ⌘/Ctrl+/ (a modifier chord, so it never gets in the way of
+ * typing a literal `?`), and leaves message/chat selection mode on Escape; the
+ * dialog itself documents what's wired up.
  */
 export function KeyboardShortcuts() {
   const open = useUiStore((s) => s.shortcutsOpen);
   const setOpen = useUiStore((s) => s.setShortcutsOpen);
 
   useEffect(() => {
+    const toggleHelp = () => {
+      const s = useUiStore.getState();
+      s.setShortcutsOpen(!s.shortcutsOpen);
+    };
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && (e.key === 'b' || e.key === 'B')) {
         e.preventDefault();
         useUiStore.getState().toggleSidebar();
         return;
       }
-      if (
-        e.key === '?' &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !isTyping(e.target)
-      ) {
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
         e.preventDefault();
+        toggleHelp();
+        return;
+      }
+      if (e.key === 'Escape') {
+        const el = e.target as HTMLElement | null;
+        const typing =
+          !!el &&
+          (el.tagName === 'INPUT' ||
+            el.tagName === 'TEXTAREA' ||
+            el.isContentEditable);
+        // Let text inputs (palette / edit) and open dialogs consume Escape first.
+        if (typing || document.querySelector('[role="dialog"]')) return;
         const s = useUiStore.getState();
-        s.setShortcutsOpen(!s.shortcutsOpen);
+        if (s.selectionMode) {
+          e.preventDefault();
+          s.toggleSelectionMode();
+        } else if (s.chatSelectMode) {
+          e.preventDefault();
+          s.toggleChatSelectMode();
+        }
       }
     };
     window.addEventListener('keydown', onKey);
