@@ -56,6 +56,9 @@ interface UiState {
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
 
+  trashOpen: boolean;
+  setTrashOpen: (open: boolean) => void;
+
   shortcutsOpen: boolean;
   setShortcutsOpen: (open: boolean) => void;
 
@@ -127,6 +130,9 @@ export const useUiStore = create<UiState>((set) => ({
 
   settingsOpen: false,
   setSettingsOpen: (open) => set({ settingsOpen: open }),
+
+  trashOpen: false,
+  setTrashOpen: (open) => set({ trashOpen: open }),
 
   shortcutsOpen: false,
   setShortcutsOpen: (open) => set({ shortcutsOpen: open }),

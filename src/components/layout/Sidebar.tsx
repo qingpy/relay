@@ -9,6 +9,7 @@ export function Sidebar() {
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const chatSelectMode = useUiStore((s) => s.chatSelectMode);
   const toggleChatSelectMode = useUiStore((s) => s.toggleChatSelectMode);
+  const setTrashOpen = useUiStore((s) => s.setTrashOpen);
 
   return (
     <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-6 text-sidebar-foreground max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40">
@@ -39,6 +40,15 @@ export function Sidebar() {
       <nav className="flex-1 overflow-y-auto">
         <SessionTree />
       </nav>
+
+      <div className="group flex items-center px-8 pt-6">
+        <Marginalia
+          onClick={() => setTrashOpen(true)}
+          className="opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          Trash
+        </Marginalia>
+      </div>
     </aside>
   );
 }

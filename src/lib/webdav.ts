@@ -38,8 +38,13 @@ let initialized = false; // guard against React StrictMode's double-mount
 let applyingRemote = false; // suppress the dirty flag while importing a pull
 let dirty = false;
 let message = '';
+let conflicted = false; // last error was an unresolved local/remote conflict
 
 class ConflictError extends Error {}
+
+/** True when sync is paused on a local/remote conflict (vs. a transient error),
+ *  so the Settings panel can offer a "keep local / keep server" resolution. */
+export const isSyncConflict = (): boolean => conflicted;
 
 const getRev = () => Number(localStorage.getItem(REV_KEY) || 0);
 const setRev = (r: number) => localStorage.setItem(REV_KEY, String(r));
@@ -333,6 +338,7 @@ async function reconcile(): Promise<void> {
     return;
   }
   setStatus('syncing');
+  conflicted = false;
   try {
     const remote = await pull(cfg);
 
@@ -368,7 +374,63 @@ async function reconcile(): Promise<void> {
     setLastSync(Date.now());
     setStatus('synced');
   } catch (e) {
+    conflicted = e instanceof ConflictError;
     setStatus('error', e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * Resolve a paused conflict by making THIS device authoritative: overwrite the
+ * server's live snapshot with local data and resume normal sync. Used by the
+ * Settings "Keep this device" button.
+ */
+export async function resolveKeepLocal(): Promise<void> {
+  const cfg = (await getAppConfig()).webdav;
+  if (!configured(cfg)) {
+    setStatus('off');
+    return;
+  }
+  setStatus('syncing');
+  conflicted = false;
+  try {
+    const remote = await pull(cfg);
+    await push(cfg, remote?.rev ?? getRev());
+    setLastSync(Date.now());
+    setStatus('synced');
+  } catch (e) {
+    setStatus('error', e instanceof Error ? e.message : String(e));
+  }
+}
+
+/**
+ * Resolve a paused conflict by taking the SERVER as authoritative: replace all
+ * local data with the server snapshot. Returns true when local data was
+ * replaced, so the caller can reload to show it. Used by "Keep server".
+ */
+export async function resolveKeepServer(): Promise<boolean> {
+  const cfg = (await getAppConfig()).webdav;
+  if (!configured(cfg)) {
+    setStatus('off');
+    return false;
+  }
+  setStatus('syncing');
+  conflicted = false;
+  try {
+    const remote = await pull(cfg);
+    if (!remote) {
+      // Nothing on the server after all — push local so the two agree.
+      await push(cfg, getRev());
+      setLastSync(Date.now());
+      setStatus('synced');
+      return false;
+    }
+    await applyRemote(remote);
+    setLastSync(Date.now());
+    setStatus('synced');
+    return true;
+  } catch (e) {
+    setStatus('error', e instanceof Error ? e.message : String(e));
+    return false;
   }
 }
 

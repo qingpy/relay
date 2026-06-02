@@ -1,6 +1,5 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Marginalia } from '@/components/ui/marginalia';
-import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,10 +7,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  deleteSession,
   listFolders,
   listSessions,
   moveSessionToFolder,
+  trashSession,
 } from '@/db/repo';
 import { useUiStore } from '@/store/ui';
 
@@ -35,15 +34,7 @@ export function ChatSelectionBar() {
 
   const remove = async () => {
     if (!count) return;
-    const ok = await confirm({
-      title: `Delete ${count} chat${count > 1 ? 's' : ''}?`,
-      description:
-        'The selected chats and their messages will be permanently removed.',
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    for (const id of ids) await deleteSession(id);
+    for (const id of ids) await trashSession(id);
     if (activeId && ids.includes(activeId)) setActive(null);
     clearChatSelection();
   };

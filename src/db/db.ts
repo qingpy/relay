@@ -247,6 +247,10 @@ export const DEFAULT_TITLE_PROMPT =
 /** Starter reasoning-effort choices (user-editable; see AppConfig.reasoningEfforts). */
 export const DEFAULT_REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'];
 
+/** Days a trashed chat is kept before auto-purge on launch (see
+ *  AppConfig.trashRetentionDays). `0` disables auto-purge. */
+export const DEFAULT_TRASH_RETENTION_DAYS = 10;
+
 /** Read the singleton config, creating it (and a starter connection) on first run. */
 export async function getAppConfig(): Promise<AppConfig> {
   const existing = await db.appConfig.get(APP_CONFIG_ID);

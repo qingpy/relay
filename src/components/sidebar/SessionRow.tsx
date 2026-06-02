@@ -4,7 +4,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Check, Copy, FolderInput, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { CheckSquare } from '@/components/ui/check-square';
-import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,11 +14,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  deleteSession,
   duplicateSession,
   listFolders,
   moveSessionToFolder,
   renameSession,
+  trashSession,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
 import { formatStamp } from '@/lib/time';
@@ -44,14 +43,7 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
   const isActive = activeId === session.id;
 
   const onDelete = async () => {
-    const ok = await confirm({
-      title: 'Delete chat?',
-      description: `"${session.title}" and its messages will be permanently removed.`,
-      confirmLabel: 'Delete',
-      destructive: true,
-    });
-    if (!ok) return;
-    await deleteSession(session.id);
+    await trashSession(session.id);
     if (isActive) setActive(null);
   };
 

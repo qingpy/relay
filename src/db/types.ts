@@ -150,6 +150,9 @@ export interface Session {
   webSearch?: boolean;
   /** Active branch tip — the conversation shown is root → this leaf. */
   currentLeafId?: string;
+  /** When set, the chat is in the trash (hidden from the sidebar, restorable).
+   *  Auto-purged once older than `AppConfig.trashRetentionDays`. */
+  deletedAt?: number;
   createdAt: number;
   updatedAt: number;
   order: number;
@@ -234,6 +237,9 @@ export interface AppConfig {
   /** Global, user-editable reasoning-effort choices offered in preset settings
    *  (the accepted set varies by model, so the list is yours to curate). */
   reasoningEfforts?: string[];
+  /** Days a deleted chat stays in the trash before it is auto-purged on launch
+   *  (default 10). `0` keeps trashed chats until you empty the trash yourself. */
+  trashRetentionDays?: number;
   /** Scheduled local backups (run while the app is open). */
   backup?: BackupSettings;
   webdav?: WebDavConfig;
