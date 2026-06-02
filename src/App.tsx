@@ -3,9 +3,10 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { ChatPane } from '@/components/layout/ChatPane';
 import { KeyboardShortcuts } from '@/components/layout/KeyboardShortcuts';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { TrashDialog } from '@/components/sidebar/TrashDialog';
 import { ConfirmDialog } from '@/components/ui/confirm';
 import { APP_CONFIG_ID, db } from '@/db/db';
-import { ensureDefaultPreset } from '@/db/repo';
+import { ensureDefaultPreset, purgeExpiredTrash } from '@/db/repo';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
 import { initLocalStore } from '@/lib/localstore';
 import { initSecrets } from '@/lib/secrets';
@@ -44,6 +45,7 @@ export default function App() {
         await initLocalStore();
         await initSecrets();
         await ensureDefaultPreset();
+        await purgeExpiredTrash();
         await initWebdavSync();
         setBoot({ phase: 'ready' });
       } catch (e) {
@@ -108,6 +110,7 @@ export default function App() {
           <SettingsDialog />
         </Suspense>
       )}
+      <TrashDialog />
       <ConfirmDialog />
       <KeyboardShortcuts />
     </div>

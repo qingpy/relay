@@ -59,7 +59,8 @@ connections { id, name, type: 'openai'|'vertex', url?,        // url = full …/
 folders     { id, name, parentId|null, order, createdAt,      // a "Preset" in the UI
               connectionId?, model?, settings?: ModelSettings, systemPrompt? }
 sessions    { id, folderId (preset), title, systemPrompt?, webSearch?,
-              currentLeafId?, createdAt, updatedAt, order }
+              currentLeafId?, deletedAt?,                      // deletedAt set = in the trash
+              createdAt, updatedAt, order }
 messages    { id, sessionId, parentId|null,                   // tree edge → branching
               role: 'user'|'assistant'|'system'|'divider',
               content: Part[], reasoning?, reasoningMs?, toolCalls?, citations?,
@@ -69,6 +70,7 @@ prompts     { id, title, content, order }
 appConfig   { id:'singleton', theme, exportIncludeThinking?,
               titleConnectionId?/titleModel?/titlePrompt?,    // auto-title
               reasoningEfforts?: string[],                    // global effort choices
+              trashRetentionDays?,                            // auto-purge trash (default 10; 0 = off)
               backup?, webdav? }
 ```
 
@@ -86,6 +88,11 @@ Key ideas:
 - **Context divider.** A `role:'divider'` message; everything before the *latest*
   divider stays on screen but is excluded from what's sent (`activeWindow` in
   `src/lib/conversation.ts`). "Clear context without clearing the page."
+- **Trash (soft delete).** Deleting a chat sets `session.deletedAt` instead of
+  removing it; `listSessions()` hides those, `listTrashedSessions()` surfaces them
+  in the Trash dialog (restore / delete-forever / empty). `purgeExpiredTrash()`
+  runs on boot and hard-deletes anything older than `appConfig.trashRetentionDays`
+  (default 10; `0` keeps them until emptied). `purgeSession()` is the hard delete.
 - **Migrations** v1–v5 in `db.ts` (message tree backfill; provider keys →
   connections; presets-only; collapse types to `openai|vertex`).
 
@@ -139,9 +146,12 @@ snapshot into the store and rewrites the file clean.
    a single user, but **no automatic sync overwrites real local data**: the cloud
    is auto-adopted only onto a pristine device, an empty/blank remote never
    clobbers a device with content, and a pristine device never seeds a blank
-   snapshot — anything ambiguous pauses with a visible conflict (resolve by
-   restoring a backup). Pull on open, scheduled push while open (interval in
-   **hours**), flush on hide.
+   snapshot — anything ambiguous pauses with a visible conflict. A paused
+   conflict (both sides hold data and this origin's `rev` is still 0) is resolved
+   explicitly in Settings → Sync: **Keep this device** (`resolveKeepLocal` — push
+   local over the server) or **Keep server** (`resolveKeepServer` — pull and
+   replace local), or by restoring a backup. Pull on open, scheduled push while
+   open (interval in **hours**), flush on hide.
    - **Versioned backups.** Alongside the single live snapshot, Relay keeps a
      rolling set of timestamped copies in a `backups/` subfolder — one written
      every `intervalHours`, plus one on each manual **Backup**, pruned to the
@@ -252,7 +262,7 @@ components/
             TreeMap · SiblingSwitcher · ContextMeter · SessionControls · ModelSelect ·
             ExportMenu · SlashPalette · MessageActions · SelectionToolbar
   sidebar/  SessionTree · FolderRow (preset) · SessionRow · PresetEditor
-            ("Model & instructions") · InlineEdit · ChatSelectionBar
+            ("Model & instructions") · InlineEdit · ChatSelectionBar · TrashDialog
   settings/ SettingsDialog · ConnectionsManager · ModelPicker · PromptsManager ·
             AutoTitleSettings · DataStoreSettings · WebdavSettings · BackupSettings ·
             SectionLabel

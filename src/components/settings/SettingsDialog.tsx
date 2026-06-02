@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { getAppConfig, updateAppConfig } from '@/db/db';
+import {
+  DEFAULT_TRASH_RETENTION_DAYS,
+  getAppConfig,
+  updateAppConfig,
+} from '@/db/db';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
@@ -75,6 +80,7 @@ export function SettingsDialog() {
                   <AutoTitleSettings />
                   <CodeBlockSettings />
                   <ExportSettings />
+                  <TrashSettings />
                 </>
               )}
               {panel === 'sync' && (
@@ -121,6 +127,37 @@ function ExportSettings() {
             void updateAppConfig({ exportIncludeThinking: v })
           }
         />
+      </label>
+    </section>
+  );
+}
+
+function TrashSettings() {
+  const config = useLiveQuery(() => getAppConfig(), []);
+  const days = config?.trashRetentionDays ?? DEFAULT_TRASH_RETENTION_DAYS;
+  return (
+    <section className="flex flex-col gap-3">
+      <SectionLabel>Trash</SectionLabel>
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span>Auto-remove deleted chats after</span>
+        <span className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            className="h-8 w-20"
+            value={days}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              void updateAppConfig({
+                trashRetentionDays:
+                  Number.isFinite(n) && n >= 0
+                    ? Math.floor(n)
+                    : DEFAULT_TRASH_RETENTION_DAYS,
+              });
+            }}
+          />
+          <span className="text-muted-foreground">days</span>
+        </span>
       </label>
     </section>
   );

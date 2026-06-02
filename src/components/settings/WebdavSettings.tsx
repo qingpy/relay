@@ -15,8 +15,11 @@ import {
   deleteWebdavBackup,
   getLastSync,
   getSyncMessage,
+  isSyncConflict,
   listWebdavBackups,
   persistWebdavConfig,
+  resolveKeepLocal,
+  resolveKeepServer,
   restoreWebdavBackup,
   saveWebdavConfig,
   syncNow,
@@ -147,6 +150,41 @@ export function WebdavSettings() {
     if (!ok) return;
     await deleteWebdavBackup(name);
     await refreshBackups();
+  };
+
+  // Resolve a paused conflict (both sides have data, this origin never synced):
+  // pick a winner explicitly. "This device" pushes local up; "server" pulls down.
+  const keepLocal = async () => {
+    const ok = await confirm({
+      title: 'Keep this device?',
+      description:
+        'Your data on this device overwrites the server copy, and sync resumes.',
+      confirmLabel: 'Keep this device',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await resolveKeepLocal();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const keepServer = async () => {
+    const ok = await confirm({
+      title: 'Keep server copy?',
+      description:
+        'The server copy replaces ALL data on this device. The app will reload.',
+      confirmLabel: 'Keep server',
+      destructive: true,
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      if (await resolveKeepServer()) location.reload();
+    } finally {
+      setBusy(false);
+    }
   };
 
   const last = getLastSync();
@@ -304,6 +342,25 @@ export function WebdavSettings() {
       >
         {note ?? statusText}
       </span>
+
+      {status === 'error' && isSyncConflict() && (
+        <div className="flex flex-wrap items-center gap-2">
+          <FlatButton
+            onClick={() => void keepLocal()}
+            disabled={busy}
+            className="px-2.5 py-1.5"
+          >
+            Keep this device
+          </FlatButton>
+          <FlatButton
+            onClick={() => void keepServer()}
+            disabled={busy}
+            className="px-2.5 py-1.5"
+          >
+            Keep server
+          </FlatButton>
+        </div>
+      )}
     </section>
   );
 }

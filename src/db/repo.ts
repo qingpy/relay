@@ -1,4 +1,10 @@
-import { db, ensureDefaultConnection, newId } from './db';
+import {
+  db,
+  DEFAULT_TRASH_RETENTION_DAYS,
+  ensureDefaultConnection,
+  getAppConfig,
+  newId,
+} from './db';
 import type {
   Connection,
   ConnectionType,
@@ -35,9 +41,16 @@ export async function createSession(input: {
   return session;
 }
 
-/** All sessions, ascending by `order` (newest first until reordered). */
-export function listSessions(): Promise<Session[]> {
-  return db.sessions.orderBy('order').toArray();
+/** Live (non-trashed) sessions, ascending by `order` (newest first until reordered). */
+export async function listSessions(): Promise<Session[]> {
+  const all = await db.sessions.orderBy('order').toArray();
+  return all.filter((s) => s.deletedAt == null);
+}
+
+/** Trashed sessions, most-recently-deleted first. */
+export async function listTrashedSessions(): Promise<Session[]> {
+  const trashed = await db.sessions.filter((s) => s.deletedAt != null).toArray();
+  return trashed.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
 }
 
 export function getSession(id: string): Promise<Session | undefined> {
@@ -79,12 +92,42 @@ export async function setSessionSystemPrompt(
   await db.sessions.update(id, { systemPrompt: systemPrompt || undefined });
 }
 
-export async function deleteSession(id: string): Promise<void> {
+/** Move a chat to the trash: hidden from the sidebar, restorable until purged. */
+export async function trashSession(id: string): Promise<void> {
+  await db.sessions.update(id, { deletedAt: Date.now() });
+}
+
+/** Bring a chat back out of the trash. */
+export async function restoreSession(id: string): Promise<void> {
+  await db.sessions.update(id, { deletedAt: undefined });
+}
+
+/** Permanently remove a chat and its messages/files. Irreversible. */
+export async function purgeSession(id: string): Promise<void> {
   await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
     await db.messages.where('sessionId').equals(id).delete();
     await db.files.where('sessionId').equals(id).delete();
     await db.sessions.delete(id);
   });
+}
+
+/** Permanently remove every trashed chat. */
+export async function emptyTrash(): Promise<void> {
+  const trashed = await listTrashedSessions();
+  for (const s of trashed) await purgeSession(s.id);
+}
+
+/** Purge trashed chats older than the configured retention (run on launch).
+ *  A retention of 0 keeps them indefinitely. */
+export async function purgeExpiredTrash(): Promise<void> {
+  const { trashRetentionDays } = await getAppConfig();
+  const days = trashRetentionDays ?? DEFAULT_TRASH_RETENTION_DAYS;
+  if (days <= 0) return;
+  const cutoff = Date.now() - days * 86_400_000;
+  const expired = (await listTrashedSessions()).filter(
+    (s) => (s.deletedAt ?? 0) < cutoff,
+  );
+  for (const s of expired) await purgeSession(s.id);
 }
 
 export async function renameSession(id: string, title: string): Promise<void> {
