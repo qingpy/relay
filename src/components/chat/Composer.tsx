@@ -77,11 +77,12 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
     if (incoming.length) setFiles((prev) => [...prev, ...incoming]);
   };
 
-  // Attach images pasted from the clipboard (e.g. screenshots), letting plain
-  // text paste through untouched.
+  // Attach files pasted from the clipboard — screenshots, copied images, or
+  // files copied from the OS file manager — while letting plain-text paste
+  // through untouched. `addFiles` drops anything the provider can't take.
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const images = Array.from(e.clipboardData.items)
-      .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+    const pasted = Array.from(e.clipboardData.items)
+      .filter((it) => it.kind === 'file')
       .map((it) => it.getAsFile())
       .filter((f): f is File => !!f)
       .map((f) =>
@@ -91,9 +92,9 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
               type: f.type,
             }),
       );
-    if (images.length) {
+    if (pasted.length) {
       e.preventDefault();
-      addFiles(images);
+      addFiles(pasted);
     }
   };
 
@@ -208,6 +209,8 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder="Message…   / for prompts"
+          spellCheck
+          lang="en"
           className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground"
         />
 
