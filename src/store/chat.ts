@@ -147,6 +147,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     // token is expensive and makes the stream stutter. Tokens still arrive at
     // full speed into `buf`; we just flush to the store at most once a frame.
     let flushQueued = false;
+    let flushHandle = 0;
     const flush = () => {
       flushQueued = false;
       setBuffer(messageId, buf);
@@ -154,7 +155,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     const scheduleFlush = () => {
       if (flushQueued) return;
       flushQueued = true;
-      requestAnimationFrame(flush);
+      flushHandle = requestAnimationFrame(flush);
     };
 
     const persist = async (final: boolean) => {
@@ -258,6 +259,9 @@ export const useChatStore = create<ChatState>((set, get) => {
           toolCalls: buf.toolCalls.map((c) => ({ ...c, pending: false })),
         };
       }
+      // Cancel any frame still queued so it can't re-insert (and resurrect) the
+      // buffer after we clear it below — the final state is persisted to the DB.
+      if (flushQueued) cancelAnimationFrame(flushHandle);
       await persist(true);
       await captureFileTokens(history, resolved.settings.systemPrompt, usage);
       if (errored) await updateMessage(messageId, { error: errored });

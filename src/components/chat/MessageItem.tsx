@@ -172,7 +172,6 @@ export const MessageItem = memo(function MessageItem({
           <Reasoning
             text={reasoning}
             streaming={streaming}
-            hasAnswer={!!text}
             durationMs={reasoningMs}
           />
         )}
