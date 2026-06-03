@@ -21,7 +21,6 @@ const GROUPS: { title: string; items: [string, string][] }[] = [
       [`${MOD} Enter`, 'Send message'],
       ['Enter', 'New line'],
       ['/', 'Quick-prompt palette'],
-      ['Esc', 'Close palette · cancel edit · exit selection'],
     ],
   },
   {
