@@ -82,8 +82,10 @@ Key ideas:
   `folders`) fix the connection/model/settings/system-prompt for the chats inside
   them; a chat adds only an extra system prompt + a web-search toggle.
 - **Branching.** Messages form a *tree* via `parentId`; the visible conversation
-  is the path root → `session.currentLeafId`. Regenerate / edit / fork create
-  siblings (non-destructive). See `src/lib/tree.ts` (`activePath`, `leafOf`,
+  is the path root → `session.currentLeafId`. Regenerate / fork create siblings
+  (non-destructive); editing a user turn rewrites it in place — text *and*
+  attachments (changing the file set clears its measured `fileTokens` so the
+  next turn re-prices it). See `src/lib/tree.ts` (`activePath`, `leafOf`,
   `childrenOf`, `siblingsOf`).
 - **Context divider.** A `role:'divider'` message; everything before the *latest*
   divider stays on screen but is excluded from what's sent (`activeWindow` in
@@ -249,7 +251,11 @@ main.tsx              React root (StrictMode)
 App.tsx               boot gating (load store → seed → WebDAV); top-level layout
 index.css             design tokens — the flat "Unboxed Stationery" theme + label-mono
 db/        types.ts · db.ts (Dexie, in-memory backend, migrations) · repo.ts (all CRUD)
-store/     ui.ts (view state) · chat.ts (streaming engine: send/regenerate/stop)
+store/     ui.ts (view state) · chat.ts (streaming engine: send/regenerate/stop;
+           the assistant turn is created before any fallible work so failures all
+           surface on it; a 120 s idle watchdog aborts hung streams; regenerate
+           stops an in-flight stream first; zero-output turns are spliced on stop
+           or errored on completion)
 providers/ types.ts · registry.ts · openai.ts · gemini.ts · vertex.ts
 lib/       resolve.ts/useResolved.ts · models.ts · conversation.ts · tree.ts ·
            context.ts (header meter) · backup.ts · localstore.ts · webdav.ts ·

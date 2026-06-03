@@ -1,12 +1,28 @@
 import { lazy, memo, Suspense, useLayoutEffect, useRef, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { AlertCircle, X } from 'lucide-react';
 import { Marginalia } from '@/components/ui/marginalia';
-import type { Message } from '@/db/types';
-import { spliceMessage, textPart, updateMessage } from '@/db/repo';
+import type { Message, StoredFile } from '@/db/types';
+import {
+  deleteFiles,
+  getFilesByIds,
+  saveAttachments,
+  spliceMessage,
+  textPart,
+  updateMessage,
+} from '@/db/repo';
+import {
+  FULL_CAPS,
+  acceptFor,
+  filesFromClipboard,
+  partitionAllowed,
+} from '@/lib/attachments';
 import { partsText } from '@/lib/conversation';
 import { formatStamp } from '@/lib/time';
+import { useResolvedConfig } from '@/lib/useResolved';
 import { cn } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
+import { AttachmentChip, useRefusedNote } from './AttachmentChip';
 import { Citations } from './Citations';
 import { MessageActions } from './MessageActions';
 import { MessageAttachments } from './MessageAttachments';
@@ -145,6 +161,16 @@ export const MessageItem = memo(function MessageItem({
   }
 
   const showDots = streaming && !text && !reasoning && toolCalls.length === 0;
+  // An assistant turn with no content and no recorded error is a stream that
+  // never finished (page closed or killed mid-flight) — say so instead of
+  // rendering a blank husk.
+  const interrupted =
+    !streaming &&
+    !text &&
+    !reasoning &&
+    toolCalls.length === 0 &&
+    citations.length === 0 &&
+    !message.error;
   const retry = () => {
     if (message.parentId)
       void useChatStore.getState().regenerate(message.sessionId, message.parentId);
@@ -179,6 +205,12 @@ export const MessageItem = memo(function MessageItem({
           <ToolCard key={tc.id || i} call={tc} />
         ))}
         {text ? <MessageBody text={text} /> : showDots ? <StreamingDots /> : null}
+        {interrupted && (
+          <div className="label-mono flex items-center gap-4 text-muted-foreground">
+            <span>No output — interrupted</span>
+            {message.parentId && <Marginalia onClick={retry}>Retry</Marginalia>}
+          </div>
+        )}
         {message.error && (
           <div
             role="alert"
@@ -206,6 +238,12 @@ export const MessageItem = memo(function MessageItem({
   );
 });
 
+/**
+ * In-place editor for a user turn: text plus attachments. Existing files show
+ * as removable chips; new files come in via Attach or paste (filtered by the
+ * model's capabilities). Saving rewrites the message where it stands — replies
+ * stay put; Regenerate picks up the new content.
+ */
 function UserEditor({
   message,
   onClose,
@@ -214,7 +252,28 @@ function UserEditor({
   onClose: () => void;
 }) {
   const [value, setValue] = useState(() => partsText(message.content));
+  const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
+  const [added, setAdded] = useState<File[]>([]);
+  const [refusedNote, reportRefused] = useRefusedNote();
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const existing = useLiveQuery(
+    () => getFilesByIds(message.attachments ?? []),
+    [message.id],
+    [] as StoredFile[],
+  );
+  const resolved = useResolvedConfig(message.sessionId);
+  const caps = resolved?.capabilities ?? FULL_CAPS;
+
+  const kept = existing.filter((f) => !removed.has(f.id));
+  const canSave = !!value.trim() || kept.length + added.length > 0;
+
+  const addFiles = (list: FileList | File[]) => {
+    const { accepted, refused } = partitionAllowed(list, caps);
+    if (accepted.length) setAdded((prev) => [...prev, ...accepted]);
+    reportRefused(refused);
+  };
 
   const resize = (el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
@@ -230,10 +289,25 @@ function UserEditor({
   }, []);
 
   const save = async () => {
-    const text = value.trim();
-    if (!text) return;
+    if (!canSave) return;
     onClose();
-    await updateMessage(message.id, { content: [textPart(text)] });
+    const text = value.trim();
+    const changed = removed.size > 0 || added.length > 0;
+    const newIds = added.length
+      ? await saveAttachments(message.sessionId, message.id, added)
+      : [];
+    await updateMessage(message.id, {
+      content: text ? [textPart(text)] : [],
+      // A changed file set invalidates the measured token cost — clear it so
+      // the next completed turn re-prices the attachments.
+      ...(changed
+        ? {
+            attachments: [...kept.map((f) => f.id), ...newIds],
+            fileTokens: undefined,
+          }
+        : {}),
+    });
+    if (removed.size) await deleteFiles([...removed]);
   };
 
   return (
@@ -242,6 +316,37 @@ function UserEditor({
         <RoleTag role="user" />
       </header>
       <div className={cn('mt-3', INDENT)}>
+        {(kept.length > 0 || added.length > 0 || refusedNote) && (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {kept.map((f) => (
+              <AttachmentChip
+                key={f.id}
+                name={f.name}
+                mimeType={f.mimeType}
+                blob={f.blob}
+                onRemove={() =>
+                  setRemoved((prev) => new Set(prev).add(f.id))
+                }
+              />
+            ))}
+            {added.map((f, i) => (
+              <AttachmentChip
+                key={`${f.name}-${i}`}
+                name={f.name}
+                mimeType={f.type}
+                blob={f}
+                onRemove={() =>
+                  setAdded((prev) => prev.filter((_, j) => j !== i))
+                }
+              />
+            ))}
+            {refusedNote && (
+              <span className="label-mono text-muted-foreground">
+                {refusedNote}
+              </span>
+            )}
+          </div>
+        )}
         <textarea
           ref={ref}
           value={value}
@@ -249,6 +354,13 @@ function UserEditor({
           onChange={(e) => {
             setValue(e.target.value);
             resize(e.target);
+          }}
+          onPaste={(e) => {
+            const pasted = filesFromClipboard(e.clipboardData);
+            if (pasted.length) {
+              e.preventDefault();
+              addFiles(pasted);
+            }
           }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') {
@@ -265,9 +377,23 @@ function UserEditor({
           }}
           className="block max-h-60 min-h-9 w-full resize-none border border-input bg-card px-3 py-2 text-base leading-relaxed outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
+        <input
+          ref={fileInput}
+          type="file"
+          multiple
+          accept={acceptFor(caps)}
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files) addFiles(e.target.files);
+            e.target.value = '';
+          }}
+        />
         <div className="mt-2 flex items-center gap-4">
-          <Marginalia onClick={() => void save()} disabled={!value.trim()}>
+          <Marginalia onClick={() => void save()} disabled={!canSave}>
             Save
+          </Marginalia>
+          <Marginalia onClick={() => fileInput.current?.click()}>
+            Attach
           </Marginalia>
           <Marginalia onClick={onClose}>Cancel</Marginalia>
         </div>

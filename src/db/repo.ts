@@ -491,3 +491,13 @@ export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
   const res = await db.files.bulkGet(ids);
   return res.filter((f): f is StoredFile => !!f);
 }
+
+/** Delete stored files by id — attachments detached from a message by an edit. */
+export async function deleteFiles(ids: string[]): Promise<void> {
+  await db.files.bulkDelete(ids);
+}
+
+/** All stored files of a session (for the context meter's size estimates). */
+export async function listSessionFiles(sessionId: string): Promise<StoredFile[]> {
+  return db.files.where('sessionId').equals(sessionId).toArray();
+}

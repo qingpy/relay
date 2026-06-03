@@ -8,6 +8,7 @@ import {
   listConnections,
   saveAttachments,
   setCurrentLeaf,
+  spliceMessage,
   textPart,
   touchSession,
   updateMessage,
@@ -20,7 +21,7 @@ import {
   deriveTitle,
   partsText,
 } from '@/lib/conversation';
-import { resolveConfig } from '@/lib/resolve';
+import { resolveConfig, type ResolvedConfig } from '@/lib/resolve';
 import { activePath } from '@/lib/tree';
 import { readSSE } from '@/lib/sse';
 import { providerForConnection } from '@/providers/registry';
@@ -50,13 +51,18 @@ interface ChatState {
   /** Send a new user turn under the active leaf and stream the reply. */
   send: (sessionId: string, text: string, files?: File[]) => Promise<void>;
   /** Answer a user turn: stream a fresh assistant child under it. If a reply
-   *  already exists it becomes an alternate sibling branch. */
+   *  already exists it becomes an alternate sibling branch; an in-flight
+   *  stream in the chat is stopped first. */
   regenerate: (sessionId: string, userId: string) => Promise<void>;
   stop: (sessionId: string) => void;
 }
 
 const controllers = new Map<string, AbortController>();
 const PERSIST_INTERVAL = 400;
+
+/** Abort a stream after this long without a single byte from the provider — a
+ *  hung request otherwise holds the session's streaming slot forever. */
+const IDLE_TIMEOUT_MS = 120_000;
 
 /**
  * Price a turn's attachments from the provider's real `promptTokens`: subtract
@@ -93,7 +99,7 @@ async function captureFileTokens(
   }
 }
 
-export const useChatStore = create<ChatState>((set, get) => {
+export const useChatStore = create<ChatState>((set, get, api) => {
   const setBuffer = (id: string, buf: StreamBuffer) =>
     set((s) => ({ streams: { ...s.streams, [id]: buf } }));
 
@@ -110,6 +116,10 @@ export const useChatStore = create<ChatState>((set, get) => {
    * Create an assistant message under `parentId`, make it the active leaf, and
    * stream the provider response into it. `history` is the conversation path
    * (root → parent) used to build the request.
+   *
+   * The assistant message is created *before* any fallible work (config
+   * resolution, attachment loading, the request itself) so every failure has a
+   * visible home: an error on that message, with Retry — never a silent no-op.
    */
   const runTurn = async (
     session: Session,
@@ -117,10 +127,6 @@ export const useChatStore = create<ChatState>((set, get) => {
     history: Message[],
   ) => {
     const sessionId = session.id;
-    const folder = session.folderId ? await getFolder(session.folderId) : undefined;
-    const connections = await listConnections();
-    const resolved = resolveConfig(session, folder, connections);
-    const chatMessages = await buildChatMessages(history);
 
     const assistant = await addMessage({ sessionId, parentId, role: 'assistant' });
     const messageId = assistant.id;
@@ -133,10 +139,24 @@ export const useChatStore = create<ChatState>((set, get) => {
     const controller = new AbortController();
     controllers.set(sessionId, controller);
 
+    let resolved: ResolvedConfig | undefined;
     let buf: StreamBuffer = EMPTY_BUFFER;
     let usage: Usage | undefined;
     let lastPersist = 0;
     let errored: string | null = null;
+
+    // Watchdog: a provider that stops sending (or never starts) would hold the
+    // session's streaming slot forever. Re-armed on every chunk; on expiry the
+    // stream aborts with a visible, retryable error instead of hanging.
+    let timedOut = false;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const armIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, IDLE_TIMEOUT_MS);
+    };
 
     // Tool-call argument fragments, accumulated by index (OpenAI streams them
     // piecemeal); reasoning start time for the "thought for Ns" readout.
@@ -161,7 +181,7 @@ export const useChatStore = create<ChatState>((set, get) => {
     const persist = async (final: boolean) => {
       await updateMessage(messageId, {
         content: buf.text ? [textPart(buf.text)] : [],
-        ...(resolved.model ? { model: resolved.model } : {}),
+        ...(resolved?.model ? { model: resolved.model } : {}),
         ...(buf.reasoning ? { reasoning: buf.reasoning } : {}),
         ...(buf.reasoningMs != null ? { reasoningMs: buf.reasoningMs } : {}),
         ...(buf.toolCalls.length ? { toolCalls: buf.toolCalls } : {}),
@@ -171,6 +191,13 @@ export const useChatStore = create<ChatState>((set, get) => {
     };
 
     try {
+      const folder = session.folderId
+        ? await getFolder(session.folderId)
+        : undefined;
+      const connections = await listConnections();
+      resolved = resolveConfig(session, folder, connections);
+      const chatMessages = await buildChatMessages(history);
+
       if (!resolved.connection || !resolved.model) {
         throw new Error(
           'No model configured. Add a connection in Settings and pick a model for this chat or its preset.',
@@ -188,6 +215,7 @@ export const useChatStore = create<ChatState>((set, get) => {
         clientEmail: resolved.connection.clientEmail,
       });
 
+      armIdleTimer();
       const res = await fetch(req.url, {
         method: 'POST',
         headers: req.headers,
@@ -204,6 +232,7 @@ export const useChatStore = create<ChatState>((set, get) => {
       }
 
       for await (const data of readSSE(res.body, controller.signal)) {
+        armIdleTimer();
         for (const delta of provider.parseStreamChunk(data)) {
           if (delta.kind === 'text') {
             if (reasoningStart && buf.reasoningMs == null) {
@@ -245,14 +274,20 @@ export const useChatStore = create<ChatState>((set, get) => {
         const now = Date.now();
         if (now - lastPersist > PERSIST_INTERVAL) {
           lastPersist = now;
-          void persist(false);
+          void persist(false).catch(() => {});
         }
       }
     } catch (err) {
-      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        // A user Stop stays silent; the watchdog's own abort must not.
+        if (timedOut) {
+          errored = `No data from the provider for ${IDLE_TIMEOUT_MS / 1000}s — request aborted.`;
+        }
+      } else {
         errored = err instanceof Error ? err.message : String(err);
       }
     } finally {
+      clearTimeout(idleTimer);
       if (buf.toolCalls.some((c) => c.pending)) {
         buf = {
           ...buf,
@@ -262,9 +297,25 @@ export const useChatStore = create<ChatState>((set, get) => {
       // Cancel any frame still queued so it can't re-insert (and resurrect) the
       // buffer after we clear it below — the final state is persisted to the DB.
       if (flushQueued) cancelAnimationFrame(flushHandle);
-      await persist(true);
-      await captureFileTokens(history, resolved.settings.systemPrompt, usage);
-      if (errored) await updateMessage(messageId, { error: errored });
+
+      const empty =
+        !buf.text && !buf.reasoning && buf.toolCalls.length === 0;
+      // A stream that ended clean but produced nothing is a failure the user
+      // must see; one the user stopped before any output is just noise.
+      if (empty && !errored && !controller.signal.aborted) {
+        errored = 'The model returned no output.';
+      }
+      try {
+        if (empty && !errored) {
+          await spliceMessage(messageId); // stopped before output: drop the husk
+        } else {
+          await persist(true);
+          await captureFileTokens(history, resolved?.settings.systemPrompt, usage);
+          if (errored) await updateMessage(messageId, { error: errored });
+        }
+      } catch {
+        // Persistence failed; still release the streaming slot below.
+      }
       controllers.delete(sessionId);
       clearStream(sessionId, messageId);
     }
@@ -308,11 +359,26 @@ export const useChatStore = create<ChatState>((set, get) => {
     },
 
     regenerate: async (sessionId, userId) => {
-      if (get().activeBySession[sessionId]) return;
       const session = await getSession(sessionId);
       if (!session) return;
       const user = await getMessage(userId);
       if (!user || user.role !== 'user') return;
+
+      // A stream already running in this chat (even a hung one) doesn't block
+      // regeneration — it means "abandon that, answer again": stop it and wait
+      // for the slot to free (the turn's cleanup always releases it).
+      if (get().activeBySession[sessionId]) {
+        controllers.get(sessionId)?.abort();
+        await new Promise<void>((resolve) => {
+          if (!get().activeBySession[sessionId]) return resolve();
+          const unsub = api.subscribe((s) => {
+            if (!s.activeBySession[sessionId]) {
+              unsub();
+              resolve();
+            }
+          });
+        });
+      }
 
       await touchSession(sessionId);
       const history = activePath(await getMessages(sessionId), user.id);

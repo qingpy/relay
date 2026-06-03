@@ -1,6 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { FileText, X } from 'lucide-react';
 import { Marginalia } from '@/components/ui/marginalia';
 import {
   clearContext,
@@ -9,21 +8,18 @@ import {
   setSessionWebSearch,
 } from '@/db/repo';
 import type { Prompt } from '@/db/types';
-import { acceptFor, isAllowed } from '@/lib/attachments';
+import {
+  FULL_CAPS,
+  acceptFor,
+  filesFromClipboard,
+  partitionAllowed,
+} from '@/lib/attachments';
 import { startNewSession } from '@/lib/session-actions';
 import { useResolvedConfig } from '@/lib/useResolved';
 import { cn } from '@/lib/utils';
-import type { Capabilities } from '@/providers/types';
 import { useChatStore } from '@/store/chat';
+import { AttachmentChip, useRefusedNote } from './AttachmentChip';
 import { SlashPalette } from './SlashPalette';
-
-const FULL_CAPS: Capabilities = {
-  vision: true,
-  pdf: true,
-  reasoning: true,
-  webSearch: true,
-  toolUse: true,
-};
 
 export function Composer({ sessionId }: { sessionId: string | null }) {
   const [value, setValue] = useState('');
@@ -32,6 +28,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [refusedNote, reportRefused] = useRefusedNote();
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -73,25 +70,15 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   }, [value, expanded]);
 
   const addFiles = (list: FileList | File[]) => {
-    const incoming = [...list].filter((f) => isAllowed(f.type, f.name, caps));
-    if (incoming.length) setFiles((prev) => [...prev, ...incoming]);
+    const { accepted, refused } = partitionAllowed(list, caps);
+    if (accepted.length) setFiles((prev) => [...prev, ...accepted]);
+    reportRefused(refused);
   };
 
-  // Attach files pasted from the clipboard — screenshots, copied images, or
-  // files copied from the OS file manager — while letting plain-text paste
-  // through untouched. `addFiles` drops anything the provider can't take.
+  // Attach files pasted from the clipboard while letting plain-text paste
+  // through untouched.
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const pasted = Array.from(e.clipboardData.items)
-      .filter((it) => it.kind === 'file')
-      .map((it) => it.getAsFile())
-      .filter((f): f is File => !!f)
-      .map((f) =>
-        f.name
-          ? f
-          : new File([f], `pasted-${Date.now()}.${f.type.split('/')[1] || 'png'}`, {
-              type: f.type,
-            }),
-      );
+    const pasted = filesFromClipboard(e.clipboardData);
     if (pasted.length) {
       e.preventDefault();
       addFiles(pasted);
@@ -189,15 +176,20 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           />
         )}
 
-        {files.length > 0 && (
-          <div className="mb-1 flex flex-wrap gap-2 px-1 pt-1">
+        {(files.length > 0 || refusedNote) && (
+          <div className="mb-1 flex flex-wrap items-center gap-2 px-1 pt-1">
             {files.map((f, i) => (
-              <PendingChip
+              <AttachmentChip
                 key={`${f.name}-${i}`}
-                file={f}
+                name={f.name}
+                mimeType={f.type}
+                blob={f}
                 onRemove={() => setFiles((prev) => prev.filter((_, j) => j !== i))}
               />
             ))}
+            {refusedNote && (
+              <span className="label-mono text-muted-foreground">{refusedNote}</span>
+            )}
           </div>
         )}
 
@@ -272,37 +264,6 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function PendingChip({ file, onRemove }: { file: File; onRemove: () => void }) {
-  const isImage = file.type.startsWith('image/');
-  const [url, setUrl] = useState<string>();
-
-  useEffect(() => {
-    if (!isImage) return;
-    const u = URL.createObjectURL(file);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [file, isImage]);
-
-  return (
-    <div className="flex items-center gap-1.5 border border-border bg-muted/50 py-1 pl-1.5 pr-1 text-xs">
-      {isImage && url ? (
-        <img src={url} alt="" className="size-7 object-cover" />
-      ) : (
-        <FileText className="size-4 text-muted-foreground" />
-      )}
-      <span className="max-w-32 truncate">{file.name}</span>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove attachment"
-        className="flex size-5 items-center justify-center text-muted-foreground transition hover:bg-background hover:text-foreground"
-      >
-        <X className="size-3" />
-      </button>
     </div>
   );
 }
