@@ -209,6 +209,8 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
           onKeyDown={onKeyDown}
           onPaste={onPaste}
           placeholder="Message…   / for prompts"
+          spellCheck
+          lang="en"
           className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground"
         />
 
