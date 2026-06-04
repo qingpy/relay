@@ -200,7 +200,7 @@ export const MessageItem = memo(function MessageItem({
         {reasoning && (
           <Reasoning
             text={reasoning}
-            streaming={streaming}
+            thinking={streaming && !text}
             durationMs={reasoningMs}
           />
         )}
