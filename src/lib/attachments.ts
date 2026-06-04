@@ -32,6 +32,44 @@ export function isAllowed(
   return kind === 'text';
 }
 
+/** Optimistic capability fallback while the resolved config is still loading. */
+export const FULL_CAPS: Capabilities = {
+  vision: true,
+  pdf: true,
+  reasoning: true,
+  webSearch: true,
+  toolUse: true,
+};
+
+/** Split files into what the model takes and what it must refuse. */
+export function partitionAllowed(
+  files: FileList | File[],
+  caps: Capabilities,
+): { accepted: File[]; refused: File[] } {
+  const accepted: File[] = [];
+  const refused: File[] = [];
+  for (const f of [...files]) {
+    (isAllowed(f.type, f.name, caps) ? accepted : refused).push(f);
+  }
+  return { accepted, refused };
+}
+
+/** Files pasted from the clipboard — screenshots, copied images, or files
+ *  copied from the OS file manager. Nameless pastes get a generated name. */
+export function filesFromClipboard(data: DataTransfer): File[] {
+  return Array.from(data.items)
+    .filter((it) => it.kind === 'file')
+    .map((it) => it.getAsFile())
+    .filter((f): f is File => !!f)
+    .map((f) =>
+      f.name
+        ? f
+        : new File([f], `pasted-${Date.now()}.${f.type.split('/')[1] || 'png'}`, {
+            type: f.type,
+          }),
+    );
+}
+
 /** `accept` attribute for the file input, narrowed to what the provider takes. */
 export function acceptFor(caps: Capabilities): string {
   const parts = ['text/*', '.md', '.csv', '.json', '.log'];

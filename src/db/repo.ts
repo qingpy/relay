@@ -338,6 +338,9 @@ export function getMessage(id: string): Promise<Message | undefined> {
 }
 
 export async function addMessage(input: {
+  /** Caller-supplied id, for state that must exist before the row does
+   *  (the chat store registers the stream buffer first). */
+  id?: string;
   sessionId: string;
   parentId: string | null;
   role: MessageRole;
@@ -345,7 +348,7 @@ export async function addMessage(input: {
   reasoning?: string;
 }): Promise<Message> {
   const message: Message = {
-    id: newId(),
+    id: input.id ?? newId(),
     sessionId: input.sessionId,
     parentId: input.parentId,
     role: input.role,
@@ -490,4 +493,14 @@ export async function saveAttachments(
 export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
   const res = await db.files.bulkGet(ids);
   return res.filter((f): f is StoredFile => !!f);
+}
+
+/** Delete stored files by id — attachments detached from a message by an edit. */
+export async function deleteFiles(ids: string[]): Promise<void> {
+  await db.files.bulkDelete(ids);
+}
+
+/** All stored files of a session (for the context meter's size estimates). */
+export async function listSessionFiles(sessionId: string): Promise<StoredFile[]> {
+  return db.files.where('sessionId').equals(sessionId).toArray();
 }
