@@ -14,6 +14,7 @@ import {
   updateMessage,
   updateSession,
 } from '@/db/repo';
+import { newId } from '@/db/db';
 import type { Citation, Message, Session, ToolCall, Usage } from '@/db/types';
 import {
   activeWindow,
@@ -117,9 +118,10 @@ export const useChatStore = create<ChatState>((set, get, api) => {
    * stream the provider response into it. `history` is the conversation path
    * (root → parent) used to build the request.
    *
-   * The assistant message is created *before* any fallible work (config
-   * resolution, attachment loading, the request itself) so every failure has a
-   * visible home: an error on that message, with Retry — never a silent no-op.
+   * The assistant turn (stream state, then the row) is set up *before* any
+   * fallible work (config resolution, attachment loading, the request itself)
+   * so every failure has a visible home: an error on that message, with Retry
+   * — never a silent no-op.
    */
   const runTurn = async (
     session: Session,
@@ -128,9 +130,10 @@ export const useChatStore = create<ChatState>((set, get, api) => {
   ) => {
     const sessionId = session.id;
 
-    const assistant = await addMessage({ sessionId, parentId, role: 'assistant' });
-    const messageId = assistant.id;
-    await setCurrentLeaf(sessionId, messageId);
+    // Stream state first, row second: whenever the live query first delivers
+    // the new message, the UI already knows it is streaming — there is no
+    // frame where the turn looks like a settled-but-empty husk.
+    const messageId = newId();
     set((s) => ({
       streams: { ...s.streams, [messageId]: EMPTY_BUFFER },
       activeBySession: { ...s.activeBySession, [sessionId]: messageId },
@@ -191,6 +194,9 @@ export const useChatStore = create<ChatState>((set, get, api) => {
     };
 
     try {
+      await addMessage({ id: messageId, sessionId, parentId, role: 'assistant' });
+      await setCurrentLeaf(sessionId, messageId);
+
       const folder = session.folderId
         ? await getFolder(session.folderId)
         : undefined;

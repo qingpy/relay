@@ -159,6 +159,21 @@
 }
 
 /* ---------------------------------------------------------------------------
+   Invisible for the first 400 ms after mount — for states that are only real
+   if they persist (e.g. the "No output — interrupted" husk note). Transient
+   mounts during store / live-query races unmount before ever painting.
+--------------------------------------------------------------------------- */
+@utility appear-late {
+  opacity: 0;
+  animation: appear-late-in 150ms ease 400ms forwards;
+}
+@keyframes appear-late-in {
+  to {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------------------------------------------------------
    Markdown ("prose") — compact, tuned for chat density and the flat aesthetic.
 --------------------------------------------------------------------------- */
 .md {

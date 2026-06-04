@@ -338,6 +338,9 @@ export function getMessage(id: string): Promise<Message | undefined> {
 }
 
 export async function addMessage(input: {
+  /** Caller-supplied id, for state that must exist before the row does
+   *  (the chat store registers the stream buffer first). */
+  id?: string;
   sessionId: string;
   parentId: string | null;
   role: MessageRole;
@@ -345,7 +348,7 @@ export async function addMessage(input: {
   reasoning?: string;
 }): Promise<Message> {
   const message: Message = {
-    id: newId(),
+    id: input.id ?? newId(),
     sessionId: input.sessionId,
     parentId: input.parentId,
     role: input.role,

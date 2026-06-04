@@ -163,7 +163,10 @@ export const MessageItem = memo(function MessageItem({
   const showDots = streaming && !text && !reasoning && toolCalls.length === 0;
   // An assistant turn with no content and no recorded error is a stream that
   // never finished (page closed or killed mid-flight) — say so instead of
-  // rendering a blank husk.
+  // rendering a blank husk. The stream store and the live query update on
+  // different schedules, so around a turn's start/finish a message can *look*
+  // like this for a frame or two — `appear-late` keeps those transient mounts
+  // from ever painting; only a husk that persists fades in.
   const interrupted =
     !streaming &&
     !text &&
@@ -206,7 +209,7 @@ export const MessageItem = memo(function MessageItem({
         ))}
         {text ? <MessageBody text={text} /> : showDots ? <StreamingDots /> : null}
         {interrupted && (
-          <div className="label-mono flex items-center gap-4 text-muted-foreground">
+          <div className="appear-late label-mono flex items-center gap-4 text-muted-foreground">
             <span>No output — interrupted</span>
             {message.parentId && <Marginalia onClick={retry}>Retry</Marginalia>}
           </div>
