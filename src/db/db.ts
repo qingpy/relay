@@ -106,6 +106,11 @@ export class RelayDB extends Dexie {
         }
       }
     });
+    // v6: content hash on files — identical attachments share one stored copy
+    // (rows missing a hash are backfilled on import; see backup.ts).
+    this.version(6).stores({
+      files: 'id, sessionId, messageId, hash',
+    });
   }
 }
 

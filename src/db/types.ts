@@ -191,7 +191,11 @@ export interface StoredFile {
   name: string;
   mimeType: string;
   size: number;
+  /** Always a bytes-owning Blob, copied out of the picked `File` at attach time
+   *  (a `File` is a lazy reference to the source path — see saveAttachments). */
   blob: Blob;
+  /** SHA-256 of the content — identical attachments share one stored copy. */
+  hash?: string;
   createdAt: number;
 }
 
