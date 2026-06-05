@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Search, Wrench } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import type { ToolCall } from '@/db/types';
 import { cn } from '@/lib/utils';
 
@@ -21,8 +21,6 @@ function pretty(value: unknown): string {
 
 export function ToolCard({ call }: { call: ToolCall }) {
   const [open, setOpen] = useState(false);
-  const isSearch = /search|web|browse/i.test(call.name);
-  const Icon = isSearch ? Search : Wrench;
   const args = pretty(call.args);
 
   return (
@@ -35,8 +33,7 @@ export function ToolCard({ call }: { call: ToolCall }) {
         <ChevronRight
           className={cn('size-3.5 transition-transform', open && 'rotate-90')}
         />
-        <Icon className="size-3.5" />
-        <span>{call.name || 'tool'}</span>
+        <span>{(call.name || 'tool').replace(/[_-]+/g, ' ')}</span>
         {call.pending && <span className="animate-pulse text-primary">running…</span>}
       </button>
       {open && (
