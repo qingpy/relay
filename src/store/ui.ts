@@ -66,6 +66,13 @@ interface UiState {
   syncStatus: 'off' | 'syncing' | 'synced' | 'error';
   setSyncStatus: (s: UiState['syncStatus']) => void;
 
+  /** Local data-file save state. `error` means changes exist that have NOT
+   *  reached disk (the flush failed and is retrying) — surfaced in the header
+   *  so a failing save is never silent. */
+  dataStatus: 'saved' | 'saving' | 'error';
+  dataError: string;
+  setDataStatus: (s: UiState['dataStatus'], error?: string) => void;
+
   collapsedFolders: Record<string, boolean>;
   toggleFolder: (id: string) => void;
 }
@@ -139,6 +146,10 @@ export const useUiStore = create<UiState>((set) => ({
 
   syncStatus: 'off',
   setSyncStatus: (s) => set({ syncStatus: s }),
+
+  dataStatus: 'saved',
+  dataError: '',
+  setDataStatus: (s, error = '') => set({ dataStatus: s, dataError: error }),
 
   collapsedFolders: loadCollapsed(),
   toggleFolder: (id) =>

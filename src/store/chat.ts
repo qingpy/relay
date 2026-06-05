@@ -28,6 +28,7 @@ import { readSSE } from '@/lib/sse';
 import { providerForConnection } from '@/providers/registry';
 import { NEW_SESSION_TITLE } from '@/db/repo';
 import { maybeAutoTitle } from '@/lib/autotitle';
+import { useUiStore } from '@/store/ui';
 
 export interface StreamBuffer {
   text: string;
@@ -319,8 +320,14 @@ export const useChatStore = create<ChatState>((set, get, api) => {
           await captureFileTokens(history, resolved?.settings.systemPrompt, usage);
           if (errored) await updateMessage(messageId, { error: errored });
         }
-      } catch {
-        // Persistence failed; still release the streaming slot below.
+      } catch (e) {
+        // Persistence failed — the finished reply may exist only in memory.
+        // Flip the header to UNSAVED; never let this fail silently. (Still
+        // release the streaming slot below.)
+        console.error('Failed to persist the finished turn', e);
+        useUiStore
+          .getState()
+          .setDataStatus('error', e instanceof Error ? e.message : String(e));
       }
       controllers.delete(sessionId);
       clearStream(sessionId, messageId);
