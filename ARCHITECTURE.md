@@ -65,7 +65,7 @@ messages    { id, sessionId, parentId|null,                   // tree edge → b
               role: 'user'|'assistant'|'system'|'divider',
               content: Part[], reasoning?, reasoningMs?, toolCalls?, citations?,
               attachments?: fileId[], model?, usage?, error?, createdAt }
-files       { id, sessionId, messageId, name, mimeType, size, blob, createdAt }
+files       { id, sessionId, messageId, name, mimeType, size, blob, hash?, createdAt }
 prompts     { id, title, content, order }
 appConfig   { id:'singleton', theme, exportIncludeThinking?,
               titleConnectionId?/titleModel?/titlePrompt?,    // auto-title
@@ -95,8 +95,17 @@ Key ideas:
   in the Trash dialog (restore / delete-forever / empty). `purgeExpiredTrash()`
   runs on boot and hard-deletes anything older than `appConfig.trashRetentionDays`
   (default 10; `0` keeps them until emptied). `purgeSession()` is the hard delete.
-- **Migrations** v1–v5 in `db.ts` (message tree backfill; provider keys →
-  connections; presets-only; collapse types to `openai|vertex`).
+- **Attachments are copied, content-addressed bytes.** `saveAttachments` reads
+  the picked `File` *immediately* into an owned Blob — a `File` is a lazy
+  reference to the source path, and reading it later (the request, every
+  snapshot save) throws once the source moves, poisoning every save (the
+  lost-reply incident). Identical content (SHA-256 `hash`) shares one Blob in
+  memory and one base64 copy in the snapshot (`data.blobs` pool, BackupFile
+  v2); v1 rows gain their hash on import. Rows stay per-message, so the
+  existing delete/duplicate paths are untouched.
+- **Migrations** v1–v6 in `db.ts` (message tree backfill; provider keys →
+  connections; presets-only; collapse types to `openai|vertex`; file content
+  hash index).
 
 ---
 
@@ -104,7 +113,8 @@ Key ideas:
 
 All three serialize the **same payload**: the `BackupFile` from
 `exportAll()` in `src/lib/backup.ts` — the whole DB (connections, folders,
-sessions, messages, prompts, appConfig, and attachments as base64). `exportAll()`
+sessions, messages, prompts, appConfig, and attachments as base64 — each unique
+content once, in the hash-keyed `data.blobs` pool). `exportAll()`
 **strips every secret** (API keys, the Vertex private key, the WebDAV password)
 at this one chokepoint, so the snapshot is always credential-free — on disk, on
 WebDAV, and in every backup. `importAll()` replaces the DB from one. Both take an

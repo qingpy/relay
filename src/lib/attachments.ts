@@ -78,6 +78,14 @@ export function acceptFor(caps: Capabilities): string {
   return parts.join(',');
 }
 
+/** SHA-256 of raw bytes as lowercase hex — the content identity of a stored file. */
+export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)]
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
 async function blobToBase64(blob: Blob): Promise<string> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = '';

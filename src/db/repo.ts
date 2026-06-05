@@ -18,6 +18,7 @@ import type {
   StoredFile,
 } from './types';
 import { DEFAULT_URL, flavorOf } from '@/lib/models';
+import { sha256Hex } from '@/lib/attachments';
 
 export const NEW_SESSION_TITLE = 'New chat';
 
@@ -464,24 +465,45 @@ export function textPart(text: string): Part {
 
 // --- Files / attachments ---------------------------------------------------
 
-/** Store uploaded files as blobs linked to a message; returns their ids. */
+/** Store uploaded files as blobs linked to a message; returns their ids.
+ *
+ *  The bytes are copied OUT of the picked `File` here, immediately: a `File`
+ *  is a lazy reference to the source path, and reading it later (the request,
+ *  every snapshot save) throws once the source is moved or deleted — which
+ *  poisons every save from that moment on. Identical content (by SHA-256)
+ *  reuses one in-memory Blob, and one copy in the snapshot. */
 export async function saveAttachments(
   sessionId: string,
   messageId: string,
   files: File[],
 ): Promise<string[]> {
+  // Read + hash before the transaction (a Dexie transaction doesn't survive
+  // non-Dexie awaits).
+  const incoming = await Promise.all(
+    files.map(async (f) => {
+      const bytes = await f.arrayBuffer();
+      return {
+        name: f.name,
+        mimeType: f.type || 'application/octet-stream',
+        bytes,
+        hash: await sha256Hex(bytes),
+      };
+    }),
+  );
   const ids: string[] = [];
   await db.transaction('rw', db.files, async () => {
-    for (const f of files) {
+    for (const f of incoming) {
       const id = newId();
+      const twin = await db.files.where('hash').equals(f.hash).first();
       await db.files.add({
         id,
         sessionId,
         messageId,
         name: f.name,
-        mimeType: f.type || 'application/octet-stream',
-        size: f.size,
-        blob: f,
+        mimeType: f.mimeType,
+        size: f.bytes.byteLength,
+        blob: twin?.blob ?? new Blob([f.bytes], { type: f.mimeType }),
+        hash: f.hash,
         createdAt: Date.now(),
       });
       ids.push(id);
