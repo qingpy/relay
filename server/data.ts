@@ -18,6 +18,10 @@ import { dirname, isAbsolute, join } from 'node:path';
  * The payload `data` is the same `BackupFile` produced by the client's
  * `exportAll()` — so the disk file, a downloaded backup, and the WebDAV snapshot
  * are all the same shape.
+ *
+ * I/O is retried on the transient Windows lock errors (EBUSY/EPERM — an AV
+ * scan or a colliding handle); a real failure returns its detail, which the
+ * client surfaces as UNSAVED and retries on its own clock.
  */
 export const data = new Hono();
 
@@ -35,12 +39,31 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+const RETRYABLE = new Set(['EBUSY', 'EPERM', 'EACCES', 'EMFILE', 'ENFILE']);
+const RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Run a file op, retrying the transient lock/permission errors Windows throws
+ *  when a read or rename collides with an AV scan or another open handle. */
+async function withRetry<T>(op: () => Promise<T>): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await op();
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code ?? '';
+      if (!RETRYABLE.has(code) || i >= RETRY_DELAYS_MS.length) throw e;
+      await sleep(RETRY_DELAYS_MS[i]);
+    }
+  }
+}
+
 // Read the current snapshot. Missing file -> a fresh, empty store.
 data.get('/', async (c) => {
   const file = dataFile();
   if (!existsSync(file)) return c.json({ rev: 0 });
   try {
-    return new Response(await readFile(file, 'utf-8'), {
+    return new Response(await withRetry(() => readFile(file, 'utf-8')), {
       headers: { 'content-type': 'application/json' },
     });
   } catch (e) {
@@ -79,8 +102,8 @@ data.put('/', async (c) => {
   try {
     await mkdir(dirname(file), { recursive: true });
     const tmp = `${file}.tmp`;
-    await writeFile(tmp, body, 'utf-8');
-    await rename(tmp, file);
+    await withRetry(() => writeFile(tmp, body, 'utf-8'));
+    await withRetry(() => rename(tmp, file));
     return c.json({ ok: true });
   } catch (e) {
     return json({ error: `Couldn't write data file: ${String(e)}` }, 500);

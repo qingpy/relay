@@ -5,6 +5,7 @@ import { ExportMenu } from '@/components/chat/ExportMenu';
 import { MessageList } from '@/components/chat/MessageList';
 import { SessionControls } from '@/components/chat/SessionControls';
 import { TreeMap } from '@/components/chat/TreeMap';
+import { SaveIndicator } from '@/components/layout/SaveIndicator';
 import { useUiStore } from '@/store/ui';
 
 export function ChatPane() {
@@ -35,6 +36,7 @@ export function ChatPane() {
           <span className="label-mono text-muted-foreground">Relay</span>
         )}
         <div className="ml-auto flex items-center gap-4">
+          <SaveIndicator />
           {activeId && <ContextMeter sessionId={activeId} />}
           {activeId && <TreeMap sessionId={activeId} />}
           {activeId && (

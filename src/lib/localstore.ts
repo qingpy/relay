@@ -1,6 +1,7 @@
 import { USE_LOCAL_STORE, db, openPersistentRelayDB, type RelayDB } from '@/db/db';
 import { exportAll, importAll, type BackupFile } from '@/lib/backup';
 import type { Connection } from '@/db/types';
+import { useUiStore } from '@/store/ui';
 
 /**
  * Local data store engine (ARCHITECTURE.md §4 "Storage & sync").
@@ -17,6 +18,11 @@ import type { Connection } from '@/db/types';
  * Mirrors the `applying…`/`dirty`/rev pattern in `webdav.ts`. The proxy MUST be
  * running to load or save (no offline-without-server) — boot surfaces a clear
  * error if it isn't. Two tabs of the same origin are last-write-wins.
+ *
+ * A failed flush is NEVER silent: it retries on its own timer (an idle app
+ * would otherwise never retry), flips the header to UNSAVED via `dataStatus`,
+ * and `beforeunload` blocks an accidental refresh while changes are pending —
+ * the browser memory may be the only copy of a just-finished reply.
  */
 
 interface DataSnapshot {
@@ -33,6 +39,8 @@ export interface DataInfo {
 }
 
 const WRITE_DEBOUNCE_MS = 400;
+const RETRY_BASE_MS = 1_000;
+const RETRY_MAX_MS = 10_000;
 
 let initialized = false; // guard against React StrictMode's double-mount
 let hooksAttached = false;
@@ -41,6 +49,10 @@ let dirty = false;
 let rev = 0;
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let writing = false;
+let retryDelay = RETRY_BASE_MS; // backoff for failed flushes; reset on success
+
+const setDataStatus = (s: 'saved' | 'saving' | 'error', error = '') =>
+  useUiStore.getState().setDataStatus(s, error);
 
 async function fetchSnapshot(): Promise<DataSnapshot | null> {
   const res = await fetch('/api/data');
@@ -61,11 +73,18 @@ async function writeSnapshot(): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(snap),
   });
-  if (!res.ok) throw new Error(`Data write failed (${res.status})`);
+  if (!res.ok) {
+    const detail = await res
+      .json()
+      .then((j: { error?: string }) => j.error)
+      .catch(() => null);
+    throw new Error(detail || `Data write failed (${res.status})`);
+  }
   rev = snap.rev;
 }
 
-/** Write pending changes now, cancelling any pending debounce. Best-effort. */
+/** Write pending changes now, cancelling any pending debounce. A failure keeps
+ *  the changes dirty, flips the UNSAVED indicator, and retries with backoff. */
 export async function flushLocalStore(): Promise<void> {
   if (writeTimer) {
     clearTimeout(writeTimer);
@@ -74,10 +93,27 @@ export async function flushLocalStore(): Promise<void> {
   if (!dirty || writing) return;
   writing = true;
   dirty = false;
+  setDataStatus('saving');
   try {
     await writeSnapshot();
-  } catch {
-    dirty = true; // keep the change pending; a later edit/flush retries
+    retryDelay = RETRY_BASE_MS;
+    if (dirty) {
+      // Changes landed during the upload — they're pending, not saved.
+      setDataStatus('saving');
+      scheduleWrite();
+    } else {
+      setDataStatus('saved');
+    }
+  } catch (e) {
+    dirty = true; // keep the change pending
+    setDataStatus('error', e instanceof Error ? e.message : String(e));
+    // Retry on our own clock: waiting for "a later edit" means an idle app
+    // (reply finished, user reading) would never save again.
+    writeTimer = setTimeout(() => {
+      writeTimer = null;
+      void flushLocalStore();
+    }, retryDelay);
+    retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
   } finally {
     writing = false;
   }
@@ -216,11 +252,20 @@ export async function initLocalStore(): Promise<void> {
   }
 
   attachHooks();
+  setDataStatus('saved');
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') void flushLocalStore();
     });
-    window.addEventListener('beforeunload', () => void flushLocalStore());
+    window.addEventListener('beforeunload', (e) => {
+      void flushLocalStore();
+      // Unsaved changes: the in-memory DB may be their only copy. Make the
+      // browser ask before the page (and the data) is thrown away.
+      if (dirty || writing) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
   }
 }
 
