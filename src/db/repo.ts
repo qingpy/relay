@@ -31,7 +31,6 @@ export async function createSession(input: {
     id: newId(),
     folderId: input.folderId ?? null,
     title: input.title ?? NEW_SESSION_TITLE,
-    webSearch: false,
     createdAt: now,
     updatedAt: now,
     // Negative so ascending `order` sort places new chats at the top; manual
@@ -75,14 +74,6 @@ export async function configureSession(
   patch: Partial<Omit<Session, 'id' | 'updatedAt'>>,
 ): Promise<void> {
   await db.sessions.update(id, patch);
-}
-
-/** Toggle this chat's web search (no `updatedAt` bump). */
-export async function setSessionWebSearch(
-  id: string,
-  webSearch: boolean,
-): Promise<void> {
-  await db.sessions.update(id, { webSearch });
 }
 
 /** Set this chat's extra system prompt (appended to its preset's). */

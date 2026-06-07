@@ -55,17 +55,18 @@ export function reasoningKind(caps: ModelCapabilities): ReasoningKind {
 }
 
 /**
- * Strip the reasoning effort when the resolved model can't use it, so a stale
- * value (left over after a model switch, a backup import, or a migration) is
- * never sent upstream.
+ * Strip knobs the resolved model can't use — the reasoning effort when it
+ * doesn't reason, web search when it can't search — so a stale value (left
+ * over after a model switch, a backup import, or a migration) is never sent
+ * upstream.
  */
-export function sanitizeReasoning(
+export function sanitizeSettings(
   settings: ModelSettings,
-  kind: ReasoningKind,
+  caps: ModelCapabilities,
 ): ModelSettings {
-  if (kind === 'effort') return settings;
   const out = { ...settings };
-  delete out.reasoningEffort;
+  if (reasoningKind(caps) !== 'effort') delete out.reasoningEffort;
+  if (!caps.webSearch) delete out.webSearch;
   return out;
 }
 
