@@ -14,10 +14,17 @@ import { dirname, isAbsolute, join } from 'node:path';
  *   GET  /api/data        -> { rev, savedAt, data } (or { rev: 0 } if no file)
  *   PUT  /api/data        -> atomically write { rev, savedAt, data }
  *   GET  /api/data/info    -> { path, exists, size, savedAt } for the Settings readout
+ *   GET  /api/data/sync-state -> { rev, lastSyncAt } the durable WebDAV sync cursor
+ *   PUT  /api/data/sync-state -> persist { rev, lastSyncAt }
  *
  * The payload `data` is the same `BackupFile` produced by the client's
  * `exportAll()` — so the disk file, a downloaded backup, and the WebDAV snapshot
  * are all the same shape.
+ *
+ * The WebDAV sync cursor (which server `rev` this machine's data is synced to)
+ * lives in a sidecar next to the data file rather than browser localStorage, so
+ * every browser / profile / origin on the machine shares one cursor — a fresh
+ * localStorage no longer reads as a never-synced device and falsely conflicts.
  *
  * I/O is retried on the transient Windows lock errors (EBUSY/EPERM — an AV
  * scan or a colliding handle); a real failure returns its detail, which the
@@ -30,6 +37,11 @@ function dataFile(): string {
   const env = process.env.RELAY_DATA_FILE?.trim();
   if (env) return isAbsolute(env) ? env : join(process.cwd(), env);
   return join(process.cwd(), 'data', 'relay.json');
+}
+
+/** Sidecar holding the WebDAV sync cursor, beside the data file it belongs to. */
+function syncStateFile(): string {
+  return `${dataFile()}.sync`;
 }
 
 function json(body: unknown, status = 200): Response {
@@ -90,6 +102,44 @@ data.get('/info', async (c) => {
     return c.json({ path: file, exists: true, size: s.size, savedAt });
   } catch (e) {
     return json({ error: `Couldn't stat data file: ${String(e)}` }, 500);
+  }
+});
+
+// The durable WebDAV sync cursor (see header). Missing sidecar -> rev 0, which
+// the client migrates from its legacy localStorage cursor on first run.
+data.get('/sync-state', async (c) => {
+  const file = syncStateFile();
+  if (!existsSync(file)) return c.json({ rev: 0, lastSyncAt: 0 });
+  try {
+    const parsed = JSON.parse(await withRetry(() => readFile(file, 'utf-8'))) as {
+      rev?: number;
+      lastSyncAt?: number;
+    };
+    return c.json({ rev: parsed.rev ?? 0, lastSyncAt: parsed.lastSyncAt ?? 0 });
+  } catch {
+    return c.json({ rev: 0, lastSyncAt: 0 });
+  }
+});
+
+// Persist the cursor. Atomic temp-file + rename, like the data write.
+data.put('/sync-state', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as {
+    rev?: number;
+    lastSyncAt?: number;
+  } | null;
+  if (!body || typeof body.rev !== 'number') {
+    return json({ error: 'Expected { rev, lastSyncAt }.' }, 400);
+  }
+  const file = syncStateFile();
+  const payload = JSON.stringify({ rev: body.rev, lastSyncAt: body.lastSyncAt ?? 0 });
+  try {
+    await mkdir(dirname(file), { recursive: true });
+    const tmp = `${file}.tmp`;
+    await withRetry(() => writeFile(tmp, payload, 'utf-8'));
+    await withRetry(() => rename(tmp, file));
+    return c.json({ ok: true });
+  } catch (e) {
+    return json({ error: `Couldn't write sync state: ${String(e)}` }, 500);
   }
 });
 

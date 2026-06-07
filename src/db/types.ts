@@ -192,6 +192,15 @@ export interface StoredFile {
   blob: Blob;
   /** SHA-256 of the content — identical attachments share one stored copy. */
   hash?: string;
+  /** When set, the content was deliberately removed (`removeFileContent`): the
+   *  blob is empty and the hash dropped, but the row stays as a tombstone so the
+   *  chat keeps a "removed" tag and the model is told the attachment is gone. */
+  removedAt?: number;
+  /** Bytes absent because the snapshot this row arrived in was written without
+   *  attachments (`AppConfig.backupIncludeFiles` off). Unlike `removedAt` the
+   *  content still exists elsewhere — `importAll` restores it by hash whenever
+   *  a snapshot or this device has the bytes. */
+  stripped?: boolean;
   createdAt: number;
 }
 
@@ -219,6 +228,10 @@ export interface WebDavConfig {
   /** How many timestamped backups to keep on the server (0/undefined = off).
    *  A new one is written each `intervalHours`; older ones are pruned. */
   backupsKeep?: number;
+  /** Include attachment bytes in the WebDAV mirror and its versioned backups
+   *  (default on). Off ships metadata-only placeholders (`StoredFile.stripped`);
+   *  local backups have their own switch (`AppConfig.backupIncludeFiles`). */
+  includeFiles?: boolean;
   /** When the last versioned backup was written (spacing + Settings readout). */
   lastWebdavBackupAt?: number;
 }
@@ -240,6 +253,11 @@ export interface AppConfig {
   /** Days a deleted chat stays in the trash before it is auto-purged on launch
    *  (default 10). `0` keeps trashed chats until you empty the trash yourself. */
   trashRetentionDays?: number;
+  /** Include attachment bytes in server/file backups and Export (default on).
+   *  Off ships file rows as metadata-only placeholders (`StoredFile.stripped`).
+   *  The WebDAV side has its own switch (`WebDavConfig.includeFiles`); the
+   *  local data file always carries the bytes. */
+  backupIncludeFiles?: boolean;
   /** Scheduled local backups (run while the app is open). */
   backup?: BackupSettings;
   webdav?: WebDavConfig;

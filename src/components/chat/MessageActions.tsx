@@ -1,8 +1,15 @@
 import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Marginalia } from '@/components/ui/marginalia';
 import { getAppConfig } from '@/db/db';
-import { setCurrentLeaf, spliceMessage } from '@/db/repo';
-import type { Message } from '@/db/types';
+import {
+  getFilesByIds,
+  removeFileContent,
+  setCurrentLeaf,
+  spliceMessage,
+} from '@/db/repo';
+import type { Message, StoredFile } from '@/db/types';
+import { fileUnavailable } from '@/lib/attachments';
 import { partsText, deriveTitle } from '@/lib/conversation';
 import { downloadText, messageToMarkdown, slugify } from '@/lib/export';
 import { useChatStore } from '@/store/chat';
@@ -21,6 +28,17 @@ export function MessageActions({
 }) {
   const [copied, setCopied] = useState(false);
   const isUser = message.role === 'user';
+
+  // Attachments whose bytes are still here — per-file removal is the hover ✕
+  // on each thumbnail; Clean strips the whole turn's files to "removed" tags.
+  const files = useLiveQuery(
+    () => getFilesByIds(isUser ? (message.attachments ?? []) : []),
+    [message.attachments?.join(',') ?? ''],
+    [] as StoredFile[],
+  );
+  const removable = files.filter((f) => !fileUnavailable(f));
+
+  const clean = () => void removeFileContent(removable.map((f) => f.id));
 
   const copy = async () => {
     await navigator.clipboard.writeText(messageToMarkdown(message));
@@ -59,6 +77,7 @@ export function MessageActions({
         <Marginalia onClick={() => void download()}>Download</Marginalia>
       )}
       <Marginalia onClick={fork}>Branch</Marginalia>
+      {removable.length > 0 && <Marginalia onClick={clean}>Clean</Marginalia>}
       <Marginalia onClick={() => void remove()}>Delete</Marginalia>
     </div>
   );

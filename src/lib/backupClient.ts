@@ -1,5 +1,5 @@
 import { getAppConfig, updateAppConfig } from '@/db/db';
-import { exportAll, importAll, type BackupFile } from './backup';
+import { exportForBackup, importAll, type BackupFile } from './backup';
 
 export interface ServerBackup {
   name: string;
@@ -9,7 +9,7 @@ export interface ServerBackup {
 
 /** Dump the local DB and write it to the server's backup directory. */
 export async function saveBackupToServer(label?: string): Promise<string> {
-  const data = await exportAll();
+  const data = await exportForBackup();
   const qs = label ? `?label=${encodeURIComponent(label)}` : '';
   const res = await fetch(`/api/backup${qs}`, {
     method: 'POST',
