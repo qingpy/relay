@@ -78,6 +78,13 @@ export function acceptFor(caps: Capabilities): string {
   return parts.join(',');
 }
 
+/** True when a stored file's bytes are gone — deliberately removed
+ *  (`removedAt`) or left out of the snapshot that brought the row here
+ *  (`stripped`). The row remains as a placeholder tag in the chat. */
+export function fileUnavailable(file: StoredFile): boolean {
+  return !!file.removedAt || !!file.stripped;
+}
+
 /** SHA-256 of raw bytes as lowercase hex — the content identity of a stored file. */
 export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -101,7 +108,7 @@ export async function fileToAttachment(
   file: StoredFile,
 ): Promise<Attachment | null> {
   const kind = classify(file.mimeType, file.name);
-  if (!kind) return null;
+  if (!kind || fileUnavailable(file)) return null;
   if (kind === 'text') {
     return { kind, name: file.name, mimeType: file.mimeType, data: await file.blob.text() };
   }

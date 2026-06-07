@@ -7,7 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { getAppConfig, updateAppConfig } from '@/db/db';
-import { downloadBackup, exportAll, importAll, readBackupFile } from '@/lib/backup';
+import {
+  downloadBackup,
+  exportForBackup,
+  importAll,
+  readBackupFile,
+} from '@/lib/backup';
 import {
   deleteServerBackup,
   listServerBackups,
@@ -50,7 +55,7 @@ export function BackupSettings() {
   };
 
   const exportNow = async () => {
-    downloadBackup(await exportAll());
+    downloadBackup(await exportForBackup());
   };
 
   const backupToServer = async () => {
@@ -190,6 +195,16 @@ export function BackupSettings() {
 
       {status && <p className="text-xs text-primary">{status}</p>}
       {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {/* Off = backups/Export ship metadata-only attachment placeholders;
+          the data file always keeps the bytes (ARCHITECTURE.md §4). */}
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span>Include attachments</span>
+        <Switch
+          checked={config?.backupIncludeFiles !== false}
+          onCheckedChange={(v) => void updateAppConfig({ backupIncludeFiles: v })}
+        />
+      </label>
 
       <label className="flex items-center justify-between gap-3 text-sm">
         <span>

@@ -21,6 +21,7 @@ import { useUiStore } from '@/store/ui';
  */
 
 const SNAPSHOT = 'relay-state.json';
+// Legacy per-browser cursor keys — read once to seed the durable store, below.
 const REV_KEY = 'relay.webdav.rev';
 const LAST_KEY = 'relay.webdav.lastSyncAt';
 const DEFAULT_INTERVAL_HOURS = 1;
@@ -46,11 +47,68 @@ class ConflictError extends Error {}
  *  so the Settings panel can offer a "keep local / keep server" resolution. */
 export const isSyncConflict = (): boolean => conflicted;
 
-const getRev = () => Number(localStorage.getItem(REV_KEY) || 0);
-const setRev = (r: number) => localStorage.setItem(REV_KEY, String(r));
-const setLastSync = (t: number) => localStorage.setItem(LAST_KEY, String(t));
-export const getLastSync = (): number =>
-  Number(localStorage.getItem(LAST_KEY) || 0);
+// The sync cursor — which server `rev` this machine's data is synced to — is
+// owned by the proxy in a sidecar next to the data file, NOT browser
+// localStorage. localStorage is per-profile/per-origin, so a second browser, a
+// cleared site, or opening via 127.0.0.1 instead of localhost would read as a
+// never-synced device (rev 0) and falsely conflict every sync. The durable
+// cursor is loaded once into memory, read synchronously by the sync logic, and
+// written back through the proxy on change (best-effort; the next sync re-persists).
+let cursorRev = 0;
+let cursorLastSync = 0;
+let cursorLoaded = false;
+
+/** Load the durable cursor once. If the proxy has none yet (first run after the
+ *  upgrade, or a genuinely fresh machine), seed it from this browser's legacy
+ *  localStorage cursor so an established device doesn't re-conflict on upgrade. */
+async function loadCursor(): Promise<void> {
+  if (cursorLoaded) return;
+  cursorLoaded = true;
+  try {
+    const res = await fetch('/api/data/sync-state');
+    if (res.ok) {
+      const s = (await res.json()) as { rev?: number; lastSyncAt?: number };
+      if ((s.rev ?? 0) > 0) {
+        cursorRev = s.rev ?? 0;
+        cursorLastSync = s.lastSyncAt ?? 0;
+        return;
+      }
+    }
+  } catch {
+    // Proxy unreachable / old build without the endpoint — fall back to the
+    // legacy localStorage cursor for this session.
+  }
+  const legacyRev = Number(localStorage.getItem(REV_KEY) || 0);
+  if (legacyRev > 0) {
+    cursorRev = legacyRev;
+    cursorLastSync = Number(localStorage.getItem(LAST_KEY) || 0);
+    void persistCursor(); // hand the established cursor to the durable store
+  }
+}
+
+async function persistCursor(): Promise<void> {
+  try {
+    await fetch('/api/data/sync-state', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rev: cursorRev, lastSyncAt: cursorLastSync }),
+    });
+  } catch {
+    // Best-effort: the in-memory value still drives this session, and the next
+    // setRev/setLastSync re-persists.
+  }
+}
+
+const getRev = () => cursorRev;
+const setRev = (r: number) => {
+  cursorRev = r;
+  void persistCursor();
+};
+const setLastSync = (t: number) => {
+  cursorLastSync = t;
+  void persistCursor();
+};
+export const getLastSync = (): number => cursorLastSync;
 export const getSyncMessage = (): string => message;
 
 const setStatus = (s: 'off' | 'syncing' | 'synced' | 'error', msg = '') => {
@@ -153,11 +211,18 @@ async function applyRemote(snap: Snapshot): Promise<void> {
   }
 }
 
+/** The snapshot WebDAV gets — attachment bytes included unless the WebDAV
+ *  "Include attachments" switch is off (then rows ship as `stripped`
+ *  placeholders that `importAll` re-hydrates wherever the bytes exist). */
+function exportForWebdav(c: WebDavConfig): Promise<BackupFile> {
+  return exportAll(db, { includeFiles: c.includeFiles !== false });
+}
+
 async function push(c: WebDavConfig, baseRev: number): Promise<void> {
   dirty = false; // clear up-front; writes during the upload re-flag it
   let data: BackupFile;
   try {
-    data = await exportAll();
+    data = await exportForWebdav(c);
     const snap: Snapshot = { rev: baseRev + 1, savedAt: Date.now(), data };
     const res = await fetch('/api/sync', {
       method: 'PUT',
@@ -181,7 +246,8 @@ async function push(c: WebDavConfig, baseRev: number): Promise<void> {
 // set of timestamped backups in a `backups/` subfolder so any past version can
 // be restored. One is written every `intervalHours` (the same cadence as sync)
 // and on demand; older ones beyond `backupsKeep` are pruned. Backups go through
-// `exportAll()`, so — like everything else — they carry no credentials.
+// `exportForWebdav()`, so — like everything else — they carry no credentials
+// (and honor the WebDAV "Include attachments" switch).
 
 export interface WebdavBackup {
   name: string;
@@ -247,7 +313,7 @@ export async function listWebdavBackups(): Promise<WebdavBackup[]> {
 /** Write a timestamped, credential-free snapshot into the backups folder
  *  (created on demand), then prune to the retention count. */
 async function writeWebdavBackup(c: WebDavConfig): Promise<void> {
-  const data = await exportAll();
+  const data = await exportForWebdav(c);
   const res = await fetch('/api/sync', {
     method: 'PUT',
     headers: {
@@ -337,6 +403,7 @@ async function reconcile(): Promise<void> {
     setStatus('off');
     return;
   }
+  await loadCursor();
   setStatus('syncing');
   conflicted = false;
   try {
@@ -390,6 +457,7 @@ export async function resolveKeepLocal(): Promise<void> {
     setStatus('off');
     return;
   }
+  await loadCursor();
   setStatus('syncing');
   conflicted = false;
   try {
@@ -413,6 +481,7 @@ export async function resolveKeepServer(): Promise<boolean> {
     setStatus('off');
     return false;
   }
+  await loadCursor();
   setStatus('syncing');
   conflicted = false;
   try {
@@ -469,6 +538,7 @@ export async function initWebdavSync(): Promise<void> {
 export async function maybeRunScheduledWebdavSync(): Promise<void> {
   const cfg = (await getAppConfig()).webdav;
   if (!configured(cfg)) return;
+  await loadCursor(); // so the interval check below reads the durable lastSync
   const intervalMs =
     Math.max(1, cfg.intervalHours ?? DEFAULT_INTERVAL_HOURS) * 3_600_000;
   if (Date.now() - getLastSync() < intervalMs) return;

@@ -485,7 +485,13 @@ export async function saveAttachments(
   await db.transaction('rw', db.files, async () => {
     for (const f of incoming) {
       const id = newId();
-      const twin = await db.files.where('hash').equals(f.hash).first();
+      // Only rows that still own bytes may serve as a dedupe source —
+      // a stripped placeholder shares the hash but holds an empty blob.
+      const twin = await db.files
+        .where('hash')
+        .equals(f.hash)
+        .filter((t) => !t.removedAt && !t.stripped)
+        .first();
       await db.files.add({
         id,
         sessionId,
@@ -511,4 +517,23 @@ export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
 /** Delete stored files by id — attachments detached from a message by an edit. */
 export async function deleteFiles(ids: string[]): Promise<void> {
   await db.files.bulkDelete(ids);
+}
+
+/** Strip stored files to tombstones: the bytes (and content hash) are dropped
+ *  for good, but the rows stay attached to their messages, so the chat keeps a
+ *  "removed" tag and the model is told the attachment is gone instead of having
+ *  it silently vanish (see buildChatMessages). Irreversible. */
+export async function removeFileContent(ids: string[]): Promise<void> {
+  await db.transaction('rw', db.files, async () => {
+    for (const id of ids) {
+      const f = await db.files.get(id);
+      if (!f || f.removedAt) continue;
+      const { hash, stripped, ...rest } = f;
+      await db.files.put({
+        ...rest,
+        blob: new Blob([], { type: f.mimeType }),
+        removedAt: Date.now(),
+      });
+    }
+  });
 }

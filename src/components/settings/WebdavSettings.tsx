@@ -268,6 +268,17 @@ export function WebdavSettings() {
         </div>
       </div>
 
+      {/* Off = the mirror + its versioned backups ship metadata-only
+          attachment placeholders; a device that holds the bytes keeps them
+          on pull (ARCHITECTURE.md §4). */}
+      <label className="flex items-center justify-between gap-3 text-sm">
+        <span>Include attachments</span>
+        <Switch
+          checked={form.includeFiles !== false}
+          onCheckedChange={(v) => set({ includeFiles: v })}
+        />
+      </label>
+
       <label className="flex items-center justify-between gap-3 text-sm">
         <span>Enable sync</span>
         <Switch

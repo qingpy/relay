@@ -14,6 +14,7 @@ import {
 import {
   FULL_CAPS,
   acceptFor,
+  fileUnavailable,
   filesFromClipboard,
   partitionAllowed,
 } from '@/lib/attachments';
@@ -320,6 +321,7 @@ function UserEditor({
                 name={f.name}
                 mimeType={f.mimeType}
                 blob={f.blob}
+                unavailable={fileUnavailable(f)}
                 onRemove={() =>
                   setRemoved((prev) => new Set(prev).add(f.id))
                 }

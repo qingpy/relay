@@ -51,3 +51,5 @@ relay-backup-*.json
 data/
 relay.json
 relay.json.tmp
+relay.json.sync
+relay.json.sync.tmp

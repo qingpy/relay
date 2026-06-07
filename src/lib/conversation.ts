@@ -1,7 +1,7 @@
 import type { Message, Part } from '@/db/types';
 import { getFilesByIds } from '@/db/repo';
 import type { Attachment, ChatMessage } from '@/providers/types';
-import { fileToAttachment } from './attachments';
+import { fileToAttachment, fileUnavailable } from './attachments';
 
 /** Concatenate the text content of a message's parts. */
 export function partsText(content: Part[]): string {
@@ -34,15 +34,24 @@ export async function buildChatMessages(
   const out: ChatMessage[] = [];
   for (const m of activeWindow(messages)) {
     if (m.role !== 'user' && m.role !== 'assistant') continue;
-    const text = partsText(m.content);
+    let text = partsText(m.content);
 
     let attachments: Attachment[] | undefined;
     if (m.attachments?.length) {
       const files = await getFilesByIds(m.attachments);
-      const resolved = (await Promise.all(files.map(fileToAttachment))).filter(
-        (a): a is Attachment => a != null,
-      );
+      const gone = files.filter(fileUnavailable);
+      const resolved = (
+        await Promise.all(files.filter((f) => !fileUnavailable(f)).map(fileToAttachment))
+      ).filter((a): a is Attachment => a != null);
       if (resolved.length) attachments = resolved;
+      // Tell the model what used to be here — an attachment silently vanishing
+      // mid-conversation reads as an error on its side.
+      if (gone.length) {
+        const note = `[${gone.length === 1 ? 'Attachment' : 'Attachments'} removed: ${gone
+          .map((f) => f.name)
+          .join(', ')}]`;
+        text = text ? `${text}\n\n${note}` : note;
+      }
     }
 
     if (!text && !attachments) continue;

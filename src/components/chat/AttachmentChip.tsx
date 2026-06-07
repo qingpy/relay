@@ -1,23 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileText, X } from 'lucide-react';
+import { FileText, FileX, X } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 /**
  * A removable attachment chip — image thumbnail or file icon + name. Shared by
  * the composer (files pending send) and the message editor (existing + newly
- * added attachments).
+ * added attachments). `unavailable` marks a tombstone (the bytes are gone);
+ * its ✕ detaches the row entirely, dropping the "removed" tag.
  */
 export function AttachmentChip({
   name,
   mimeType,
   blob,
+  unavailable,
   onRemove,
 }: {
   name: string;
   mimeType: string;
   blob: Blob;
+  unavailable?: boolean;
   onRemove: () => void;
 }) {
-  const isImage = mimeType.startsWith('image/');
+  const isImage = !unavailable && mimeType.startsWith('image/');
   const [url, setUrl] = useState<string>();
 
   useEffect(() => {
@@ -28,9 +32,16 @@ export function AttachmentChip({
   }, [blob, isImage]);
 
   return (
-    <div className="flex items-center gap-1.5 border border-border bg-muted/50 py-1 pl-1.5 pr-1 text-xs">
+    <div
+      className={cn(
+        'flex items-center gap-1.5 border border-border bg-muted/50 py-1 pl-1.5 pr-1 text-xs',
+        unavailable && 'border-dashed bg-transparent text-muted-foreground',
+      )}
+    >
       {isImage && url ? (
         <img src={url} alt="" className="size-7 object-cover" />
+      ) : unavailable ? (
+        <FileX className="size-4 text-muted-foreground" />
       ) : (
         <FileText className="size-4 text-muted-foreground" />
       )}

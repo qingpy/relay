@@ -65,13 +65,16 @@ messages    { id, sessionId, parentId|null,                   // tree edge → b
               role: 'user'|'assistant'|'system'|'divider',
               content: Part[], reasoning?, reasoningMs?, toolCalls?, citations?,
               attachments?: fileId[], model?, usage?, error?, createdAt }
-files       { id, sessionId, messageId, name, mimeType, size, blob, hash?, createdAt }
+files       { id, sessionId, messageId, name, mimeType, size, blob, hash?,
+              removedAt?, stripped?,                          // bytes-less tombstone/placeholder
+              createdAt }
 prompts     { id, title, content, order }
 appConfig   { id:'singleton', theme, exportIncludeThinking?,
               titleConnectionId?/titleModel?/titlePrompt?,    // auto-title
               reasoningEfforts?: string[],                    // global effort choices
               trashRetentionDays?,                            // auto-purge trash (default 10; 0 = off)
-              backup?, webdav? }
+              backupIncludeFiles?,                            // attachments in backups/Export (default on)
+              backup?, webdav? }                              // webdav.includeFiles = the WebDAV-side switch
 ```
 
 Key ideas:
@@ -103,6 +106,19 @@ Key ideas:
   memory and one base64 copy in the snapshot (`data.blobs` pool, BackupFile
   v2); v1 rows gain their hash on import. Rows stay per-message, so the
   existing delete/duplicate paths are untouched.
+- **Attachment removal leaves a tag, not a hole.** `removeFileContent` (the
+  hover ✕ on an attachment; a turn's **Clean** action, next to Delete — both
+  immediate, no confirm) drops a file's
+  bytes and hash but keeps the row as a tombstone (`removedAt`): the chat shows
+  a quiet "Removed" tag and `buildChatMessages` appends `[Attachment removed:
+  name]` to that turn, so the model is told instead of seeing content silently
+  vanish — frees context without confusing the next reply. A second bytes-less
+  state, `stripped`, marks rows whose bytes were left out of the snapshot that
+  delivered them (see §4); same tag ("Missing") and same note, but the content
+  still exists elsewhere and is re-hydrated by hash whenever a snapshot or the
+  local DB has it. Bytes-less rows never serve as dedupe sources, never enter
+  the blob pool, and editing a turn can detach the tombstone entirely (dropping
+  the tag).
 - **Migrations** v1–v6 in `db.ts` (message tree backfill; provider keys →
   connections; presets-only; collapse types to `openai|vertex`; file content
   hash index).
@@ -120,6 +136,21 @@ at this one chokepoint, so the snapshot is always credential-free — on disk, o
 WebDAV, and in every backup. `importAll()` replaces the DB from one. Both take an
 optional DB arg (used by the M9 migration to read the old persistent store).
 
+**Attachments are optional in everything but the data file.** Each destination
+has its own "Include attachments" switch (both default on): server/file backups
+and the manual Export honor `appConfig.backupIncludeFiles` (via
+`exportForBackup()`); the WebDAV mirror + its versioned backups honor
+`webdav.includeFiles` (via `exportForWebdav()` in `webdav.ts`). Off, file rows
+ship as hash-keyed `stripped` placeholders
+(BackupFile v3) and the blob pool is omitted; the data file itself always
+carries the bytes (it is the source of truth). `importAll()` re-hydrates
+stripped rows from the snapshot's own pool or from bytes the device already
+holds (matched by content hash) — so pulling an attachment-less mirror or
+restoring an attachment-less backup never erases local files; rows whose bytes
+exist nowhere stay placeholders ("Missing" in the chat, a removed-note to the
+model). User-removed tombstones (`removedAt`) propagate as-is and are never
+re-hydrated.
+
 Secrets instead live in a **separate proxy-owned store** (`server/secrets.ts`),
 keyed by connection id, in a file outside the repo (env `RELAY_SECRETS_FILE`,
 default a per-user config dir). The browser never holds raw keys after boot: it
@@ -136,7 +167,8 @@ snapshot into the store and rewrites the file clean.
    owned by the proxy:
    - **`server/data.ts`** → `GET /api/data` (the `{rev,savedAt,data}` snapshot,
      or `{rev:0}`), `PUT /api/data` (atomic temp-file + rename), `GET
-     /api/data/info` (`{path,size,savedAt}`).
+     /api/data/info` (`{path,size,savedAt}`), and `GET`/`PUT /api/data/sync-state`
+     (the durable WebDAV cursor, §4.2, in a `.sync` sidecar beside the data file).
    - **`src/lib/localstore.ts`** → on boot, `GET` → `importAll` into the in-memory
      DB; on any change (Dexie hooks, suppressed during import) write the whole
      snapshot back, ~400 ms debounced, plus a flush on tab-hide/`beforeunload`.
@@ -159,11 +191,21 @@ snapshot into the store and rewrites the file clean.
    is auto-adopted only onto a pristine device, an empty/blank remote never
    clobbers a device with content, and a pristine device never seeds a blank
    snapshot — anything ambiguous pauses with a visible conflict. A paused
-   conflict (both sides hold data and this origin's `rev` is still 0) is resolved
+   conflict (both sides hold data and this machine's `rev` is still 0) is resolved
    explicitly in Settings → Sync: **Keep this device** (`resolveKeepLocal` — push
    local over the server) or **Keep server** (`resolveKeepServer` — pull and
    replace local), or by restoring a backup. Pull on open, scheduled push while
    open (interval in **hours**), flush on hide.
+   - **Durable sync cursor.** The `rev` this machine is synced to (and
+     `lastSyncAt`) lives in a `.sync` sidecar beside the data file, owned by the
+     proxy (`GET`/`PUT /api/data/sync-state`), **not** browser localStorage.
+     localStorage is per-profile/per-origin, so a second browser, cleared site
+     data, or opening via `127.0.0.1` vs `localhost` used to reset the cursor to
+     0 and re-raise the "both have data" conflict on every sync. `webdav.ts`
+     loads it once into memory (`loadCursor`), reads it synchronously, and
+     writes back on change; on first run with no sidecar it seeds from this
+     browser's legacy localStorage cursor so an established device doesn't
+     re-conflict on upgrade. One cursor per machine, shared by every browser.
    - **Versioned backups.** Alongside the single live snapshot, Relay keeps a
      rolling set of timestamped copies in a `backups/` subfolder — one written
      every `intervalHours`, plus one on each manual **Backup**, pruned to the
@@ -336,7 +378,10 @@ utility). Shared primitives avoid repetition: `Marginalia` (mono text actions),
   rewrite (deferred — `repo.ts` would change, the rest wouldn't).
 - **Durability:** the last unsynced change can be lost on a hard crash —
   mitigated by the ~400 ms debounce + hide/unload flush.
-- **Two tabs of the same origin are last-write-wins** (local file and WebDAV).
+- **Two tabs of the same origin are last-write-wins** (local file and WebDAV);
+  the WebDAV sync cursor is shared across all of a machine's browsers via the
+  proxy `.sync` sidecar (§4.2), so they agree on `rev` rather than each starting
+  from a per-origin 0.
 - **Secrets:** API keys, the Vertex private key, and the WebDAV password live
   **only** in the proxy's secret store (`RELAY_SECRETS_FILE`, default a per-user
   config dir **outside the repo**), keyed by connection id. `exportAll()` strips
