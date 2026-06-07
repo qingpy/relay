@@ -299,13 +299,8 @@ function UserEditor({
       : [];
     await updateMessage(message.id, {
       content: text ? [textPart(text)] : [],
-      // A changed file set invalidates the measured token cost — clear it so
-      // the next completed turn re-prices the attachments.
       ...(changed
-        ? {
-            attachments: [...kept.map((f) => f.id), ...newIds],
-            fileTokens: undefined,
-          }
+        ? { attachments: [...kept.map((f) => f.id), ...newIds] }
         : {}),
     });
     if (removed.size) await deleteFiles([...removed]);

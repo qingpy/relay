@@ -62,7 +62,7 @@ export interface SavedModel {
   label?: string;
   capabilities: ModelCapabilities;
   /** Max context window in tokens. When set, the context meter reports usage as
-   *  a percentage of this; when unset, it shows the absolute token estimate. */
+   *  a percentage of this; when unset, it shows the absolute token count. */
   contextWindow?: number;
 }
 
@@ -172,10 +172,6 @@ export interface Message {
   toolCalls?: ToolCall[];
   citations?: Citation[];
   attachments?: string[];
-  /** Provider-measured token cost of this message's attachments, captured the
-   *  first time a turn that includes them reports usage. Lets the context meter
-   *  price files/images for real while still counting text live. */
-  fileTokens?: number;
   usage?: Usage;
   /** Model id that produced an assistant message (shown in its meta line). */
   model?: string;

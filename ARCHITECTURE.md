@@ -85,9 +85,8 @@ Key ideas:
 - **Branching.** Messages form a *tree* via `parentId`; the visible conversation
   is the path root → `session.currentLeafId`. Regenerate / fork create siblings
   (non-destructive); editing a user turn rewrites it in place — text *and*
-  attachments (changing the file set clears its measured `fileTokens` so the
-  next turn re-prices it). See `src/lib/tree.ts` (`activePath`, `leafOf`,
-  `childrenOf`, `siblingsOf`).
+  attachments. See `src/lib/tree.ts` (`activePath`, `leafOf`, `childrenOf`,
+  `siblingsOf`).
 - **Context divider.** A `role:'divider'` message; everything before the *latest*
   divider stays on screen but is excluded from what's sent (`activeWindow` in
   `src/lib/conversation.ts`). "Clear context without clearing the page."
