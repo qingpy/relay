@@ -58,7 +58,7 @@ connections { id, name, type: 'openai'|'vertex', url?,        // url = full …/
               // secrets (API key, Vertex private key) live in the proxy's secret store, not here
 folders     { id, name, parentId|null, order, createdAt,      // a "Preset" in the UI
               connectionId?, model?, settings?: ModelSettings, systemPrompt? }
-sessions    { id, folderId (preset), title, systemPrompt?, webSearch?,
+sessions    { id, folderId (preset), title, systemPrompt?,
               currentLeafId?, deletedAt?,                      // deletedAt set = in the trash
               createdAt, updatedAt, order }
 messages    { id, sessionId, parentId|null,                   // tree edge → branching
@@ -80,7 +80,8 @@ Key ideas:
   proxy's secret store (§4), keyed by connection id, never in the record.
   **Presets** (stored as
   `folders`) fix the connection/model/settings/system-prompt for the chats inside
-  them; a chat adds only an extra system prompt + a web-search toggle.
+  them (web search is one of the settings); a chat adds only an extra system
+  prompt.
 - **Branching.** Messages form a *tree* via `parentId`; the visible conversation
   is the path root → `session.currentLeafId`. Regenerate / fork create siblings
   (non-destructive); editing a user turn rewrites it in place — text *and*
@@ -214,18 +215,19 @@ The proxy streams the upstream SSE straight back; `src/lib/sse.ts` parses it and
 
 **Capabilities & reasoning.** Each saved model carries `{vision, pdf, reasoning,
 webSearch, toolUse}` (inferred in `models.ts`, user-editable in Connections), used
-to gate the composer and the reasoning control. `reasoningKind(caps)` → `none`
-(no knob) / `effort` (a string chosen from the global `appConfig.reasoningEfforts`
-list). Every reasoning-capable model uses the same effort knob — OpenAI-compatible
-endpoints send it as `reasoning_effort`, Vertex/Gemini as `thinkingConfig.thinkingLevel`.
-`sanitizeReasoning()` strips it at the resolve boundary when the model can't reason,
-so a stale value is never sent.
+to gate the composer's attachments and the preset's reasoning + web-search
+controls. `reasoningKind(caps)` → `none` (no knob) / `effort` (a string chosen
+from the global `appConfig.reasoningEfforts` list). Every reasoning-capable model
+uses the same effort knob — OpenAI-compatible endpoints send it as
+`reasoning_effort`, Vertex/Gemini as `thinkingConfig.thinkingLevel`.
+`sanitizeSettings()` strips knobs at the resolve boundary when the model can't
+use them (reasoning effort, web search), so a stale value is never sent.
 
 **Config resolution.** `src/lib/resolve.ts` (`resolveConfig`, live via
 `useResolved.ts`) turns a session + its preset + connections into the effective
-`{connection, model, settings, capabilities}`: preset's connection/model/knobs,
-the preset's system prompt + the chat's own concatenated, the chat's web-search
-toggle, with sane fallbacks.
+`{connection, model, settings, capabilities}`: preset's connection/model/knobs
+(web search included), the preset's system prompt + the chat's own concatenated,
+with sane fallbacks.
 
 ---
 

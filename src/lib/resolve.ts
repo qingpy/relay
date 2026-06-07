@@ -5,7 +5,7 @@ import type {
   ProviderSettings,
   Session,
 } from '@/db/types';
-import { findModel, reasoningKind, sanitizeReasoning } from '@/lib/models';
+import { findModel, sanitizeSettings } from '@/lib/models';
 
 export interface ResolvedConfig {
   connection?: Connection;
@@ -30,8 +30,8 @@ const firstEnabled = (connections: Connection[]): Connection | undefined =>
 
 /**
  * Resolve the connection, model, settings, and capabilities for a chat. A chat
- * uses its preset's connection/model/knobs and prepends the preset's system
- * prompt; it always contributes its own extra system prompt + web-search toggle.
+ * uses its preset's connection/model/knobs (web search included) and prepends
+ * the preset's system prompt; it contributes only its own extra system prompt.
  * Falls back to the first enabled connection if the preset's is missing.
  */
 export function resolveConfig(
@@ -57,12 +57,9 @@ export function resolveConfig(
   const saved = connection && model ? findModel(connection, model) : undefined;
   const capabilities = saved?.capabilities ?? NO_CAPS;
 
-  const kind = reasoningKind(capabilities);
-
   const settings: ProviderSettings = {
-    ...sanitizeReasoning(folder?.settings ?? {}, kind),
+    ...sanitizeSettings(folder?.settings ?? {}, capabilities),
     systemPrompt,
-    webSearch: session?.webSearch ?? false,
   };
 
   return {

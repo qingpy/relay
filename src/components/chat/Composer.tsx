@@ -1,12 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Marginalia } from '@/components/ui/marginalia';
-import {
-  clearContext,
-  getSession,
-  listPrompts,
-  setSessionWebSearch,
-} from '@/db/repo';
+import { clearContext, listPrompts } from '@/db/repo';
 import type { Prompt } from '@/db/types';
 import {
   FULL_CAPS,
@@ -32,16 +27,11 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const session = useLiveQuery(
-    () => (sessionId ? getSession(sessionId) : undefined),
-    [sessionId],
-  );
   const prompts = useLiveQuery(() => listPrompts(), [], []);
   const resolved = useResolvedConfig(sessionId);
   const streaming = useChatStore((s) =>
     sessionId ? !!s.activeBySession[sessionId] : false,
   );
-  const webSearch = session?.webSearch ?? false;
   const caps = resolved?.capabilities ?? FULL_CAPS;
 
   const slashQuery =
@@ -223,19 +213,9 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
             {expanded ? 'Shrink' : 'Expand'}
           </Marginalia>
           {sessionId && (
-            <>
-              {caps.webSearch && (
-                <Marginalia
-                  onClick={() => void setSessionWebSearch(sessionId, !webSearch)}
-                  active={webSearch}
-                >
-                  Web
-                </Marginalia>
-              )}
-              <Marginalia onClick={() => void clearContext(sessionId)}>
-                Clear
-              </Marginalia>
-            </>
+            <Marginalia onClick={() => void clearContext(sessionId)}>
+              Clear
+            </Marginalia>
           )}
           <div className="ml-auto" />
           {streaming ? (

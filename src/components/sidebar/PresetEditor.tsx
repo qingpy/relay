@@ -278,9 +278,8 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
 
   const conn = connections.find((c) => c.id === connectionId);
   const groups = modelGroups(connections);
-  const reasoning = conn
-    ? reasoningKind(findModel(conn, model).capabilities)
-    : 'none';
+  const caps = conn ? findModel(conn, model).capabilities : undefined;
+  const reasoning = caps ? reasoningKind(caps) : 'none';
 
   const saveSettings = (patch: Partial<ModelSettings>) => {
     // Drop undefined keys so an "off" knob is truly absent → provider default.
@@ -370,6 +369,16 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
           value={settings.reasoningEffort}
           onActivate={(v) => saveSettings({ reasoningEffort: v })}
         />
+      )}
+
+      {caps?.webSearch && (
+        <div className="flex items-center justify-between">
+          <span className="label-mono text-muted-foreground">Web search</span>
+          <Switch
+            checked={settings.webSearch ?? false}
+            onCheckedChange={(v) => saveSettings({ webSearch: v || undefined })}
+          />
+        </div>
       )}
 
       <div className={FIELD}>

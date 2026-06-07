@@ -97,8 +97,8 @@ export interface Connection {
   createdAt: number;
 }
 
-/** Model knobs shared by a preset (the system prompt and web search live
- *  elsewhere — on the preset and the chat respectively). */
+/** Model knobs shared by a preset (the system prompts live elsewhere — on the
+ *  preset and the chat). */
 export interface ModelSettings {
   temperature?: number;
   topP?: number;
@@ -110,12 +110,14 @@ export interface ModelSettings {
    * types what their model accepts.
    */
   reasoningEffort?: string;
+  /** Ground answers with the provider's native web search (OpenRouter's web
+   *  plugin / Gemini's google_search tool). */
+  webSearch?: boolean;
 }
 
 /** The full settings object handed to a provider's `buildRequest`. */
 export interface ProviderSettings extends ModelSettings {
   systemPrompt?: string;
-  webSearch?: boolean;
 }
 
 /**
@@ -146,8 +148,6 @@ export interface Session {
   title: string;
   /** Per-chat system prompt, appended to the preset's. */
   systemPrompt?: string;
-  /** Per-chat web-search toggle. */
-  webSearch?: boolean;
   /** Active branch tip — the conversation shown is root → this leaf. */
   currentLeafId?: string;
   /** When set, the chat is in the trash (hidden from the sidebar, restorable).

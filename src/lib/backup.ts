@@ -136,6 +136,13 @@ function stripConfigSecrets(config: AppConfig): AppConfig {
   return { ...config, webdav };
 }
 
+/** Drop fields a session no longer carries (web search moved to the preset's
+ *  `ModelSettings`); runs on every import so old snapshots converge. */
+function normalizeSession(session: Session & { webSearch?: boolean }): Session {
+  const { webSearch, ...rest } = session;
+  return rest;
+}
+
 /** Validate a parsed object as a Relay backup. */
 export function isBackupFile(x: unknown): x is BackupFile {
   return (
@@ -198,7 +205,7 @@ export async function importAll(
       await Promise.all([
         database.connections.bulkPut((d.connections ?? []).map(normalizeConnection)),
         database.folders.bulkPut(d.folders ?? []),
-        database.sessions.bulkPut(d.sessions ?? []),
+        database.sessions.bulkPut((d.sessions ?? []).map(normalizeSession)),
         database.messages.bulkPut(d.messages ?? []),
         database.prompts.bulkPut(d.prompts ?? []),
         database.appConfig.bulkPut(d.appConfig ?? []),
