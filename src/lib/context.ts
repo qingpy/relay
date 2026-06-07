@@ -1,58 +1,32 @@
-import type { Message, StoredFile } from '@/db/types';
-import { classify } from '@/lib/attachments';
-import { activeWindow, partsText } from '@/lib/conversation';
+import type { Message } from '@/db/types';
+import { activeWindow } from '@/lib/conversation';
 import { activePath } from '@/lib/tree';
 
 /**
- * Context-size readout for a chat (the "how big is this conversation getting"
- * indicator), one figure with no side-channels. Text is a deterministic
- * ~4-chars-per-token estimate. Attachments count via the real token cost the
- * provider reported (`message.fileTokens`, captured once a turn including them
- * is measured — see `store/chat.ts`); until then they carry a size-based
- * provisional estimate, replaced by the measurement after the first reply.
- *
- * Everything is summed over the *current* window, so editing or deleting a
- * message updates the figure immediately: drop a message and its text and its
- * file cost both leave the sum.
+ * Context-size readout for a chat, taken straight from the provider — no
+ * chars-per-token or file-size estimating, no per-message attribution. The
+ * figure is the reported usage of the last measured turn in the current
+ * window (the same model Codex and Claude Code use: the last response's
+ * token count *is* the context size, refreshed once per turn). Because the
+ * anchor is found by walking the active path, deleting the tail, switching
+ * branches, and regenerating all snap to the right measurement instantly;
+ * editing *above* a measured turn leaves the figure quietly stale until the
+ * next reply re-measures. With nothing measured in the window (a fresh chat,
+ * or a divider cutting off every measured turn) the meter stays hidden.
  */
-
-/** Rough cost of an image attachment until a turn measures it. */
-const IMAGE_TOKENS = 800;
-/** Observed bytes-per-token for typical PDFs (text + layout). */
-const PDF_BYTES_PER_TOKEN = 70;
-
-function estimateFileTokens(file: StoredFile): number {
-  const kind = classify(file.mimeType, file.name);
-  if (kind === 'image') return IMAGE_TOKENS;
-  if (kind === 'pdf') return Math.ceil(file.size / PDF_BYTES_PER_TOKEN);
-  return Math.ceil(file.size / 4); // text files: bytes ≈ chars
-}
-
-/** Estimated tokens the next turn will send over the current window. */
-export function contextTokens(
+export function measuredContextTokens(
   messages: Message[],
   leafId: string | undefined,
-  systemPrompt: string | undefined,
-  files: StoredFile[],
-): number {
-  const byId = new Map(files.map((f) => [f.id, f]));
+): number | undefined {
   const window = activeWindow(activePath(messages, leafId));
-  let textChars = systemPrompt?.length ?? 0;
-  let fileTokens = 0;
-  for (const m of window) {
-    if (m.role !== 'user' && m.role !== 'assistant') continue;
-    textChars += partsText(m.content).length;
-    if (!m.attachments?.length) continue;
-    if (m.fileTokens != null) {
-      fileTokens += m.fileTokens;
-    } else {
-      for (const id of m.attachments) {
-        const f = byId.get(id);
-        if (f) fileTokens += estimateFileTokens(f);
-      }
-    }
+  for (let i = window.length - 1; i >= 0; i--) {
+    const u = window[i].usage;
+    if (!u) continue;
+    if (u.totalTokens != null) return u.totalTokens;
+    if (u.promptTokens != null || u.completionTokens != null)
+      return (u.promptTokens ?? 0) + (u.completionTokens ?? 0);
   }
-  return Math.ceil(textChars / 4) + fileTokens;
+  return undefined;
 }
 
 /** Compact token label: 950 / 3.2k / 12k / 1M / 1.5M. */

@@ -512,8 +512,3 @@ export async function getFilesByIds(ids: string[]): Promise<StoredFile[]> {
 export async function deleteFiles(ids: string[]): Promise<void> {
   await db.files.bulkDelete(ids);
 }
-
-/** All stored files of a session (for the context meter's size estimates). */
-export async function listSessionFiles(sessionId: string): Promise<StoredFile[]> {
-  return db.files.where('sessionId').equals(sessionId).toArray();
-}
