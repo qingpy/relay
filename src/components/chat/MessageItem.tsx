@@ -185,9 +185,7 @@ export const MessageItem = memo(function MessageItem({
         <RoleTag role="assistant" />
         <div className="label-mono flex items-center gap-3 text-muted-foreground">
           {message.model && (
-            <span className="max-w-[12rem] truncate" title={message.model}>
-              {message.model}
-            </span>
+            <span className="max-w-[12rem] truncate">{message.model}</span>
           )}
           {message.usage?.totalTokens != null && (
             <span>{message.usage.totalTokens} tok</span>
