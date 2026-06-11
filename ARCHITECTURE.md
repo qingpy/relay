@@ -318,8 +318,8 @@ lib/       resolve.ts/useResolved.ts · models.ts · conversation.ts · tree.ts 
 components/
   layout/   ChatPane · Sidebar · KeyboardShortcuts
   chat/     MessageList · MessageItem · Composer · Reasoning · ToolCard · Citations ·
-            TreeMap · SiblingSwitcher · ContextMeter · SessionControls · ModelSelect ·
-            ExportMenu · SlashPalette · MessageActions · SelectionToolbar
+            TreeMap · SiblingSwitcher · ContextMeter · SessionControls · PresetControls ·
+            ModelSelect · ExportMenu · SlashPalette · MessageActions · SelectionToolbar
   sidebar/  SessionTree · FolderRow (preset) · SessionRow · PresetEditor
             ("Model & instructions") · InlineEdit · ChatSelectionBar · TrashDialog
   settings/ SettingsDialog · ConnectionsManager · ModelPicker · PromptsManager ·
@@ -328,6 +328,16 @@ components/
   ui/       shadcn/Radix primitives + flat-* (dialog, popover, dropdown-menu, switch,
             slider, flat-select, flat-button, marginalia, check-square, confirm, input)
 ```
+
+**Active target = a chat, else a preset.** The header/composer act on the open
+chat (`activeSessionId`) when there is one; with none but a preset selected
+(`activePresetId`), they fall back to a **blank chat bound to that preset** —
+`PresetControls` shows/edits the preset's model + Tune, and the first sent
+message starts a real chat there (`Composer` → `startNewSession`). The bare
+"Relay" page only appears on a fresh load or with no presets at all. So a preset
+is configured from the header (Tune) — its row menu is just Rename/Delete — and
+deleting the open chat advances to the next chat in its preset (`trashSessions`)
+rather than going blank.
 
 **Design system.** Strictly-flat "Unboxed Stationery": airy grey canvas, hairline
 borders, **no shadows or rounded corners**, one slate-blue accent,

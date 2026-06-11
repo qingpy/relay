@@ -16,7 +16,14 @@ import { useChatStore } from '@/store/chat';
 import { AttachmentChip, useRefusedNote } from './AttachmentChip';
 import { SlashPalette } from './SlashPalette';
 
-export function Composer({ sessionId }: { sessionId: string | null }) {
+export function Composer({
+  sessionId,
+  folderId = null,
+}: {
+  sessionId: string | null;
+  /** Active preset when no chat is open — gates attachments by the preset's model. */
+  folderId?: string | null;
+}) {
   const [value, setValue] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -28,7 +35,7 @@ export function Composer({ sessionId }: { sessionId: string | null }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const prompts = useLiveQuery(() => listPrompts(), [], []);
-  const resolved = useResolvedConfig(sessionId);
+  const resolved = useResolvedConfig(sessionId, folderId);
   const streaming = useChatStore((s) =>
     sessionId ? !!s.activeBySession[sessionId] : false,
   );

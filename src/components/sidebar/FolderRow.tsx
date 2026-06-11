@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Pencil, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -15,7 +15,6 @@ import type { Folder } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { InlineEdit } from './InlineEdit';
-import { PresetEditor } from './PresetEditor';
 
 export function FolderRow({
   folder,
@@ -37,7 +36,6 @@ export function FolderRow({
   const selectedChats = useUiStore((s) => s.selectedChats);
   const setChatSelected = useUiStore((s) => s.setChatSelected);
   const [editing, setEditing] = useState(false);
-  const [configuring, setConfiguring] = useState(false);
 
   const allSelected = chatIds.length > 0 && chatIds.every((id) => selectedChats[id]);
 
@@ -56,7 +54,8 @@ export function FolderRow({
   const sessionOver = isOver && String(active?.id ?? '').startsWith('S:');
 
   // While selecting: click a preset to (de)select all of its chats. Otherwise:
-  // make it active, expand it, and jump to its top chat.
+  // make it active, expand it, and jump to its top chat — or a blank chat bound
+  // to the preset when it has none.
   const onActivate = () => {
     if (editing) return;
     if (selecting) {
@@ -65,7 +64,8 @@ export function FolderRow({
     }
     setActivePreset(folder.id);
     if (collapsed) toggleFolder(folder.id);
-    if (topChatId) setActive(topChatId);
+    // No chat under it → blank chat bound to this preset, not the last one viewed.
+    setActive(topChatId ?? null);
   };
 
   const onDelete = async () => {
@@ -149,12 +149,6 @@ export function FolderRow({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onSelect={() => setTimeout(() => setConfiguring(true), 0)}
-              >
-                <SlidersHorizontal />
-                Settings
-              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
                 <Pencil />
                 Rename
@@ -168,12 +162,6 @@ export function FolderRow({
           </DropdownMenu>
         </>
       )}
-
-      <PresetEditor
-        folder={folder}
-        open={configuring}
-        onOpenChange={setConfiguring}
-      />
     </div>
   );
 }

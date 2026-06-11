@@ -6,12 +6,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-  listFolders,
-  listSessions,
-  moveSessionToFolder,
-  trashSession,
-} from '@/db/repo';
+import { listFolders, listSessions, moveSessionToFolder } from '@/db/repo';
+import { trashSessions } from '@/lib/session-actions';
 import { useUiStore } from '@/store/ui';
 
 /** Bulk actions shown while selecting chats in the sidebar: move, delete, done. */
@@ -21,8 +17,6 @@ export function ChatSelectionBar() {
   const selected = useUiStore((s) => s.selectedChats);
   const clearChatSelection = useUiStore((s) => s.clearChatSelection);
   const toggleChatSelectMode = useUiStore((s) => s.toggleChatSelectMode);
-  const activeId = useUiStore((s) => s.activeSessionId);
-  const setActive = useUiStore((s) => s.setActiveSession);
 
   const ids = sessions.filter((s) => selected[s.id]).map((s) => s.id);
   const count = ids.length;
@@ -34,8 +28,7 @@ export function ChatSelectionBar() {
 
   const remove = async () => {
     if (!count) return;
-    for (const id of ids) await trashSession(id);
-    if (activeId && ids.includes(activeId)) setActive(null);
+    await trashSessions(ids);
     clearChatSelection();
   };
 
