@@ -1,21 +1,34 @@
+import { useLiveQuery } from 'dexie-react-hooks';
 import { Marginalia } from '@/components/ui/marginalia';
 import { Composer } from '@/components/chat/Composer';
 import { ContextMeter } from '@/components/chat/ContextMeter';
 import { ExportMenu } from '@/components/chat/ExportMenu';
 import { MessageList } from '@/components/chat/MessageList';
+import { PresetControls } from '@/components/chat/PresetControls';
 import { SessionControls } from '@/components/chat/SessionControls';
 import { TreeMap } from '@/components/chat/TreeMap';
 import { SaveIndicator } from '@/components/layout/SaveIndicator';
+import { listFolders } from '@/db/repo';
 import { useUiStore } from '@/store/ui';
 
 export function ChatPane() {
   const sidebarOpen = useUiStore((s) => s.sidebarOpen);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const activeId = useUiStore((s) => s.activeSessionId);
+  const activePresetId = useUiStore((s) => s.activePresetId);
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
   const selectionMode = useUiStore((s) => s.selectionMode);
   const toggleSelectionMode = useUiStore((s) => s.toggleSelectionMode);
+
+  const folders = useLiveQuery(() => listFolders(), [], []);
+  // With no chat open, fall back to a blank chat bound to the active preset (so
+  // its model/tune show and a sent message starts a chat there). The bare "Relay"
+  // page is only for a fresh load or when there are no presets at all.
+  const presetId =
+    !activeId && activePresetId && folders.some((f) => f.id === activePresetId)
+      ? activePresetId
+      : null;
 
   return (
     <main className="flex h-full min-w-0 flex-1 flex-col bg-background">
@@ -32,6 +45,8 @@ export function ChatPane() {
         )}
         {activeId ? (
           <SessionControls sessionId={activeId} />
+        ) : presetId ? (
+          <PresetControls folderId={presetId} />
         ) : (
           <span className="label-mono text-muted-foreground">Relay</span>
         )}
@@ -52,7 +67,7 @@ export function ChatPane() {
 
       {activeId ? <MessageList sessionId={activeId} /> : <div className="flex-1" />}
 
-      <Composer sessionId={activeId} />
+      <Composer sessionId={activeId} folderId={presetId} />
     </main>
   );
 }

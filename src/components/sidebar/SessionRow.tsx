@@ -18,9 +18,9 @@ import {
   listFolders,
   moveSessionToFolder,
   renameSession,
-  trashSession,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
+import { trashSessions } from '@/lib/session-actions';
 import { formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
@@ -43,8 +43,7 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
   const isActive = activeId === session.id;
 
   const onDelete = async () => {
-    await trashSession(session.id);
-    if (isActive) setActive(null);
+    await trashSessions([session.id]);
   };
 
   const onDuplicate = async () => {
