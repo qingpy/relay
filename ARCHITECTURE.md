@@ -344,7 +344,13 @@ borders, **no shadows or rounded corners**, one slate-blue accent,
 uppercase-monospace labels/metadata, **light-only**. All re-skin flows through
 tokens in `src/index.css` (`--radius: 0`, neutralized shadows, the `label-mono`
 utility). Shared primitives avoid repetition: `Marginalia` (mono text actions),
-`CheckSquare` (one selection box), `SectionLabel` (settings headings).
+`CheckSquare` (one selection box), `SectionLabel` (settings headings). **Fonts:**
+the `--font-sans`/`--font-mono` stacks lead with Inter/JetBrains Mono and resolve
+CJK glyphs to a bundled **Noto Sans SC** (`@fontsource-variable/noto-sans-sc`,
+imported in `main.tsx`) — self-hosted and unicode-range-subsetted, so it stays
+local-first (no external font requests) and the browser fetches only the glyph
+ranges actually rendered. Per-glyph fallback keeps Latin on Inter while Chinese
+picks the clean sans instead of the browser's serif default.
 
 ---
 
