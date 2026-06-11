@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, FileX, X } from 'lucide-react';
+import { classify } from '@/lib/attachments';
 import { cn } from '@/lib/utils';
 
 /**
@@ -58,10 +59,18 @@ export function AttachmentChip({
   );
 }
 
+/** Why a file was refused — a missing model capability, or binary bytes. */
+function refusalReason(file: File): string {
+  const kind = classify(file.type, file.name);
+  if (kind === 'image') return 'this model does not take images';
+  if (kind === 'pdf') return 'this model does not take PDFs';
+  return 'binary files cannot be attached';
+}
+
 /**
- * Transient feedback for files the current model can't take (no vision/PDF
- * support) — attaching used to drop them silently. Returns the note to render
- * and a reporter to call with the refused files.
+ * Transient feedback for files that can't be attached (binary bytes, or no
+ * vision/PDF support) — attaching used to drop them silently. Returns the
+ * note to render and a reporter to call with the refused files.
  */
 export function useRefusedNote(): [string | null, (refused: File[]) => void] {
   const [note, setNote] = useState<string | null>(null);
@@ -73,8 +82,8 @@ export function useRefusedNote(): [string | null, (refused: File[]) => void] {
     if (refused.length === 0) return;
     setNote(
       refused.length === 1
-        ? `${refused[0].name} — not supported by this model`
-        : `${refused.length} files not supported by this model`,
+        ? `${refused[0].name} — ${refusalReason(refused[0])}`
+        : `${refused.length} files cannot be attached`,
     );
     clearTimeout(timer.current);
     timer.current = setTimeout(() => setNote(null), 4000);

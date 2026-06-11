@@ -271,8 +271,8 @@ function UserEditor({
   const kept = existing.filter((f) => !removed.has(f.id));
   const canSave = !!value.trim() || kept.length + added.length > 0;
 
-  const addFiles = (list: FileList | File[]) => {
-    const { accepted, refused } = partitionAllowed(list, caps);
+  const addFiles = async (list: FileList | File[]) => {
+    const { accepted, refused } = await partitionAllowed(list, caps);
     if (accepted.length) setAdded((prev) => [...prev, ...accepted]);
     reportRefused(refused);
   };

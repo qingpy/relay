@@ -66,8 +66,8 @@ export function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 240)}px`;
   }, [value, expanded]);
 
-  const addFiles = (list: FileList | File[]) => {
-    const { accepted, refused } = partitionAllowed(list, caps);
+  const addFiles = async (list: FileList | File[]) => {
+    const { accepted, refused } = await partitionAllowed(list, caps);
     if (accepted.length) setFiles((prev) => [...prev, ...accepted]);
     reportRefused(refused);
   };
