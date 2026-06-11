@@ -7,7 +7,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { deleteFolder, renameFolder } from '@/db/repo';
@@ -153,7 +152,6 @@ export function FolderRow({
                 <Pencil />
                 Rename
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem destructive onSelect={() => void onDelete()}>
                 <Trash2 />
                 Delete
