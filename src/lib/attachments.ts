@@ -41,15 +41,39 @@ export const FULL_CAPS: Capabilities = {
   toolUse: true,
 };
 
-/** Split files into what the model takes and what it must refuse. */
-export function partitionAllowed(
+/** Bytes read as text: no NULs and valid UTF-8 in the first chunk. The
+ *  streaming decode tolerates a multi-byte character cut at the chunk edge. */
+async function looksLikeText(file: File): Promise<boolean> {
+  const bytes = new Uint8Array(await file.slice(0, 8192).arrayBuffer());
+  if (bytes.includes(0)) return false;
+  try {
+    new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Split files into what the model takes and what it must refuse. Files the
+ *  MIME/extension lists don't recognize (.tex, .log, …) are sniffed — if the
+ *  bytes are text they're accepted, re-typed to text/plain so classification
+ *  downstream (storage, send) agrees. */
+export async function partitionAllowed(
   files: FileList | File[],
   caps: Capabilities,
-): { accepted: File[]; refused: File[] } {
+): Promise<{ accepted: File[]; refused: File[] }> {
   const accepted: File[] = [];
   const refused: File[] = [];
   for (const f of [...files]) {
-    (isAllowed(f.type, f.name, caps) ? accepted : refused).push(f);
+    if (isAllowed(f.type, f.name, caps)) {
+      accepted.push(f);
+    } else if (!classify(f.type, f.name) && (await looksLikeText(f))) {
+      accepted.push(
+        new File([f], f.name, { type: 'text/plain', lastModified: f.lastModified }),
+      );
+    } else {
+      refused.push(f);
+    }
   }
   return { accepted, refused };
 }
