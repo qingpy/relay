@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { FileText, FileX, X } from 'lucide-react';
 import { classify } from '@/lib/attachments';
+import { useObjectUrl } from '@/lib/useObjectUrl';
 import { cn } from '@/lib/utils';
 
 /**
@@ -23,14 +24,7 @@ export function AttachmentChip({
   onRemove: () => void;
 }) {
   const isImage = !unavailable && mimeType.startsWith('image/');
-  const [url, setUrl] = useState<string>();
-
-  useEffect(() => {
-    if (!isImage) return;
-    const u = URL.createObjectURL(blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [blob, isImage]);
+  const url = useObjectUrl(blob, isImage);
 
   return (
     <div

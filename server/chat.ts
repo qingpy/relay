@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getConnectionSecret } from './secrets.ts';
+import { errorResponse, safeUrl } from './util.ts';
 import { getAccessToken, loadServiceAccount } from './vertex-auth.ts';
 
 /**
@@ -14,8 +15,8 @@ import { getAccessToken, loadServiceAccount } from './vertex-auth.ts';
  *    key comes from the secret store (or a transient one in the body for
  *    testing), or `GOOGLE_VERTEX_CREDENTIALS`. The key never reaches the browser.
  *
- * Endpoints validate the upstream origin so the proxy can't be turned into an
- * open forwarder.
+ * Upstream URLs are user config, used verbatim; endpoints check only that they
+ * parse as http(s). Fine for a local, no-auth proxy — don't expose it publicly.
  */
 export const chat = new Hono();
 
@@ -24,26 +25,6 @@ export const SSE_HEADERS = {
   'cache-control': 'no-cache',
   connection: 'keep-alive',
 } as const;
-
-export function errorResponse(message: string, status: number): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-/** Validate a user-supplied upstream URL — used verbatim, so only the protocol
- *  is checked (and it must parse as a URL). */
-export function safeUrl(raw: unknown): string | null {
-  if (typeof raw !== 'string' || !raw) return null;
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' && url.protocol !== 'http:') return null;
-    return raw;
-  } catch {
-    return null;
-  }
-}
 
 chat.post('/openai', async (c) => {
   const { url: rawUrl, payload, connectionId } = await c.req

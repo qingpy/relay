@@ -1,16 +1,15 @@
-import type { BuildInput, ChatMessage, Delta } from './types';
+import {
+  textWithInlinedFiles,
+  type BuildInput,
+  type ChatMessage,
+  type Delta,
+} from './types';
 
 /** Build Gemini content parts: text (+ inlined text files) then inlineData
  *  parts for images/PDFs. */
 function toParts(m: ChatMessage): unknown[] {
-  const atts = m.attachments ?? [];
-  let text = m.text;
-  for (const f of atts.filter((a) => a.kind === 'text')) {
-    text += `\n\n[file: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
-  }
-
-  const parts: unknown[] = [{ text }];
-  for (const f of atts.filter((a) => a.kind !== 'text')) {
+  const parts: unknown[] = [{ text: textWithInlinedFiles(m) }];
+  for (const f of (m.attachments ?? []).filter((a) => a.kind !== 'text')) {
     parts.push({ inlineData: { mimeType: f.mimeType, data: f.data } });
   }
   return parts;

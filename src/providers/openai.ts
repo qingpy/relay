@@ -1,23 +1,17 @@
-import type {
-  BuildInput,
-  ChatMessage,
-  Delta,
-  Provider,
-  ProxyRequest,
+import {
+  textWithInlinedFiles,
+  type BuildInput,
+  type ChatMessage,
+  type Delta,
+  type Provider,
+  type ProxyRequest,
 } from './types';
 
 /** Build OpenAI message content: a plain string when there are no binary
- *  attachments, otherwise the multimodal parts array. Text attachments are
- *  inlined into the text so any model can read them. */
+ *  attachments, otherwise the multimodal parts array. */
 function toContent(m: ChatMessage): unknown {
-  const atts = m.attachments ?? [];
-  const textFiles = atts.filter((a) => a.kind === 'text');
-  const binary = atts.filter((a) => a.kind !== 'text');
-
-  let text = m.text;
-  for (const f of textFiles) {
-    text += `\n\n[file: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
-  }
+  const binary = (m.attachments ?? []).filter((a) => a.kind !== 'text');
+  const text = textWithInlinedFiles(m);
 
   if (binary.length === 0) return text;
 

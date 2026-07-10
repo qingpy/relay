@@ -18,9 +18,6 @@ import { sync } from './sync.ts';
  * In dev, Vite serves the SPA and forwards `/api/*` here. In production
  * (`npm run build && npm run serve`) this same process also serves the built
  * SPA from `dist/`, giving a single origin with zero CORS.
- *
- * LLM passthrough (`/api/chat/*`), model lists, and WebDAV sync are added in
- * later milestones; M0 establishes the server and the dev proxy wiring.
  */
 
 const PORT = Number(process.env.API_PORT ?? 8787);

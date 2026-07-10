@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { json } from './util.ts';
 
 /**
  * Local backup storage. The browser holds the data (IndexedDB) and POSTs a
@@ -14,13 +15,6 @@ export const backup = new Hono();
 const BACKUP_DIR = process.env.RELAY_BACKUP_DIR || join(process.cwd(), 'backups');
 const NAME_RE = /^[\w.\-]+\.json$/;
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
 async function ensureDir(): Promise<void> {
   if (!existsSync(BACKUP_DIR)) await mkdir(BACKUP_DIR, { recursive: true });
 }
@@ -31,12 +25,15 @@ function safeName(name: string): string | null {
   return name;
 }
 
+/** Millisecond-precise so two backups written the same second (scheduled +
+ *  manual) never collide on the same name, which would silently overwrite. */
 function stamp(): string {
   const t = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
   return (
     `${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}` +
-    `-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}`
+    `-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}` +
+    pad(t.getMilliseconds(), 3)
   );
 }
 

@@ -45,7 +45,11 @@ export function resolveConfig(
   let model = folder?.model ?? '';
   if (!connection) {
     connection = firstEnabled(connections);
-    if (!model) model = connection?.models[0]?.id ?? '';
+    // The preset's model belongs to its (missing) connection — carry it onto
+    // the fallback only if that connection's catalog actually has it.
+    if (!connection?.models.some((m) => m.id === model)) {
+      model = connection?.models[0]?.id ?? '';
+    }
   }
 
   const systemPrompt =

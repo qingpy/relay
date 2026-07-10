@@ -74,3 +74,13 @@ export interface Provider {
   /** Parse one SSE `data:` payload into zero or more deltas. */
   parseStreamChunk(data: string): Delta[];
 }
+
+/** The message text with its text attachments inlined as fenced blocks, so any
+ *  model can read them regardless of file support. */
+export function textWithInlinedFiles(m: ChatMessage): string {
+  let text = m.text;
+  for (const f of (m.attachments ?? []).filter((a) => a.kind === 'text')) {
+    text += `\n\n[file: ${f.name}]\n\`\`\`\n${f.data}\n\`\`\``;
+  }
+  return text;
+}

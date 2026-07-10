@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
+import { atomicWrite, json, withRetry } from './util.ts';
 
 /**
  * Local data store (ARCHITECTURE.md §4 "Storage & sync").
@@ -42,32 +43,6 @@ function dataFile(): string {
 /** Sidecar holding the WebDAV sync cursor, beside the data file it belongs to. */
 function syncStateFile(): string {
   return `${dataFile()}.sync`;
-}
-
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-const RETRYABLE = new Set(['EBUSY', 'EPERM', 'EACCES', 'EMFILE', 'ENFILE']);
-const RETRY_DELAYS_MS = [50, 100, 200, 400, 800];
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Run a file op, retrying the transient lock/permission errors Windows throws
- *  when a read or rename collides with an AV scan or another open handle. */
-async function withRetry<T>(op: () => Promise<T>): Promise<T> {
-  for (let i = 0; ; i++) {
-    try {
-      return await op();
-    } catch (e) {
-      const code = (e as NodeJS.ErrnoException).code ?? '';
-      if (!RETRYABLE.has(code) || i >= RETRY_DELAYS_MS.length) throw e;
-      await sleep(RETRY_DELAYS_MS[i]);
-    }
-  }
 }
 
 // Read the current snapshot. Missing file -> a fresh, empty store.
@@ -133,10 +108,7 @@ data.put('/sync-state', async (c) => {
   const file = syncStateFile();
   const payload = JSON.stringify({ rev: body.rev, lastSyncAt: body.lastSyncAt ?? 0 });
   try {
-    await mkdir(dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    await withRetry(() => writeFile(tmp, payload, 'utf-8'));
-    await withRetry(() => rename(tmp, file));
+    await atomicWrite(file, payload);
     return c.json({ ok: true });
   } catch (e) {
     return json({ error: `Couldn't write sync state: ${String(e)}` }, 500);
@@ -150,10 +122,7 @@ data.put('/', async (c) => {
   if (!body) return json({ error: 'Empty body.' }, 400);
   const file = dataFile();
   try {
-    await mkdir(dirname(file), { recursive: true });
-    const tmp = `${file}.tmp`;
-    await withRetry(() => writeFile(tmp, body, 'utf-8'));
-    await withRetry(() => rename(tmp, file));
+    await atomicWrite(file, body);
     return c.json({ ok: true });
   } catch (e) {
     return json({ error: `Couldn't write data file: ${String(e)}` }, 500);

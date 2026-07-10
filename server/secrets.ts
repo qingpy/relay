@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
+import { atomicWrite, withRetry } from './util.ts';
 
 /**
  * Server-side secret store (ARCHITECTURE.md §4 "Storage & sync").
@@ -59,25 +60,25 @@ async function load(): Promise<SecretStore> {
     cache = { version: 1, connections: {} };
     return cache;
   }
+  // A read failure must propagate (the request 500s and the next one retries):
+  // caching an empty store here would blank every key for the process lifetime,
+  // and the next save would persist that empty store over the real file.
+  const raw = await withRetry(() => readFile(file, 'utf-8'));
   try {
-    const parsed = JSON.parse(await readFile(file, 'utf-8')) as Partial<SecretStore>;
+    const parsed = JSON.parse(raw) as Partial<SecretStore>;
     cache = {
       version: 1,
       connections: parsed.connections ?? {},
       webdav: parsed.webdav,
     };
   } catch {
-    cache = { version: 1, connections: {} };
+    throw new Error(`Secret store is not valid JSON: ${file}`);
   }
   return cache;
 }
 
 async function persist(store: SecretStore): Promise<void> {
-  const file = secretsFile();
-  await mkdir(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp`;
-  await writeFile(tmp, JSON.stringify(store, null, 2), 'utf-8');
-  await rename(tmp, file);
+  await atomicWrite(secretsFile(), JSON.stringify(store, null, 2));
   cache = store;
 }
 

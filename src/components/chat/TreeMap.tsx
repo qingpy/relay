@@ -13,7 +13,7 @@ import { getMessages, getSession, setCurrentLeaf, spliceMessage } from '@/db/rep
 import type { Message } from '@/db/types';
 import { partsText } from '@/lib/conversation';
 import { activePath, childrenOf, leafOf } from '@/lib/tree';
-import { cn } from '@/lib/utils';
+import { cn, rangeBetween } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 
 function label(m: Message): string {
@@ -113,21 +113,16 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   // Click toggles one row; shift-click extends to cover the whole span between
   // the anchor and the clicked row (Explorer-style).
   const selectAt = (id: string, shift: boolean) => {
-    if (shift && anchorRef.current) {
-      const a = order.indexOf(anchorRef.current);
-      const b = order.indexOf(id);
-      if (a !== -1 && b !== -1) {
-        const [lo, hi] = a < b ? [a, b] : [b, a];
-        setSel((s) => {
-          const next = { ...s };
-          for (const rid of order.slice(lo, hi + 1)) next[rid] = true;
-          return next;
-        });
-        anchorRef.current = id;
-        return;
-      }
+    const range = shift ? rangeBetween(order, anchorRef.current, id) : null;
+    if (range) {
+      setSel((s) => {
+        const next = { ...s };
+        for (const rid of range) next[rid] = true;
+        return next;
+      });
+    } else {
+      toggle(id);
     }
-    toggle(id);
     anchorRef.current = id;
   };
 

@@ -1,3 +1,5 @@
+import type { Provider, ProxyRequest } from '@/providers/types';
+
 /**
  * Read a `text/event-stream` body and yield each event's `data` payload as a
  * string. Handles multi-line `data:` fields, ignores comments, and stops on the
@@ -50,4 +52,30 @@ export async function* readSSE(
   } finally {
     reader.cancel().catch(() => {});
   }
+}
+
+/** POST a built provider request and collect the streamed text deltas into one
+ *  string — the simple consumer shared by auto-title and connection tests (the
+ *  chat engine has its own full delta loop). An error delta stops collection. */
+export async function collectStreamText(
+  provider: Provider,
+  req: ProxyRequest,
+): Promise<{ text: string; error?: string }> {
+  const res = await fetch(req.url, {
+    method: 'POST',
+    headers: req.headers,
+    body: JSON.stringify(req.body),
+  });
+  if (!res.ok || !res.body) {
+    const j = (await res.json().catch(() => null)) as { error?: string } | null;
+    return { text: '', error: j?.error || `HTTP ${res.status}` };
+  }
+  let text = '';
+  for await (const data of readSSE(res.body)) {
+    for (const d of provider.parseStreamChunk(data)) {
+      if (d.kind === 'text') text += d.text;
+      else if (d.kind === 'error') return { text, error: d.message };
+    }
+  }
+  return { text };
 }
