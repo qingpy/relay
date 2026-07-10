@@ -1,5 +1,5 @@
 import { db, getAppConfig, type RelayDB } from '@/db/db';
-import { fileUnavailable, sha256Hex } from '@/lib/attachments';
+import { bytesToBase64, fileUnavailable, sha256Hex } from '@/lib/attachments';
 import { normalizeConnection } from '@/lib/models';
 import type {
   AppConfig,
@@ -41,15 +41,6 @@ export interface BackupFile {
     /** Content pool: base64 by SHA-256 — each unique attachment stored once. */
     blobs?: Record<string, string>;
   };
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
 }
 
 function base64ToBlob(b64: string, type: string): Blob {
@@ -267,12 +258,15 @@ export async function importAll(
   );
 }
 
-export function backupFilename(label?: string): string {
+/** `relay-backup-<stamp>[-label].json`. Pass `ms` where two backups can land
+ *  in the same second — a colliding name silently overwrites. */
+export function backupFilename(label?: string, ms = false): string {
   const t = new Date();
-  const pad = (n: number) => String(n).padStart(2, '0');
+  const pad = (n: number, w = 2) => String(n).padStart(w, '0');
   const stamp =
     `${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}` +
-    `-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}`;
+    `-${pad(t.getHours())}${pad(t.getMinutes())}${pad(t.getSeconds())}` +
+    (ms ? pad(t.getMilliseconds(), 3) : '');
   return `relay-backup-${stamp}${label ? `-${label}` : ''}.json`;
 }
 

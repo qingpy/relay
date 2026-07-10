@@ -11,7 +11,7 @@ import { CheckSquare } from '@/components/ui/check-square';
 import { getMessages, getSession } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { activePath } from '@/lib/tree';
-import { cn } from '@/lib/utils';
+import { cn, rangeBetween } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
 import { useUiStore } from '@/store/ui';
 import { MessageItem } from './MessageItem';
@@ -50,6 +50,12 @@ export function MessageList({ sessionId }: { sessionId: string }) {
     if (!el) return;
     stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
+
+  // A new chat always opens stuck to its latest message — the ref survives
+  // session switches, so a scrolled-up position would otherwise carry over.
+  useEffect(() => {
+    stick.current = true;
+  }, [sessionId]);
 
   useEffect(() => {
     // Don't yank to the bottom while we're trying to land on a specific message.
@@ -145,17 +151,9 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   // Click toggles one message; shift-click extends the selection to cover the
   // whole run between the anchor and the clicked message (Explorer-style).
   const selectAt = (id: string, shift: boolean) => {
-    if (shift && anchorRef.current) {
-      const a = selectableIds.indexOf(anchorRef.current);
-      const b = selectableIds.indexOf(id);
-      if (a !== -1 && b !== -1) {
-        const [lo, hi] = a < b ? [a, b] : [b, a];
-        addSelection(selectableIds.slice(lo, hi + 1));
-        anchorRef.current = id;
-        return;
-      }
-    }
-    setMessageSelected(id, !selected[id]);
+    const range = shift ? rangeBetween(selectableIds, anchorRef.current, id) : null;
+    if (range) addSelection(range);
+    else setMessageSelected(id, !selected[id]);
     anchorRef.current = id;
   };
 

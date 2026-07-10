@@ -1,6 +1,6 @@
 import type { Connection } from '@/db/types';
 import { providerForConnection } from '@/providers/registry';
-import { readSSE } from './sse';
+import { collectStreamText } from './sse';
 
 export interface TestResult {
   ok: boolean;
@@ -34,22 +34,8 @@ export async function testConnection(
 
   const start = Date.now();
   try {
-    const res = await fetch(req.url, {
-      method: 'POST',
-      headers: req.headers,
-      body: JSON.stringify(req.body),
-    });
-    if (!res.ok || !res.body) {
-      const j = (await res.json().catch(() => null)) as { error?: string } | null;
-      return { ok: false, error: j?.error || `HTTP ${res.status}` };
-    }
-    let text = '';
-    for await (const data of readSSE(res.body)) {
-      for (const d of provider.parseStreamChunk(data)) {
-        if (d.kind === 'text') text += d.text;
-        else if (d.kind === 'error') return { ok: false, error: d.message };
-      }
-    }
+    const { text, error } = await collectStreamText(provider, req);
+    if (error) return { ok: false, error };
     return { ok: true, text: text.trim().slice(0, 80), ms: Date.now() - start };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };

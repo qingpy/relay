@@ -229,6 +229,19 @@ async function migrateToPresets(tx: Transaction): Promise<void> {
 
 export const db = new RelayDB(memoryBackend);
 
+/** Subscribe to every table's create/update/delete hooks — the change signal
+ *  for the write-through data file and the WebDAV dirty flag. */
+export function onDbChange(cb: () => void): void {
+  for (const table of db.tables) {
+    const hook = (
+      table as unknown as { hook: (e: string, cb: () => void) => void }
+    ).hook;
+    hook.call(table, 'creating', cb);
+    hook.call(table, 'updating', cb);
+    hook.call(table, 'deleting', cb);
+  }
+}
+
 /**
  * Open the browser's PERSISTENT `relay` IndexedDB (the pre-M9 on-disk store),
  * for the one-time migration into the local data file. Always the real browser

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
-import { errorResponse, safeUrl } from './chat.ts';
 import { getConnectionSecret } from './secrets.ts';
+import { errorResponse, safeUrl } from './util.ts';
 
 /**
  * Model-discovery routes. The proxy lists upstream models so the client can

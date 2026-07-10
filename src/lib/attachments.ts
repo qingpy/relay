@@ -117,14 +117,18 @@ export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
     .join('');
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const bytes = new Uint8Array(await blob.arrayBuffer());
+/** Base64-encode raw bytes, chunked to stay under the argument-count limit. */
+export function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunk = 0x8000;
   for (let i = 0; i < bytes.length; i += chunk) {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
   }
   return btoa(binary);
+}
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return bytesToBase64(new Uint8Array(await blob.arrayBuffer()));
 }
 
 /** Resolve a stored file to inline data for sending. */

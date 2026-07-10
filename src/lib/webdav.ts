@@ -1,5 +1,5 @@
-import { db, getAppConfig, updateAppConfig } from '@/db/db';
-import { exportAll, importAll, type BackupFile } from '@/lib/backup';
+import { db, getAppConfig, onDbChange, updateAppConfig } from '@/db/db';
+import { backupFilename, exportAll, importAll, type BackupFile } from '@/lib/backup';
 import { webdavSecretSet } from '@/lib/secrets';
 import type { WebDavConfig } from '@/db/types';
 import { useUiStore } from '@/store/ui';
@@ -263,17 +263,6 @@ function backupFileUrl(c: WebDavConfig, name: string): string {
   return `${backupsFolderUrl(c)}/${name}`;
 }
 
-/** A unique, sortable backup filename. Millisecond-precise so two backups taken
- *  in the same second never collide on the same name (which would overwrite). */
-function backupName(): string {
-  const t = new Date();
-  const p = (n: number, w = 2) => String(n).padStart(w, '0');
-  return (
-    `relay-backup-${t.getFullYear()}${p(t.getMonth() + 1)}${p(t.getDate())}` +
-    `-${p(t.getHours())}${p(t.getMinutes())}${p(t.getSeconds())}${p(t.getMilliseconds(), 3)}.json`
-  );
-}
-
 /** Headers for a request aimed at an arbitrary WebDAV URL (not the snapshot). */
 function urlHeaders(c: WebDavConfig, url: string): Record<string, string> {
   return { 'x-webdav-url': url, 'x-webdav-user': c.user };
@@ -317,7 +306,7 @@ async function writeWebdavBackup(c: WebDavConfig): Promise<void> {
   const res = await fetch('/api/sync', {
     method: 'PUT',
     headers: {
-      ...urlHeaders(c, backupFileUrl(c, backupName())),
+      ...urlHeaders(c, backupFileUrl(c, backupFilename(undefined, true))),
       'content-type': 'application/json',
     },
     body: JSON.stringify(data),
@@ -506,16 +495,9 @@ export async function resolveKeepServer(): Promise<boolean> {
 function attachHooks(): void {
   if (hooksAttached) return;
   hooksAttached = true;
-  const onChange = () => {
+  onDbChange(() => {
     if (!applyingRemote) dirty = true;
-  };
-  for (const table of db.tables) {
-    const hook = (table as unknown as { hook: (e: string, cb: () => void) => void })
-      .hook;
-    hook.call(table, 'creating', onChange);
-    hook.call(table, 'updating', onChange);
-    hook.call(table, 'deleting', onChange);
-  }
+  });
 }
 
 /** Attach change tracking and do an initial sync on app open. */

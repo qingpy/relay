@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getWebdavPass } from './secrets.ts';
+import { errorResponse as err, safeUrl } from './util.ts';
 
 /**
  * WebDAV sync proxy. The browser can't reach most WebDAV servers directly
@@ -17,16 +18,6 @@ import { getWebdavPass } from './secrets.ts';
  */
 export const sync = new Hono();
 
-function safeUrl(raw: string | undefined): string | null {
-  if (!raw) return null;
-  try {
-    const u = new URL(raw);
-    return u.protocol === 'https:' || u.protocol === 'http:' ? raw : null;
-  } catch {
-    return null;
-  }
-}
-
 async function creds(c: { req: { header: (k: string) => string | undefined } }) {
   const url = safeUrl(c.req.header('x-webdav-url'));
   const user = c.req.header('x-webdav-user');
@@ -37,13 +28,6 @@ async function creds(c: { req: { header: (k: string) => string | undefined } }) 
       ? `Basic ${Buffer.from(`${user}:${pass}`, 'utf-8').toString('base64')}`
       : undefined;
   return { url, authHeader };
-}
-
-function err(message: string, status = 400): Response {
-  return new Response(JSON.stringify({ error: message }), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
 }
 
 /** Parent collection URL (strip any trailing slash, then the last segment).

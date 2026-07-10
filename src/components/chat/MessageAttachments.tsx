@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { FileText, FileX, X } from 'lucide-react';
 import { getFilesByIds, removeFileContent } from '@/db/repo';
 import type { StoredFile } from '@/db/types';
 import { fileUnavailable } from '@/lib/attachments';
+import { useObjectUrl } from '@/lib/useObjectUrl';
 import { cn } from '@/lib/utils';
 
 export function MessageAttachments({ fileIds }: { fileIds: string[] }) {
@@ -49,14 +49,7 @@ function RemoveButton({
 function FileThumb({ file }: { file: StoredFile }) {
   const gone = fileUnavailable(file);
   const isImage = !gone && file.mimeType.startsWith('image/');
-  const [url, setUrl] = useState<string>();
-
-  useEffect(() => {
-    if (!isImage) return;
-    const u = URL.createObjectURL(file.blob);
-    setUrl(u);
-    return () => URL.revokeObjectURL(u);
-  }, [file.blob, isImage]);
+  const url = useObjectUrl(file.blob, isImage);
 
   // The bytes are gone (removed here, or never carried by the snapshot that
   // brought the row to this device) — a quiet tag marks where the file was.

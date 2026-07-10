@@ -7,7 +7,7 @@ import {
 } from '@/db/repo';
 import { partsText } from './conversation';
 import { activePath } from './tree';
-import { readSSE } from './sse';
+import { collectStreamText } from './sse';
 import { providerForConnection } from '@/providers/registry';
 import type { ChatMessage } from '@/providers/types';
 
@@ -56,19 +56,8 @@ export async function maybeAutoTitle(sessionId: string): Promise<void> {
       region: connection.region,
       clientEmail: connection.clientEmail,
     });
-    const res = await fetch(req.url, {
-      method: 'POST',
-      headers: req.headers,
-      body: JSON.stringify(req.body),
-    });
-    if (!res.ok || !res.body) return;
-
-    let text = '';
-    for await (const data of readSSE(res.body)) {
-      for (const delta of provider.parseStreamChunk(data)) {
-        if (delta.kind === 'text') text += delta.text;
-      }
-    }
+    const { text, error } = await collectStreamText(provider, req);
+    if (error) return;
 
     const title = cleanTitle(text);
     if (title) await updateSession(sessionId, { title });

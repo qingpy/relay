@@ -1,4 +1,4 @@
-import { USE_LOCAL_STORE, db, openPersistentRelayDB, type RelayDB } from '@/db/db';
+import { USE_LOCAL_STORE, onDbChange, openPersistentRelayDB, type RelayDB } from '@/db/db';
 import { exportAll, importAll, type BackupFile } from '@/lib/backup';
 import type { Connection } from '@/db/types';
 import { useUiStore } from '@/store/ui';
@@ -99,8 +99,13 @@ export async function flushLocalStore(): Promise<void> {
     retryDelay = RETRY_BASE_MS;
     if (dirty) {
       // Changes landed during the upload — they're pending, not saved.
+      // Arm the timer directly: scheduleWrite() would no-op while `writing`
+      // is still true (it clears only in the finally below).
       setDataStatus('saving');
-      scheduleWrite();
+      writeTimer = setTimeout(() => {
+        writeTimer = null;
+        void flushLocalStore();
+      }, WRITE_DEBOUNCE_MS);
     } else {
       setDataStatus('saved');
     }
@@ -130,19 +135,11 @@ function scheduleWrite(): void {
 function attachHooks(): void {
   if (hooksAttached) return;
   hooksAttached = true;
-  const onChange = () => {
+  onDbChange(() => {
     if (applyingLocal) return;
     dirty = true;
     scheduleWrite();
-  };
-  for (const table of db.tables) {
-    const hook = (
-      table as unknown as { hook: (e: string, cb: () => void) => void }
-    ).hook;
-    hook.call(table, 'creating', onChange);
-    hook.call(table, 'updating', onChange);
-    hook.call(table, 'deleting', onChange);
-  }
+  });
 }
 
 /** Import a snapshot into the in-memory DB without re-triggering write-through. */

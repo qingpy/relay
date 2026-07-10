@@ -3,6 +3,8 @@ import { partsText } from './conversation';
 
 interface ExportOptions {
   includeThinking?: boolean;
+  /** Render context dividers as `---` (whole-conversation export). */
+  dividers?: boolean;
 }
 
 /** Markdown for a single message (no role heading). */
@@ -34,17 +36,8 @@ export function sessionToMarkdown(
   messages: Message[],
   opts: ExportOptions = {},
 ): string {
-  const lines = [`# ${session.title}`, ''];
-  for (const m of messages) {
-    if (m.role === 'divider') {
-      lines.push('---', '');
-      continue;
-    }
-    if (m.role !== 'user' && m.role !== 'assistant') continue;
-    lines.push(m.role === 'user' ? '## You' : '## Assistant', '');
-    lines.push(messageToMarkdown(m, opts), '');
-  }
-  return lines.join('\n').trim() + '\n';
+  const body = messagesToMarkdown(messages, { ...opts, dividers: true });
+  return `# ${session.title}\n\n${body}`.trim() + '\n';
 }
 
 /** Markdown for a set of messages (used by multi-select copy/export). Each turn
@@ -55,6 +48,10 @@ export function messagesToMarkdown(
 ): string {
   const lines: string[] = [];
   for (const m of messages) {
+    if (m.role === 'divider') {
+      if (opts.dividers) lines.push('---', '');
+      continue;
+    }
     if (m.role !== 'user' && m.role !== 'assistant') continue;
     lines.push(m.role === 'user' ? '## You' : '## Assistant', '');
     lines.push(messageToMarkdown(m, opts), '');
