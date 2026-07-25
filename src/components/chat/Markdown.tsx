@@ -3,6 +3,10 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import type { PluggableList } from 'unified';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+// CJK next to ** / ~~ with interior punctuation fails CommonMark flanking
+// rules (e.g. 这是**“x”**的). These relax that without changing Latin cases.
+import remarkCjkFriendly from 'remark-cjk-friendly';
+import remarkCjkFriendlyGfmStrikethrough from 'remark-cjk-friendly-gfm-strikethrough';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 import 'katex/dist/katex.min.css';
@@ -17,7 +21,12 @@ const components: Components = {
   pre: CodeBlock,
 };
 
-const remarkPlugins: PluggableList = [remarkGfm, remarkMath];
+const remarkPlugins: PluggableList = [
+  remarkGfm,
+  remarkCjkFriendly,
+  remarkCjkFriendlyGfmStrikethrough,
+  remarkMath,
+];
 const rehypePlugins: PluggableList = [
   rehypeKatex,
   [rehypeHighlight, { detect: true, ignoreMissing: true }],

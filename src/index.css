@@ -189,6 +189,8 @@
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md p { margin: 0.75em 0; }
+.md strong { font-weight: 600; }
+.md em { font-style: italic; }
 .md h1, .md h2, .md h3, .md h4 {
   margin: 1.4em 0 0.6em;
   font-weight: 600;
