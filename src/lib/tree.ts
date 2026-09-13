@@ -48,3 +48,42 @@ export function activePath(messages: Message[], leafId?: string): Message[] {
 export function siblingsOf(messages: Message[], message: Message): Message[] {
   return childrenOf(messages, message.parentId);
 }
+
+/**
+ * A linear stretch from a fork head (or root) until the next fork, a divider,
+ * or a leaf. Dividers are their own one-message segments so they stay selectable.
+ */
+export interface Segment {
+  id: string;
+  messages: Message[];
+  children: Segment[];
+}
+
+function segmentFrom(
+  messages: Message[],
+  start: Message,
+): { chain: Message[]; next: Message[] } {
+  if (start.role === 'divider') {
+    return { chain: [start], next: childrenOf(messages, start.id) };
+  }
+  const chain = [start];
+  let cur = start;
+  for (;;) {
+    const kids = childrenOf(messages, cur.id);
+    if (kids.length === 1 && kids[0].role !== 'divider') {
+      cur = kids[0];
+      chain.push(cur);
+    } else {
+      return { chain, next: kids };
+    }
+  }
+}
+
+/** Forest of compressed branches for the map. */
+export function segmentTree(messages: Message[]): Segment[] {
+  const build = (head: Message): Segment => {
+    const { chain, next } = segmentFrom(messages, head);
+    return { id: head.id, messages: chain, children: next.map(build) };
+  };
+  return childrenOf(messages, null).map(build);
+}

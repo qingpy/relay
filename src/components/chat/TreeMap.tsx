@@ -1,7 +1,7 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckSquare } from '@/components/ui/check-square';
-import { Marginalia } from '@/components/ui/marginalia';
+import { confirm } from '@/components/ui/confirm';
 import {
   Dialog,
   DialogContent,
@@ -9,14 +9,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { Marginalia } from '@/components/ui/marginalia';
 import { getMessages, getSession, setCurrentLeaf, spliceMessage } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { partsText } from '@/lib/conversation';
-import { activePath, childrenOf, leafOf } from '@/lib/tree';
-import { cn, rangeBetween } from '@/lib/utils';
+import { activePath, leafOf, segmentTree, type Segment } from '@/lib/tree';
+import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 
-function label(m: Message): string {
+function snippet(m: Message): string {
   if (m.role === 'divider') return 'Context cleared';
   const text = partsText(m.content).replace(/\s+/g, ' ').trim();
   if (text) return text;
@@ -26,25 +27,38 @@ function label(m: Message): string {
   return '(empty)';
 }
 
-const ROLE_TONE: Record<string, string> = {
-  user: 'text-primary',
-  assistant: 'text-foreground',
-  divider: 'text-muted-foreground',
-};
-
 function roleTag(m: Message): string {
-  return m.role === 'user' ? 'You' : m.role === 'assistant' ? 'AI' : '—';
+  return m.role === 'user' ? 'You' : m.role === 'assistant' ? 'AI' : '';
+}
+
+function walkSegments(tree: Segment[], fn: (s: Segment) => void) {
+  const walk = (s: Segment) => {
+    fn(s);
+    for (const c of s.children) walk(c);
+  };
+  for (const s of tree) walk(s);
+}
+
+function expandableIds(tree: Segment[]): string[] {
+  const ids: string[] = [];
+  walkSegments(tree, (s) => {
+    if (s.messages.length > 1) ids.push(s.id);
+  });
+  return ids;
+}
+
+function allMessageIds(tree: Segment[]): string[] {
+  const ids: string[] = [];
+  walkSegments(tree, (s) => {
+    for (const m of s.messages) ids.push(m.id);
+  });
+  return ids;
 }
 
 /**
- * The branch map: a top-to-bottom outline of the whole conversation tree. A
- * straight run of replies stays flush (so a long linear chat reads as a simple
- * list); only a real fork — a message with more than one reply — indents its
- * alternative branches. The active branch is highlighted.
- *
- * Default click locates a message: it makes that message's branch active and
- * scrolls the chat to it. A "Select" toggle turns rows into checkboxes for bulk
- * deletion (each picked message is spliced out, its replies kept).
+ * Branch map: a modal skeleton of the conversation tree. Each row is a linear
+ * stretch between forks (a divider is its own row). Parallel heads sit as
+ * siblings. Select mode checks individual messages. Delete splices those turns.
  */
 export function TreeMap({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
@@ -60,49 +74,53 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
     [sessionId, open],
   );
 
+  const tree = useMemo(() => segmentTree(all), [all]);
   const activeSet = useMemo(
     () => new Set(activePath(all, session?.currentLeafId).map((m) => m.id)),
     [all, session?.currentLeafId],
   );
-  const roots = useMemo(() => childrenOf(all, null), [all]);
+  const canExpand = useMemo(() => expandableIds(tree), [tree]);
+  const messageIds = useMemo(() => allMessageIds(tree), [tree]);
 
+  const [expanded, setExpanded] = useState<Record<string, true>>({});
   const [selectMode, setSelectMode] = useState(false);
   const [sel, setSel] = useState<Record<string, true>>({});
   const selCount = Object.keys(sel).length;
-  // Anchor for shift-range selection (the last plainly-clicked row).
-  const anchorRef = useRef<string | null>(null);
-
-  // Selectable message ids in the order they appear in the map (tree preorder),
-  // so a shift-range covers exactly the rows between two clicks.
-  const order = useMemo(() => {
-    const out: string[] = [];
-    const walk = (nodes: Message[]) => {
-      for (const n of nodes) {
-        if (n.role !== 'divider') out.push(n.id);
-        walk(childrenOf(all, n.id));
-      }
-    };
-    walk(roots);
-    return out;
-  }, [all, roots]);
-  const allChecked = order.length > 0 && selCount === order.length;
+  const allChecked = messageIds.length > 0 && selCount === messageIds.length;
 
   const reset = (v: boolean) => {
     setOpen(v);
     if (!v) {
       setSel({});
+      setExpanded({});
       setSelectMode(false);
-      anchorRef.current = null;
     }
   };
 
   const exitSelect = () => {
     setSelectMode(false);
     setSel({});
-    anchorRef.current = null;
   };
 
-  const toggle = (id: string) =>
+  const show = (m: Message) => {
+    if (!activeSet.has(m.id)) void setCurrentLeaf(sessionId, leafOf(all, m.id));
+    requestLocate(m.id);
+    reset(false);
+  };
+
+  const toggleExpand = (id: string) =>
+    setExpanded((s) => {
+      const next = { ...s };
+      if (next[id]) delete next[id];
+      else next[id] = true;
+      return next;
+    });
+
+  const expandAll = () =>
+    setExpanded(Object.fromEntries(canExpand.map((id) => [id, true])));
+  const collapseAll = () => setExpanded({});
+
+  const toggleMessage = (id: string) =>
     setSel((s) => {
       const next = { ...s };
       if (next[id]) delete next[id];
@@ -110,142 +128,77 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
       return next;
     });
 
-  // Click toggles one row; shift-click extends to cover the whole span between
-  // the anchor and the clicked row (Explorer-style).
-  const selectAt = (id: string, shift: boolean) => {
-    const range = shift ? rangeBetween(order, anchorRef.current, id) : null;
-    if (range) {
-      setSel((s) => {
-        const next = { ...s };
-        for (const rid of range) next[rid] = true;
-        return next;
-      });
-    } else {
-      toggle(id);
-    }
-    anchorRef.current = id;
-  };
-
-  const locate = (m: Message) => {
-    if (!activeSet.has(m.id)) void setCurrentLeaf(sessionId, leafOf(all, m.id));
-    requestLocate(m.id);
-    reset(false);
-  };
-
   const deleteSelected = async () => {
-    if (selCount === 0) return;
-    for (const id of Object.keys(sel)) await spliceMessage(id);
-    setSel({});
-  };
-
-  const row = (node: Message): React.ReactNode => {
-    const kids = childrenOf(all, node.id);
-    const onPath = activeSet.has(node.id);
-    const checked = !!sel[node.id];
-    const selectable = node.role !== 'divider';
-    return (
-      <div
-        key={node.id}
-        onClick={(e) =>
-          selectMode
-            ? selectable && selectAt(node.id, e.shiftKey)
-            : locate(node)
-        }
-        className={cn(
-          'flex cursor-pointer select-none items-center gap-2 py-1.5 pl-2 pr-2 text-sm transition-colors',
-          onPath ? 'text-foreground' : 'text-muted-foreground',
-          checked
-            ? 'bg-primary/5 ring-1 ring-inset ring-primary/30'
-            : onPath && !selectMode
-              ? 'bg-accent'
-              : 'hover:bg-accent/60',
-        )}
-      >
-        {selectMode &&
-          (selectable ? (
-            <CheckSquare checked={checked} />
-          ) : (
-            <span className="size-3.5 shrink-0" />
-          ))}
-        <span
-          className={cn(
-            'label-mono inline-flex w-7 shrink-0 items-center',
-            ROLE_TONE[node.role] ?? 'text-muted-foreground',
-          )}
-        >
-          {roleTag(node)}
-        </span>
-        <span className="min-w-0 flex-1 truncate">{label(node)}</span>
-        {kids.length > 1 && (
-          <span className="label-mono shrink-0 text-[10px] text-muted-foreground">
-            {kids.length} branches
-          </span>
-        )}
-      </div>
-    );
-  };
-
-  // Render a vertical run of siblings. A single child continues the spine at the
-  // same indent; multiple children fork — each branch nests one level deeper,
-  // with a hairline guide.
-  const renderChain = (nodes: Message[]): React.ReactNode => {
-    if (nodes.length === 0) return null;
-    if (nodes.length === 1) {
-      const n = nodes[0];
-      return (
-        <>
-          {row(n)}
-          {renderChain(childrenOf(all, n.id))}
-        </>
-      );
+    const ids = Object.keys(sel);
+    if (ids.length === 0) return;
+    if (ids.length > 1) {
+      const ok = await confirm({
+        title: 'Delete messages?',
+        description: `${ids.length} messages will be removed. Replies are kept.`,
+        confirmLabel: 'Delete',
+        destructive: true,
+      });
+      if (!ok) return;
     }
-    return nodes.map((n) => (
-      <div key={n.id} className="ml-3 border-l border-border pl-2">
-        {row(n)}
-        {renderChain(childrenOf(all, n.id))}
-      </div>
-    ));
+    for (const id of ids) await spliceMessage(id);
+    setSel({});
   };
 
   return (
     <Dialog open={open} onOpenChange={reset}>
       <DialogTrigger asChild>
-        <Marginalia>Map</Marginalia>
+        <Marginalia active={open}>Map</Marginalia>
       </DialogTrigger>
       <DialogContent
-        className="max-w-xl"
+        className="flex max-h-[85vh] max-w-2xl flex-col gap-0 overflow-hidden p-0"
         aria-describedby={undefined}
         onEscapeKeyDown={(e) => {
-          // Esc peels one layer at a time: leave select mode first, then close.
           if (selectMode) {
             e.preventDefault();
             exitSelect();
           }
         }}
       >
-        <DialogHeader>
-          <DialogTitle>Branch map</DialogTitle>
-        </DialogHeader>
-
-        {order.length > 0 && (
-          <div className="flex items-center gap-3 border-b border-border pb-2 text-sm">
-            {selectMode ? (
-              <>
-                <span className="label-mono tabular-nums text-muted-foreground">
-                  {selCount} selected
-                </span>
-                <Marginalia
-                  onClick={() =>
-                    setSel(
-                      allChecked
-                        ? {}
-                        : Object.fromEntries(order.map((id) => [id, true])),
-                    )
-                  }
-                >
-                  {allChecked ? 'None' : 'All'}
-                </Marginalia>
-                <div className="ml-auto flex items-center gap-3">
+        <DialogHeader className="border-b border-border px-6 py-4 pr-16">
+          <div className="flex items-center gap-3">
+            <DialogTitle>Map</DialogTitle>
+            {selectMode && (
+              <span className="label-mono tabular-nums text-muted-foreground">
+                {selCount} selected
+              </span>
+            )}
+            <div className="ml-auto flex items-center gap-3">
+              {canExpand.length > 0 && (
+                <>
+                  <Marginalia
+                    onClick={expandAll}
+                    disabled={canExpand.every((id) => expanded[id])}
+                  >
+                    Expand all
+                  </Marginalia>
+                  <span className="text-muted-foreground/30">·</span>
+                  <Marginalia
+                    onClick={collapseAll}
+                    disabled={Object.keys(expanded).length === 0}
+                  >
+                    Collapse all
+                  </Marginalia>
+                  <span className="text-muted-foreground/30">·</span>
+                </>
+              )}
+              {selectMode ? (
+                <>
+                  <Marginalia
+                    onClick={() =>
+                      setSel(
+                        allChecked
+                          ? {}
+                          : Object.fromEntries(messageIds.map((id) => [id, true])),
+                      )
+                    }
+                  >
+                    {allChecked ? 'None' : 'All'}
+                  </Marginalia>
                   <Marginalia
                     disabled={selCount === 0}
                     onClick={() => void deleteSelected()}
@@ -254,29 +207,183 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
                   </Marginalia>
                   <span className="text-muted-foreground/30">·</span>
                   <Marginalia onClick={exitSelect}>Done</Marginalia>
-                </div>
-              </>
-            ) : (
-              <Marginalia
-                className="ml-auto"
-                onClick={() => setSelectMode(true)}
-              >
-                Select
-              </Marginalia>
-            )}
+                </>
+              ) : (
+                <Marginalia
+                  onClick={() => setSelectMode(true)}
+                  disabled={messageIds.length === 0}
+                >
+                  Select
+                </Marginalia>
+              )}
+            </div>
           </div>
-        )}
+        </DialogHeader>
 
-        <div className="-mx-2 max-h-[55vh] overflow-y-auto">
-          {roots.length === 0 ? (
-            <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          {tree.length === 0 ? (
+            <p className="px-2 py-8 text-center text-sm text-muted-foreground">
               No messages yet.
             </p>
           ) : (
-            renderChain(roots)
+            tree.map((seg) => (
+              <BranchRow
+                key={seg.id}
+                seg={seg}
+                activeSet={activeSet}
+                currentLeafId={session?.currentLeafId}
+                expanded={expanded}
+                selectMode={selectMode}
+                sel={sel}
+                onToggle={toggleMessage}
+                onExpand={toggleExpand}
+                onShow={show}
+              />
+            ))
           )}
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function BranchRow({
+  seg,
+  activeSet,
+  currentLeafId,
+  expanded,
+  selectMode,
+  sel,
+  onToggle,
+  onExpand,
+  onShow,
+}: {
+  seg: Segment;
+  activeSet: Set<string>;
+  currentLeafId?: string;
+  expanded: Record<string, true>;
+  selectMode: boolean;
+  sel: Record<string, true>;
+  onToggle: (id: string) => void;
+  onExpand: (id: string) => void;
+  onShow: (m: Message) => void;
+}) {
+  const head = seg.messages[0];
+  const n = seg.messages.length;
+  const open = !!expanded[seg.id];
+  const checked = !!sel[head.id];
+  const onPath = seg.messages.some((m) => activeSet.has(m.id));
+  const here = seg.messages.some((m) => m.id === currentLeafId);
+  const divider = head.role === 'divider';
+
+  const onRow = (m: Message) =>
+    selectMode ? onToggle(m.id) : onShow(m);
+
+  return (
+    <div>
+      <div
+        className={cn(
+          'group flex cursor-pointer select-none items-center gap-2 py-1.5 pr-1 text-sm transition-colors hover:bg-accent/60',
+          divider && 'italic',
+          onPath ? 'text-foreground' : 'text-muted-foreground',
+          checked && 'bg-primary/5',
+          here && !checked && 'bg-accent',
+        )}
+        onClick={() => onRow(head)}
+      >
+        {n > 1 ? (
+          <button
+            type="button"
+            aria-label={open ? 'Collapse' : 'Expand'}
+            onClick={(e) => {
+              e.stopPropagation();
+              onExpand(seg.id);
+            }}
+            className="flex w-3 shrink-0 justify-center font-mono text-[0.7rem] text-muted-foreground/60 hover:text-foreground"
+          >
+            {open ? '▾' : '▸'}
+          </button>
+        ) : (
+          <span className="w-3 shrink-0" />
+        )}
+        {selectMode && <CheckSquare checked={checked} />}
+        {!divider && (
+          <span
+            className={cn(
+              'label-mono inline-flex w-7 shrink-0 items-center',
+              head.role === 'user' ? 'text-primary' : 'text-foreground',
+            )}
+          >
+            {roleTag(head)}
+          </span>
+        )}
+        <span className="min-w-0 flex-1 truncate">{snippet(head)}</span>
+        {n > 1 && (
+          <span className="label-mono shrink-0 tabular-nums text-muted-foreground/50">
+            {n}
+          </span>
+        )}
+        {here && (
+          <span className="label-mono shrink-0 text-[10px] text-primary">
+            now
+          </span>
+        )}
+        {!selectMode && (
+          <Marginalia
+            className="opacity-0 group-hover:opacity-100"
+            onClick={(e) => {
+              e.stopPropagation();
+              onShow(head);
+            }}
+          >
+            Show
+          </Marginalia>
+        )}
+      </div>
+
+      {(open && n > 1) || seg.children.length > 0 ? (
+        <div className="ml-5 border-l border-border pl-3">
+          {open &&
+            n > 1 &&
+            seg.messages.slice(1).map((m) => (
+              <div
+                key={m.id}
+                onClick={() => onRow(m)}
+                className={cn(
+                  'group/in flex cursor-pointer select-none items-center gap-2 py-1 pr-1 text-sm transition-colors hover:bg-accent/60',
+                  m.role === 'divider' && 'italic',
+                  sel[m.id]
+                    ? 'bg-primary/5 text-foreground'
+                    : m.id === currentLeafId
+                      ? 'text-foreground'
+                      : 'text-muted-foreground',
+                )}
+              >
+                {selectMode && <CheckSquare checked={!!sel[m.id]} />}
+                {m.role !== 'divider' && (
+                  <span className="label-mono inline-flex w-7 shrink-0 items-center">
+                    {roleTag(m)}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate">{snippet(m)}</span>
+              </div>
+            ))}
+          {seg.children.map((child) => (
+            <BranchRow
+              key={child.id}
+              seg={child}
+              activeSet={activeSet}
+              currentLeafId={currentLeafId}
+              expanded={expanded}
+              selectMode={selectMode}
+              sel={sel}
+              onToggle={onToggle}
+              onExpand={onExpand}
+              onShow={onShow}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

@@ -195,6 +195,24 @@ export async function renameFolder(id: string, name: string): Promise<void> {
   await db.folders.update(id, { name: name.trim() || 'Untitled preset' });
 }
 
+/** Clone a preset's model/settings/prompt (not its chats) as a new preset. */
+export async function duplicateFolder(
+  id: string,
+): Promise<Folder | undefined> {
+  const folder = await getFolder(id);
+  if (!folder) return;
+  const copy: Folder = {
+    ...folder,
+    id: newId(),
+    name: `Copy of ${folder.name}`,
+    order: -Date.now(),
+    createdAt: Date.now(),
+    settings: folder.settings ? { ...folder.settings } : undefined,
+  };
+  await db.folders.add(copy);
+  return copy;
+}
+
 /** Update a preset's model/connection/settings/system-prompt. */
 export async function updateFolderConfig(
   id: string,

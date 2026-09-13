@@ -30,39 +30,39 @@ export async function startNewSession(
 }
 
 /**
- * Move one or more chats to the trash. If the chat currently on screen is among
- * them, advance to the next surviving chat in its preset (then the previous),
- * falling back to that preset's blank view when none remain — never leaving the
- * trashed chat showing.
+ * Move one or more chats to the trash. If the chat on screen is among them
+ * (including when a menu click lands on the deleted row after the menu closes),
+ * advance to the next surviving chat in its preset (then the previous), falling
+ * back to that preset's blank view when none remain — never leaving a trashed
+ * chat showing.
  */
 export async function trashSessions(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
-  const ui = useUiStore.getState();
-  const activeId = ui.activeSessionId;
   const removed = new Set(ids);
-  const advancing = !!activeId && removed.has(activeId);
+  // Snapshot siblings before trashing so we can pick a replacement.
+  const all = await listSessions();
 
-  let nextId: string | null = activeId;
-  let presetId: string | null = null;
-  if (advancing) {
-    // Compute the replacement before trashing, while siblings are still listed.
-    const all = await listSessions();
-    presetId = all.find((s) => s.id === activeId)?.folderId ?? null;
+  for (const id of ids) await trashSession(id);
+
+  const leaveGhost = () => {
+    const ui = useUiStore.getState();
+    const current = ui.activeSessionId;
+    if (!current || !removed.has(current)) return;
+    const presetId = all.find((s) => s.id === current)?.folderId ?? null;
     const siblings = all.filter((s) => s.folderId === presetId);
-    const i = siblings.findIndex((s) => s.id === activeId);
-    nextId = null;
+    const i = siblings.findIndex((s) => s.id === current);
+    let nextId: string | null = null;
     for (let j = i + 1; j < siblings.length && nextId === null; j++) {
       if (!removed.has(siblings[j].id)) nextId = siblings[j].id;
     }
     for (let j = i - 1; j >= 0 && nextId === null; j--) {
       if (!removed.has(siblings[j].id)) nextId = siblings[j].id;
     }
-  }
-
-  for (const id of ids) await trashSession(id);
-
-  if (advancing) {
     if (presetId) ui.setActivePreset(presetId);
     ui.setActiveSession(nextId);
-  }
+  };
+
+  leaveGhost();
+  // The row under a just-closed dropdown can still receive the same click.
+  requestAnimationFrame(leaveGhost);
 }

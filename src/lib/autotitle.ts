@@ -5,46 +5,78 @@ import {
   getSession,
   updateSession,
 } from '@/db/repo';
-import { partsText } from './conversation';
+import { deriveTitle, partsText } from './conversation';
 import { activePath } from './tree';
 import { collectStreamText } from './sse';
 import { providerForConnection } from '@/providers/registry';
 import type { ChatMessage } from '@/providers/types';
+
+const inflight = new Set<string>();
 
 /**
  * After the first exchange, ask the configured title model for a short title.
  * No-ops when no title model is set (the placeholder title from the first user
  * message then stands) or once the chat has more than one user turn.
  */
-export async function maybeAutoTitle(sessionId: string): Promise<void> {
-  const config = await getAppConfig();
-  if (!config.titleConnectionId || !config.titleModel) return;
+export function maybeAutoTitle(sessionId: string): Promise<void> {
+  return generateTitle(sessionId, { firstExchangeOnly: true });
+}
 
-  const session = await getSession(sessionId);
-  if (!session) return;
-
-  const path = activePath(await getMessages(sessionId), session.currentLeafId);
-  const convo = path.filter((m) => m.role === 'user' || m.role === 'assistant');
-  const users = convo.filter((m) => m.role === 'user');
-  // Only title the very first exchange (one user turn, at least one reply).
-  if (users.length !== 1 || convo.length < 2) return;
-
-  const connection = await getConnection(config.titleConnectionId);
-  if (!connection) return;
-
-  const transcript = convo
-    .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${partsText(m.content)}`)
-    .join('\n\n')
-    .slice(0, 6000);
-
-  const messages: ChatMessage[] = [
-    {
-      role: 'user',
-      text: `${config.titlePrompt || DEFAULT_TITLE_PROMPT}\n\n---\n${transcript}`,
-    },
-  ];
-
+/**
+ * (Re)title a chat from its active path. Uses the Settings auto-title model
+ * when one is set; otherwise falls back to the first user message.
+ */
+export async function generateTitle(
+  sessionId: string,
+  opts: { firstExchangeOnly?: boolean } = {},
+): Promise<void> {
+  if (inflight.has(sessionId)) return;
+  inflight.add(sessionId);
   try {
+    const session = await getSession(sessionId);
+    if (!session) return;
+
+    const path = activePath(await getMessages(sessionId), session.currentLeafId);
+    const convo = path.filter(
+      (m) => m.role === 'user' || m.role === 'assistant',
+    );
+    const users = convo.filter((m) => m.role === 'user');
+    if (convo.length === 0) return;
+
+    const config = await getAppConfig();
+    if (opts.firstExchangeOnly) {
+      if (!config.titleConnectionId || !config.titleModel) return;
+      if (users.length !== 1 || convo.length < 2) return;
+    }
+
+    if (!config.titleConnectionId || !config.titleModel) {
+      const first = users[0];
+      if (first) {
+        await updateSession(sessionId, {
+          title: deriveTitle(partsText(first.content)),
+        });
+      }
+      return;
+    }
+
+    const connection = await getConnection(config.titleConnectionId);
+    if (!connection) return;
+
+    const transcript = convo
+      .map(
+        (m) =>
+          `${m.role === 'user' ? 'User' : 'Assistant'}: ${partsText(m.content)}`,
+      )
+      .join('\n\n')
+      .slice(0, 6000);
+
+    const messages: ChatMessage[] = [
+      {
+        role: 'user',
+        text: `${config.titlePrompt || DEFAULT_TITLE_PROMPT}\n\n---\n${transcript}`,
+      },
+    ];
+
     const provider = providerForConnection(connection);
     const req = provider.buildRequest({
       model: config.titleModel,
@@ -62,7 +94,9 @@ export async function maybeAutoTitle(sessionId: string): Promise<void> {
     const title = cleanTitle(text);
     if (title) await updateSession(sessionId, { title });
   } catch {
-    // Title generation is best-effort; keep the placeholder on failure.
+    // Title generation is best-effort; keep the existing title on failure.
+  } finally {
+    inflight.delete(sessionId);
   }
 }
 

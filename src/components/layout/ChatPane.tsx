@@ -8,7 +8,7 @@ import { PresetControls } from '@/components/chat/PresetControls';
 import { SessionControls } from '@/components/chat/SessionControls';
 import { TreeMap } from '@/components/chat/TreeMap';
 import { SaveIndicator } from '@/components/layout/SaveIndicator';
-import { listFolders } from '@/db/repo';
+import { getSession, listFolders } from '@/db/repo';
 import { useUiStore } from '@/store/ui';
 
 export function ChatPane() {
@@ -22,11 +22,20 @@ export function ChatPane() {
   const toggleSelectionMode = useUiStore((s) => s.toggleSelectionMode);
 
   const folders = useLiveQuery(() => listFolders(), [], []);
+  const session = useLiveQuery(
+    () => (activeId ? getSession(activeId) : undefined),
+    [activeId],
+  );
+  // A trashed id can land in `activeSessionId` for a frame (menu click-through
+  // onto the deleted row). Never render that ghost; fall back to the preset.
+  // While the query is still loading `session` is undefined — keep showing the
+  // id so the pane doesn't flash empty.
+  const openId = !activeId ? null : session?.deletedAt ? null : activeId;
   // With no chat open, fall back to a blank chat bound to the active preset (so
   // its model/tune show and a sent message starts a chat there). The bare "Relay"
   // page is only for a fresh load or when there are no presets at all.
   const presetId =
-    !activeId && activePresetId && folders.some((f) => f.id === activePresetId)
+    !openId && activePresetId && folders.some((f) => f.id === activePresetId)
       ? activePresetId
       : null;
 
@@ -43,8 +52,8 @@ export function ChatPane() {
             ▸
           </button>
         )}
-        {activeId ? (
-          <SessionControls sessionId={activeId} />
+        {openId ? (
+          <SessionControls sessionId={openId} />
         ) : presetId ? (
           <PresetControls folderId={presetId} />
         ) : (
@@ -52,22 +61,22 @@ export function ChatPane() {
         )}
         <div className="ml-auto flex items-center gap-4">
           <SaveIndicator />
-          {activeId && <ContextMeter sessionId={activeId} />}
-          {activeId && <TreeMap sessionId={activeId} />}
-          {activeId && (
+          {openId && <ContextMeter sessionId={openId} />}
+          {openId && <TreeMap sessionId={openId} />}
+          {openId && (
             <Marginalia onClick={toggleSelectionMode} active={selectionMode}>
               Select
             </Marginalia>
           )}
-          {activeId && <ExportMenu sessionId={activeId} />}
+          {openId && <ExportMenu sessionId={openId} />}
           <Marginalia onClick={() => setShortcutsOpen(true)}>Keys</Marginalia>
           <Marginalia onClick={() => setSettingsOpen(true)}>Settings</Marginalia>
         </div>
       </header>
 
-      {activeId ? <MessageList sessionId={activeId} /> : <div className="flex-1" />}
+      {openId ? <MessageList sessionId={openId} /> : <div className="flex-1" />}
 
-      <Composer sessionId={activeId} folderId={presetId} />
+      <Composer sessionId={openId} folderId={presetId} />
     </main>
   );
 }

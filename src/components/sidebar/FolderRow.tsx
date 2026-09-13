@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Copy, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { confirm } from '@/components/ui/confirm';
 import {
   DropdownMenu,
@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { deleteFolder, renameFolder } from '@/db/repo';
+import { deleteFolder, duplicateFolder, renameFolder } from '@/db/repo';
 import type { Folder } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
@@ -35,6 +35,10 @@ export function FolderRow({
   const selectedChats = useUiStore((s) => s.selectedChats);
   const setChatSelected = useUiStore((s) => s.setChatSelected);
   const [editing, setEditing] = useState(false);
+  const swallowClick = useRef(false);
+  const armSwallow = () => {
+    swallowClick.current = true;
+  };
 
   const allSelected = chatIds.length > 0 && chatIds.every((id) => selectedChats[id]);
 
@@ -56,6 +60,10 @@ export function FolderRow({
   // make it active, expand it, and jump to its top chat — or a blank chat bound
   // to the preset when it has none.
   const onActivate = () => {
+    if (swallowClick.current) {
+      swallowClick.current = false;
+      return;
+    }
     if (editing) return;
     if (selecting) {
       for (const id of chatIds) setChatSelected(id, !allSelected);
@@ -148,11 +156,35 @@ export function FolderRow({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={() => setTimeout(() => setEditing(true), 0)}>
+              <DropdownMenuItem
+                onSelect={() => {
+                  armSwallow();
+                  setTimeout(() => setEditing(true), 0);
+                }}
+              >
                 <Pencil />
                 Rename
               </DropdownMenuItem>
-              <DropdownMenuItem destructive onSelect={() => void onDelete()}>
+              <DropdownMenuItem
+                onSelect={() => {
+                  armSwallow();
+                  void duplicateFolder(folder.id).then((copy) => {
+                    if (!copy) return;
+                    setActivePreset(copy.id);
+                    setActive(null);
+                  });
+                }}
+              >
+                <Copy />
+                Duplicate
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                destructive
+                onSelect={() => {
+                  armSwallow();
+                  void onDelete();
+                }}
+              >
                 <Trash2 />
                 Delete
               </DropdownMenuItem>

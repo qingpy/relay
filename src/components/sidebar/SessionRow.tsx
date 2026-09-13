@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, Copy, FolderInput, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
+import { Check, Copy, FolderInput, MoreHorizontal, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 import { CheckSquare } from '@/components/ui/check-square';
 import {
   DropdownMenu,
@@ -20,6 +20,7 @@ import {
   renameSession,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
+import { generateTitle } from '@/lib/autotitle';
 import { trashSessions } from '@/lib/session-actions';
 import { formatStamp } from '@/lib/time';
 import { cn } from '@/lib/utils';
@@ -32,6 +33,11 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
   const setActivePreset = useUiStore((s) => s.setActivePreset);
   const folders = useLiveQuery(() => listFolders(), [], []);
   const [editing, setEditing] = useState(false);
+  // A dropdown item's click can land on this row after the menu unmounts.
+  const swallowClick = useRef(false);
+  const armSwallow = () => {
+    swallowClick.current = true;
+  };
 
   const selecting = useUiStore((s) => s.chatSelectMode);
   const checked = useUiStore((s) => !!s.selectedChats[session.id]);
@@ -52,6 +58,10 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
   };
 
   const onRowClick = () => {
+    if (swallowClick.current) {
+      swallowClick.current = false;
+      return;
+    }
     if (editing) return;
     if (selecting) {
       setChatSelected(session.id, !checked);
@@ -142,12 +152,29 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem
-              onSelect={() => setTimeout(() => setEditing(true), 0)}
+              onSelect={() => {
+                armSwallow();
+                setTimeout(() => setEditing(true), 0);
+              }}
             >
               <Pencil />
               Rename
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void onDuplicate()}>
+            <DropdownMenuItem
+              onSelect={() => {
+                armSwallow();
+                void generateTitle(session.id);
+              }}
+            >
+              <RefreshCw />
+              Regenerate title
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => {
+                armSwallow();
+                void onDuplicate();
+              }}
+            >
               <Copy />
               Duplicate
             </DropdownMenuItem>
@@ -162,7 +189,10 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
                     <DropdownMenuItem
                       key={f.id}
                       disabled={f.id === session.folderId}
-                      onSelect={() => void moveSessionToFolder(session.id, f.id)}
+                      onSelect={() => {
+                        armSwallow();
+                        void moveSessionToFolder(session.id, f.id);
+                      }}
                     >
                       {f.id === session.folderId ? (
                         <Check />
@@ -175,7 +205,13 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
                 </DropdownMenuSubContent>
               </DropdownMenuSub>
             )}
-            <DropdownMenuItem destructive onSelect={() => void onDelete()}>
+            <DropdownMenuItem
+              destructive
+              onSelect={() => {
+                armSwallow();
+                void onDelete();
+              }}
+            >
               <Trash2 />
               Delete
             </DropdownMenuItem>

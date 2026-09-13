@@ -229,8 +229,14 @@ components/
 Active target: the header/composer act on the open chat; with none but a
 preset selected they fall back to a blank chat bound to that preset, and the
 first send starts a real chat there. Presets are configured from the header
-(Tune); a preset row menu is just Rename/Delete; deleting the open chat
-advances to the preset's next chat.
+(Tune); a preset row menu is Rename / Duplicate / Delete (duplicate copies
+model, settings, and prompt — not chats). A chat row can regenerate its
+title. Deleting the open chat advances to the preset's next chat; deleting
+another leaves the open chat in place. The branch map is a modal skeleton
+of the tree: each row is a linear stretch between forks (a divider is its
+own row); parallel heads sit as siblings. Select mode checks individual
+messages (not whole branches). Expand all / Collapse all. Delete splices
+the checked turns.
 
 Design system "Unboxed Stationery", light only: airy grey canvas, hairline
 borders, no shadows or rounded corners, one slate-blue accent,
