@@ -256,6 +256,7 @@ export const APP_CONFIG_ID = 'singleton' as const;
 export const DEFAULT_APP_CONFIG: AppConfig = {
   id: APP_CONFIG_ID,
   theme: 'system',
+  uiStyle: 'stationery',
 };
 
 export const DEFAULT_TITLE_PROMPT =

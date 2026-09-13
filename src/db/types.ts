@@ -236,9 +236,20 @@ export interface WebDavConfig {
   lastWebdavBackupAt?: number;
 }
 
+export const UI_STYLES = [
+  'stationery',
+  'night',
+  'paper',
+  'ink',
+  'soft',
+] as const;
+export type UiStyle = (typeof UI_STYLES)[number];
+
 export interface AppConfig {
   id: 'singleton';
   theme: 'light' | 'dark' | 'system';
+  /** Named chrome: Stationery / Night / Paper / Ink / Soft. */
+  uiStyle?: UiStyle;
   /** Include the model's "thinking" in markdown export/download (default off). */
   exportIncludeThinking?: boolean;
   /** Wrap long lines in chat code blocks rather than scrolling them (default on). */

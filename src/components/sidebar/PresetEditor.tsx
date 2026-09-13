@@ -28,11 +28,11 @@ import {
   modelGroups,
   reasoningKind,
 } from '@/lib/models';
+import { fieldClass } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 const FIELD = 'flex flex-col gap-3';
-const FLAT_INPUT =
-  'w-full border border-input bg-transparent px-4 py-3 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-primary';
+const FLAT_INPUT = fieldClass;
 const FLAT_TEXTAREA = `${FLAT_INPUT} min-h-[100px] resize-y leading-relaxed`;
 
 function GroupHeader({ label, value }: { label: string; value?: string }) {

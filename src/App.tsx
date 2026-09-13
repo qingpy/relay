@@ -75,6 +75,20 @@ export default function App() {
     document.documentElement.classList.toggle('code-nowrap', wrapCode === false);
   }, [wrapCode]);
 
+  const uiStyle = useLiveQuery(
+    () => db.appConfig.get(APP_CONFIG_ID).then((c) => c?.uiStyle ?? 'stationery'),
+    [],
+  );
+  useEffect(() => {
+    const style = uiStyle ?? 'stationery';
+    document.documentElement.dataset.style = style;
+    const scheme = style === 'night' ? 'dark' : 'light';
+    document.documentElement.style.colorScheme = scheme;
+    document
+      .querySelector('meta[name="color-scheme"]')
+      ?.setAttribute('content', scheme);
+  }, [uiStyle]);
+
   // Background work while the app is open: local backups + WebDAV sync. Each
   // call no-ops until its own interval is due, so a 1-min tick is cheap.
   useEffect(() => {

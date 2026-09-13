@@ -238,7 +238,7 @@ export function WebdavSettings() {
         <div className={FIELD}>
           <span className={LABEL}>Folder</span>
           <Input
-            className="h-8 w-32"
+            className="h-8 w-32 px-2 py-1"
             value={form.path}
             onChange={(e) => set({ path: e.target.value })}
             placeholder="relay"
@@ -249,7 +249,7 @@ export function WebdavSettings() {
           <Input
             type="number"
             min={1}
-            className="h-8 w-20"
+            className="h-8 w-20 px-2 py-1"
             value={form.intervalHours ?? 1}
             onChange={(e) => set({ intervalHours: Number(e.target.value) || 1 })}
           />
@@ -259,7 +259,7 @@ export function WebdavSettings() {
           <Input
             type="number"
             min={0}
-            className="h-8 w-20"
+            className="h-8 w-20 px-2 py-1"
             value={form.backupsKeep ?? 10}
             onChange={(e) =>
               set({ backupsKeep: Math.max(0, Math.trunc(Number(e.target.value) || 0)) })

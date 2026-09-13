@@ -41,7 +41,7 @@ files       { id, sessionId, messageId, name, mimeType, size, blob, hash?,
               removedAt?, stripped?,                          // bytes-less tombstone/placeholder
               createdAt }
 prompts     { id, title, content, order }
-appConfig   { id:'singleton', theme, exportIncludeThinking?,
+appConfig   { id:'singleton', theme, uiStyle?, exportIncludeThinking?,
               titleConnectionId?/titleModel?/titlePrompt?,    // auto-title
               reasoningEfforts?: string[],                    // global effort choices
               trashRetentionDays?,                            // auto-purge trash (default 10; 0 = off)
@@ -54,8 +54,10 @@ Key ideas:
 - Presets (stored as `folders`) fix connection / model / settings / system
   prompt for their chats; a chat adds only an extra system prompt.
 - Branching: messages form a tree via `parentId`; the visible conversation is
-  root → `session.currentLeafId`. Regenerate/fork create siblings; editing a
-  user turn rewrites it in place (text and attachments). See `src/lib/tree.ts`.
+  root → `session.currentLeafId`. Regenerate creates assistant siblings under
+  a user turn (`‹ n/m ›` on the reply). Branch on an assistant turn sets the
+  leaf there so the next user message is a sibling fork (`‹ n/m ›` on that
+  input). Editing a user turn rewrites it in place. See `src/lib/tree.ts`.
 - Context divider: a `role:'divider'` message; everything before the latest
   divider stays on screen but is excluded from the request (`activeWindow` in
   `src/lib/conversation.ts`).
@@ -238,17 +240,19 @@ own row); parallel heads sit as siblings. Select mode checks individual
 messages (not whole branches). Expand all / Collapse all. Delete splices
 the checked turns.
 
-Design system "Unboxed Stationery", light only: airy grey canvas, hairline
-borders, no shadows or rounded corners, one slate-blue accent,
-uppercase-monospace labels. All re-skin flows through tokens in
-`src/index.css`. Shared primitives: `Marginalia`, `CheckSquare`,
-`SectionLabel`, the `flat-*` components. Fonts: Inter / JetBrains Mono, with
-bundled, unicode-range-subsetted Noto Sans SC for CJK (self-hosted, no
-external font requests).
+Design system "Unboxed Stationery": airy grey canvas, hairline borders, no
+shadows, sharp corners, one slate-blue accent, uppercase-monospace labels.
+Named styles (Stationery, Night, Paper, Ink, Soft) remap tokens on
+`html[data-style]` in `src/index.css`; Soft is the same palette with 4px
+radius. Shared primitives: `Marginalia`, `CheckSquare`, `SectionLabel`, the
+`flat-*` components. Fonts: Inter / JetBrains Mono, with bundled,
+unicode-range-subsetted Noto Sans SC for CJK (self-hosted, no external
+font requests).
 
 ## 7. Key decisions
 
-- Name Relay; light only; default model OpenRouter `openai/gpt-4o-mini`.
+- Name Relay; default model OpenRouter `openai/gpt-4o-mini`. Chrome is
+  named styles (Stationery default), not a separate light/dark toggle.
 - Two protocols only: `openai` (OpenAI-compatible, covers most incl. Gemini
   AI Studio) and `vertex`.
 - Reasoning effort from a global user-editable list (seeded

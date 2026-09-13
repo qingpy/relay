@@ -228,7 +228,7 @@ export function BackupSettings() {
             <Input
               type="number"
               min={1}
-              className="h-8 w-20"
+              className="h-8 w-20 px-2 py-1"
               value={backup.intervalHours ?? 24}
               onChange={(e) =>
                 patchBackup({ intervalHours: Number(e.target.value) || 24 })

@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { UI_STYLES, type UiStyle } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { AutoTitleSettings } from './AutoTitleSettings';
@@ -27,10 +28,27 @@ type PanelId = 'connections' | 'prompts' | 'chats' | 'sync';
 
 const ITEMS: { id: PanelId; title: string }[] = [
   { id: 'connections', title: 'Connections' },
-  { id: 'prompts', title: 'Quick prompts' },
   { id: 'chats', title: 'Chats' },
+  { id: 'prompts', title: 'Quick prompts' },
   { id: 'sync', title: 'Sync & backup' },
 ];
+
+const STYLE_LABEL: Record<UiStyle, string> = {
+  stationery: 'Stationery',
+  night: 'Night',
+  paper: 'Paper',
+  ink: 'Ink',
+  soft: 'Soft',
+};
+
+/** Canvas + accent chips for the style row (must match index.css palettes). */
+const STYLE_SWATCH: Record<UiStyle, { canvas: string; accent: string }> = {
+  stationery: { canvas: '#f4f5f6', accent: '#425a70' },
+  night: { canvas: '#16181c', accent: '#8aa4bc' },
+  paper: { canvas: '#f3eee4', accent: '#6b4a32' },
+  ink: { canvas: '#ffffff', accent: '#111111' },
+  soft: { canvas: '#f4f5f6', accent: '#425a70' },
+};
 
 export function SettingsDialog() {
   const open = useUiStore((s) => s.settingsOpen);
@@ -77,6 +95,7 @@ export function SettingsDialog() {
               {panel === 'connections' && <ConnectionsManager />}
               {panel === 'chats' && (
                 <>
+                  <StyleSettings />
                   <AutoTitleSettings />
                   <CodeBlockSettings />
                   <ExportSettings />
@@ -95,6 +114,40 @@ export function SettingsDialog() {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function StyleSettings() {
+  const config = useLiveQuery(() => getAppConfig(), []);
+  const value = config?.uiStyle ?? 'stationery';
+  return (
+    <section className="flex flex-col gap-2">
+      <SectionLabel>Style</SectionLabel>
+      <div className="flex items-center gap-2">
+        {UI_STYLES.map((id) => {
+          const sw = STYLE_SWATCH[id];
+          const on = value === id;
+          return (
+            <button
+              key={id}
+              type="button"
+              title={STYLE_LABEL[id]}
+              aria-label={STYLE_LABEL[id]}
+              aria-pressed={on}
+              onClick={() => void updateAppConfig({ uiStyle: id })}
+              className={cn(
+                'flex size-8 shrink-0 flex-col overflow-hidden border transition-colors',
+                on ? 'border-foreground' : 'border-input hover:border-foreground',
+              )}
+              style={id === 'soft' ? { borderRadius: 4 } : undefined}
+            >
+              <span className="min-h-0 flex-1" style={{ background: sw.canvas }} />
+              <span className="h-1.5 shrink-0" style={{ background: sw.accent }} />
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -144,7 +197,7 @@ function TrashSettings() {
           <Input
             type="number"
             min={0}
-            className="h-8 w-20"
+            className="h-8 w-20 px-2 py-1"
             value={days}
             onChange={(e) => {
               const n = Number(e.target.value);

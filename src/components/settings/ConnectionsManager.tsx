@@ -5,7 +5,7 @@ import { FlatButton } from '@/components/ui/flat-button';
 import { FlatSelect } from '@/components/ui/flat-select';
 import { Marginalia } from '@/components/ui/marginalia';
 import { confirm } from '@/components/ui/confirm';
-import { Input } from '@/components/ui/input';
+import { fieldClass, Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
   createConnection,
@@ -324,7 +324,7 @@ function Editor({ conn }: { conn: Connection }) {
                 void putConnectionSecret(conn.id, { privateKey: e.target.value });
               }}
               rows={3}
-              className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className={`${fieldClass} resize-y font-mono text-[11px]`}
             />
           </Field>
         </>
@@ -379,7 +379,7 @@ function Editor({ conn }: { conn: Connection }) {
           <select
             value={testModelId}
             onChange={(e) => setTestModel(e.target.value)}
-            className="h-8 max-w-36 rounded-md border border-input bg-transparent pl-2 pr-6 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-8 max-w-36 border border-input bg-transparent pl-2 pr-6 text-xs outline-none focus-visible:border-primary"
             aria-label="Model to test"
           >
             {conn.models.map((m) => (

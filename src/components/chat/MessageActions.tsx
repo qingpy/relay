@@ -17,7 +17,7 @@ import { useChatStore } from '@/store/chat';
 /**
  * The marginalia action row beneath a message — quiet uppercase text links
  * rather than icon buttons. User turns get Edit/Regenerate; assistant turns get
- * Download; both share Copy/Branch/Delete.
+ * Download/Branch; both share Copy/Delete.
  */
 export function MessageActions({
   message,
@@ -74,9 +74,11 @@ export function MessageActions({
           <Marginalia onClick={regenerate}>Regenerate</Marginalia>
         </>
       ) : (
-        <Marginalia onClick={() => void download()}>Download</Marginalia>
+        <>
+          <Marginalia onClick={() => void download()}>Download</Marginalia>
+          <Marginalia onClick={fork}>Branch</Marginalia>
+        </>
       )}
-      <Marginalia onClick={fork}>Branch</Marginalia>
       {removable.length > 0 && <Marginalia onClick={clean}>Clean</Marginalia>}
       <Marginalia onClick={() => void remove()}>Delete</Marginalia>
     </div>

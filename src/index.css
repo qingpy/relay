@@ -9,7 +9,8 @@
 
    Palette is deliberately limited to black · white · grey · slate-blue.
    No rounded corners, no shadows — separation comes from hairlines and the
-   white/grey surface contrast. Light theme only.
+   white/grey surface contrast. Named styles (Night, Paper, Ink, Soft) remap
+   these tokens on `html[data-style]`.
 --------------------------------------------------------------------------- */
 :root {
   --radius: 0;
@@ -81,16 +82,16 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 
-  /* Strictly flat: every named radius scale collapses to 0. `rounded-full`
-     is intentionally left untouched for genuinely circular indicators (dots). */
-  --radius-xs: 0;
-  --radius-sm: 0;
-  --radius-md: 0;
-  --radius-lg: 0;
-  --radius-xl: 0;
-  --radius-2xl: 0;
-  --radius-3xl: 0;
-  --radius-4xl: 0;
+  /* Strictly flat by default (`--radius: 0`). Soft remaps `--radius`.
+     `rounded-full` stays circular for dots. */
+  --radius-xs: var(--radius);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
+  --radius-3xl: var(--radius);
+  --radius-4xl: var(--radius);
 
   /* No shadows anywhere — separation is by hairline + surface contrast. */
   --shadow-2xs: none;
@@ -116,6 +117,10 @@
 @layer base {
   * {
     border-color: var(--color-border);
+  }
+
+  html {
+    color-scheme: light;
   }
 
   html,
@@ -295,6 +300,172 @@
   --hl-attr: #5f6b78;
   --hl-builtin: #425a70;
   --hl-literal: #1a1c20;
+}
+
+html[data-style='night'] {
+  color-scheme: dark;
+  --background: #16181c;
+  --foreground: #eceef0;
+  --card: #1e2126;
+  --card-foreground: #eceef0;
+  --popover: #1e2126;
+  --popover-foreground: #eceef0;
+  --primary: #8aa4bc;
+  --primary-foreground: #16181c;
+  --secondary: #2a2e34;
+  --secondary-foreground: #eceef0;
+  --muted: #262a30;
+  --muted-foreground: #8b929c;
+  --accent: #2a2e34;
+  --accent-foreground: #eceef0;
+  --destructive: #eceef0;
+  --destructive-foreground: #16181c;
+  --border: #2f343b;
+  --input: #2f343b;
+  --ring: #8aa4bc;
+  --sidebar: #16181c;
+  --sidebar-foreground: #eceef0;
+  --sidebar-border: #2f343b;
+  --sidebar-accent: #2a2e34;
+  --sidebar-accent-foreground: #eceef0;
+  --hl-comment: #7a818c;
+  --hl-keyword: #8aa4bc;
+  --hl-string: #a8b0ba;
+  --hl-number: #eceef0;
+  --hl-title: #9db4c8;
+  --hl-attr: #a8b0ba;
+  --hl-builtin: #8aa4bc;
+  --hl-literal: #eceef0;
+}
+
+html[data-style='paper'] {
+  --background: #f3eee4;
+  --foreground: #2c2416;
+  --card: #faf6ee;
+  --card-foreground: #2c2416;
+  --popover: #faf6ee;
+  --popover-foreground: #2c2416;
+  --primary: #6b4a32;
+  --primary-foreground: #faf6ee;
+  --secondary: #e8dfd0;
+  --secondary-foreground: #2c2416;
+  --muted: #ebe4d6;
+  --muted-foreground: #8a7d6b;
+  --accent: #e8dfd0;
+  --accent-foreground: #2c2416;
+  --destructive: #2c2416;
+  --destructive-foreground: #faf6ee;
+  --border: #e0d4c2;
+  --input: #e0d4c2;
+  --ring: #6b4a32;
+  --sidebar: #f3eee4;
+  --sidebar-foreground: #2c2416;
+  --sidebar-border: #e0d4c2;
+  --sidebar-accent: #e8dfd0;
+  --sidebar-accent-foreground: #2c2416;
+  --hl-comment: #9a8d7a;
+  --hl-keyword: #6b4a32;
+  --hl-string: #7a6a56;
+  --hl-number: #2c2416;
+  --hl-title: #5a3d28;
+  --hl-attr: #7a6a56;
+  --hl-builtin: #6b4a32;
+  --hl-literal: #2c2416;
+}
+
+html[data-style='ink'] {
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --card-foreground: #111111;
+  --popover: #ffffff;
+  --popover-foreground: #111111;
+  --primary: #111111;
+  --primary-foreground: #ffffff;
+  --secondary: #f0f0f0;
+  --secondary-foreground: #111111;
+  --muted: #f0f0f0;
+  --muted-foreground: #5c5c5c;
+  --accent: #ececec;
+  --accent-foreground: #111111;
+  --destructive: #111111;
+  --destructive-foreground: #ffffff;
+  --border: #bdbdbd;
+  --input: #bdbdbd;
+  --ring: #111111;
+  --sidebar: #ffffff;
+  --sidebar-foreground: #111111;
+  --sidebar-border: #bdbdbd;
+  --sidebar-accent: #ececec;
+  --sidebar-accent-foreground: #111111;
+  --hl-comment: #6a6a6a;
+  --hl-keyword: #111111;
+  --hl-string: #3a3a3a;
+  --hl-number: #111111;
+  --hl-title: #111111;
+  --hl-attr: #3a3a3a;
+  --hl-builtin: #111111;
+  --hl-literal: #111111;
+}
+
+html[data-style='soft'] {
+  --radius: 0.25rem;
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.25rem;
+  --radius-2xl: 0.25rem;
+  --radius-3xl: 0.25rem;
+  --radius-4xl: 0.25rem;
+}
+
+/* Rebind Tailwind's --color-* aliases on the themed root so portaled
+   dialogs/menus inherit live values instead of :root's computed stationery. */
+html[data-style] {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+}
+
+html[data-style='soft'] :where(.border, .border-t, .border-b, .border-l, .border-r, .border-input):not(.rounded-full) {
+  border-radius: 0.25rem;
+}
+
+/* Floating surfaces: bind to raw tokens so portaled dialogs/menus follow the
+   active style even if Tailwind baked --color-card at :root. */
+[role='dialog'],
+[role='menu'],
+[role='listbox'] {
+  background-color: var(--card);
+  color: var(--foreground);
+}
+
+select,
+option {
+  background-color: var(--card);
+  color: var(--foreground);
 }
 .hljs-comment, .hljs-quote { color: var(--hl-comment); font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-meta-keyword, .hljs-doctag { color: var(--hl-keyword); font-weight: 600; }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { fieldClass } from '@/components/ui/input';
 import { FlatSelect } from '@/components/ui/flat-select';
 import { DEFAULT_TITLE_PROMPT, getAppConfig, updateAppConfig } from '@/db/db';
 import { listConnections } from '@/db/repo';
@@ -90,7 +91,7 @@ export function AutoTitleSettings() {
             void updateAppConfig({ titlePrompt: e.target.value });
           }}
           rows={3}
-          className="resize-y rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={`${fieldClass} resize-y`}
         />
       )}
     </section>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Plus, Trash2 } from 'lucide-react';
 import { FlatButton } from '@/components/ui/flat-button';
-import { Input } from '@/components/ui/input';
+import { fieldClass, Input } from '@/components/ui/input';
 import { createPrompt, deletePrompt, listPrompts, updatePrompt } from '@/db/repo';
 import type { Prompt } from '@/db/types';
 import { cn } from '@/lib/utils';
@@ -108,7 +108,7 @@ function Editor({ prompt, onDelete }: { prompt: Prompt; onDelete: () => void }) 
           setContent(e.target.value);
           void updatePrompt(prompt.id, { content: e.target.value });
         }}
-        className="min-h-0 flex-1 resize-none border border-input bg-card px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        className={`${fieldClass} min-h-0 flex-1 resize-none`}
       />
     </div>
   );

@@ -68,7 +68,7 @@ export function ModelPicker({
         </DialogHeader>
 
         <div className="flex items-center gap-2">
-          <div className="flex flex-1 items-center gap-2 rounded-md border border-input px-2.5">
+          <div className="flex flex-1 items-center gap-2 border border-input px-2.5 focus-within:border-primary">
             <Search className="size-3.5 shrink-0 text-muted-foreground" />
             <input
               autoFocus
