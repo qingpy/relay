@@ -84,9 +84,10 @@ export function SessionTree() {
     let insertIndex: number;
 
     if (oid.startsWith('F:')) {
+      // Drop on a preset title → top of that preset.
       targetFolderId = oid.slice(2);
       targetList = inFolder(targetFolderId);
-      insertIndex = targetList.length;
+      insertIndex = 0;
     } else if (oid.startsWith('S:')) {
       const overSession = sessions.find((s) => s.id === oid.slice(2));
       if (!overSession?.folderId) return;

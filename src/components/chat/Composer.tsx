@@ -16,6 +16,10 @@ import { useChatStore } from '@/store/chat';
 import { AttachmentChip, useRefusedNote } from './AttachmentChip';
 import { SlashPalette } from './SlashPalette';
 
+function isFileDrag(dt: DataTransfer) {
+  return [...dt.types].includes('Files');
+}
+
 export function Composer({
   sessionId,
   folderId = null,
@@ -148,6 +152,9 @@ export function Composer({
     <div className="border-t border-border bg-card">
       <div
         onDragOver={(e) => {
+          // File drags attach; text drags fall through so the textarea can
+          // insert/move at the caret like a normal editor.
+          if (!isFileDrag(e.dataTransfer)) return;
           e.preventDefault();
           setDragOver(true);
         }}
@@ -156,6 +163,7 @@ export function Composer({
           setDragOver(false);
         }}
         onDrop={(e) => {
+          if (!isFileDrag(e.dataTransfer)) return;
           e.preventDefault();
           setDragOver(false);
           addFiles(e.dataTransfer.files);

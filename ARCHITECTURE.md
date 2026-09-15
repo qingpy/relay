@@ -233,7 +233,10 @@ preset selected they fall back to a blank chat bound to that preset, and the
 first send starts a real chat there. Presets are configured from the header
 (Tune); a preset row menu is Rename / Duplicate / Delete (duplicate copies
 model, settings, and prompt — not chats). A chat row can regenerate its
-title. Deleting the open chat advances to the preset's next chat; deleting
+title. Drag a chat onto a preset title to move it to the top of that
+preset. Composer file-drops attach; text drags use the textarea's native
+insert/move. Clicking an attachment opens an in-app preview (image, PDF,
+or text). Deleting the open chat advances to the preset's next chat; deleting
 another leaves the open chat in place. The branch map is a modal skeleton
 of the tree: each row is a linear stretch between forks (a divider is its
 own row); parallel heads sit as siblings. Select mode checks individual
