@@ -29,17 +29,20 @@ const components: Components = {
   ),
 };
 
+/** `singleTilde: false`: `~text~` stays literal; only `~~text~~` is strikethrough. */
+const GFM_STRIKE = { singleTilde: false } as const;
+
 /** CommonMark flanking drops ** / ~~ next to CJK punctuation (这是**“x”**的).
  *  Register the micromark extensions here so the production bundle cannot
  *  tree-shake them (the remark wrappers have `sideEffects: false`). */
 const remarkCjkFriendly: Plugin = function remarkCjkFriendly() {
   const data = this.data() as { micromarkExtensions?: unknown[] };
   const exts = data.micromarkExtensions || (data.micromarkExtensions = []);
-  exts.push(cjkFriendlyExtension(), gfmStrikethroughCjkFriendly());
+  exts.push(cjkFriendlyExtension(), gfmStrikethroughCjkFriendly(GFM_STRIKE));
 };
 
 const remarkPlugins: PluggableList = [
-  remarkGfm,
+  [remarkGfm, GFM_STRIKE],
   remarkCjkFriendly,
   remarkBreaks,
   remarkMath,
