@@ -81,7 +81,7 @@ export function Composer({
   const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const pasted = filesFromClipboard(e.clipboardData);
     if (pasted.length) {
-      e.preventDefault();
+      if (!e.clipboardData.getData('text/plain')) e.preventDefault();
       addFiles(pasted);
     }
   };

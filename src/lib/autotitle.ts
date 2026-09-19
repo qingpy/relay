@@ -38,7 +38,8 @@ export async function generateTitle(
 
     const path = activePath(await getMessages(sessionId), session.currentLeafId);
     const convo = path.filter(
-      (m) => m.role === 'user' || m.role === 'assistant',
+      (m) =>
+        (m.role === 'user' || m.role === 'assistant') && !m.deletedAt,
     );
     const users = convo.filter((m) => m.role === 'user');
     if (convo.length === 0) return;

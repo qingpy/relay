@@ -99,6 +99,10 @@ export const MessageItem = memo(function MessageItem({
   const streaming = !!buffer;
   const [editing, setEditing] = useState(false);
 
+  if (message.deletedAt) {
+    return <SiblingSwitcher message={message} allMessages={siblings} />;
+  }
+
   if (message.role === 'divider') {
     return (
       <div className="group label-mono flex items-center gap-3 text-muted-foreground">
@@ -292,7 +296,6 @@ function UserEditor({
 
   const save = async () => {
     if (!canSave) return;
-    onClose();
     const text = value.trim();
     const changed = removed.size > 0 || added.length > 0;
     const newIds = added.length
@@ -305,6 +308,7 @@ function UserEditor({
         : {}),
     });
     if (removed.size) await deleteFiles([...removed]);
+    onClose();
   };
 
   return (
@@ -356,7 +360,7 @@ function UserEditor({
           onPaste={(e) => {
             const pasted = filesFromClipboard(e.clipboardData);
             if (pasted.length) {
-              e.preventDefault();
+              if (!e.clipboardData.getData('text/plain')) e.preventDefault();
               addFiles(pasted);
             }
           }}

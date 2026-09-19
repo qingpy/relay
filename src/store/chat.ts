@@ -266,7 +266,10 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       if (flushQueued) cancelAnimationFrame(flushHandle);
 
       const empty =
-        !buf.text && !buf.reasoning && buf.toolCalls.length === 0;
+        !buf.text &&
+        !buf.reasoning &&
+        buf.toolCalls.length === 0 &&
+        buf.citations.length === 0;
       // A stream that ended clean but produced nothing is a failure the user
       // must see; one the user stopped before any output is just noise.
       if (empty && !errored && !controller.signal.aborted) {
@@ -274,7 +277,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       }
       try {
         if (empty && !errored) {
-          await spliceMessage(messageId); // stopped before output: drop the husk
+          await spliceMessage(messageId, { force: true });
         } else {
           await persist(true);
           if (errored) await updateMessage(messageId, { error: errored });
@@ -303,26 +306,47 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       const trimmed = text.trim();
       if (!trimmed && !files?.length) return;
       if (get().activeBySession[sessionId]) return; // already streaming
+      set((s) => ({
+        activeBySession: { ...s.activeBySession, [sessionId]: 'pending' },
+      }));
 
       const session = await getSession(sessionId);
-      if (!session) return;
+      if (!session) {
+        set((s) => {
+          const activeBySession = { ...s.activeBySession };
+          delete activeBySession[sessionId];
+          return { activeBySession };
+        });
+        return;
+      }
 
       // User turn branches off the active leaf; show it immediately.
-      const userMsg = await addMessage({
-        sessionId,
-        parentId: session.currentLeafId ?? null,
-        role: 'user',
-        content: [textPart(trimmed)],
-      });
-      if (files?.length) {
-        const ids = await saveAttachments(sessionId, userMsg.id, files);
-        await updateMessage(userMsg.id, { attachments: ids });
+      let userMsg: Message | undefined;
+      try {
+        userMsg = await addMessage({
+          sessionId,
+          parentId: session.currentLeafId ?? null,
+          role: 'user',
+          content: trimmed ? [textPart(trimmed)] : [],
+        });
+        if (files?.length) {
+          const ids = await saveAttachments(sessionId, userMsg.id, files);
+          await updateMessage(userMsg.id, { attachments: ids });
+        }
+      } catch (e) {
+        if (userMsg) await spliceMessage(userMsg.id, { force: true });
+        set((s) => {
+          const activeBySession = { ...s.activeBySession };
+          delete activeBySession[sessionId];
+          return { activeBySession };
+        });
+        throw e;
       }
       await setCurrentLeaf(sessionId, userMsg.id);
       if (session.title === NEW_SESSION_TITLE) {
         await updateSession(sessionId, { title: deriveTitle(trimmed) });
       } else {
-        await updateSession(sessionId, {});
+        await touchSession(sessionId);
       }
 
       const history = activePath(await getMessages(sessionId), userMsg.id);

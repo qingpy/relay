@@ -177,6 +177,9 @@ export interface Message {
   model?: string;
   /** Marks a message that ended in an error (e.g. aborted/failed request). */
   error?: string;
+  /** Set when the turn was deleted but other branches still pass through this
+   *  node. The row stays as a placeholder; the provider never sees it. */
+  deletedAt?: number;
   createdAt: number;
 }
 

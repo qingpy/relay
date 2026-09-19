@@ -48,6 +48,7 @@ export function messagesToMarkdown(
 ): string {
   const lines: string[] = [];
   for (const m of messages) {
+    if (m.deletedAt) continue;
     if (m.role === 'divider') {
       if (opts.dividers) lines.push('---', '');
       continue;

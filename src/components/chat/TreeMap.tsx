@@ -13,7 +13,7 @@ import { Marginalia } from '@/components/ui/marginalia';
 import { getMessages, getSession, setCurrentLeaf, spliceMessage } from '@/db/repo';
 import type { Message } from '@/db/types';
 import { partsText } from '@/lib/conversation';
-import { activePath, leafOf, segmentTree, type Segment } from '@/lib/tree';
+import { activePath, segmentTree, visibleLeafOf, type Segment } from '@/lib/tree';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 
@@ -103,7 +103,8 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   };
 
   const show = (m: Message) => {
-    if (!activeSet.has(m.id)) void setCurrentLeaf(sessionId, leafOf(all, m.id));
+    if (!activeSet.has(m.id))
+      void setCurrentLeaf(sessionId, visibleLeafOf(all, m.id));
     requestLocate(m.id);
     reset(false);
   };

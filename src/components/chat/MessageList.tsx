@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { CheckSquare } from '@/components/ui/check-square';
 import { getMessages, getSession } from '@/db/repo';
 import type { Message } from '@/db/types';
-import { activePath } from '@/lib/tree';
+import { activePath, roleSiblings } from '@/lib/tree';
 import { cn, rangeBetween } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
 import { useUiStore } from '@/store/ui';
@@ -23,6 +23,14 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const messages = useMemo(
     () => activePath(all, session?.currentLeafId),
     [all, session?.currentLeafId],
+  );
+  const visible = useMemo(
+    () =>
+      messages.filter((m) => {
+        if (!m.deletedAt) return true;
+        return roleSiblings(all, m).length >= 2;
+      }),
+    [messages, all],
   );
 
   const selectionMode = useUiStore((s) => s.selectionMode);
@@ -139,7 +147,10 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   }, [prevUser, nextUser, jumpTop, jumpBottom]);
 
   const selectableIds = useMemo(
-    () => messages.filter((m) => m.role !== 'divider').map((m) => m.id),
+    () =>
+      messages
+        .filter((m) => m.role !== 'divider' && !m.deletedAt)
+        .map((m) => m.id),
     [messages],
   );
 
@@ -164,8 +175,8 @@ export function MessageList({ sessionId }: { sessionId: string }) {
       )}
       <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
-          {messages.map((m) =>
-            selectionMode && m.role !== 'divider' ? (
+          {visible.map((m) =>
+            selectionMode && !m.deletedAt && m.role !== 'divider' ? (
               <SelectableRow
                 key={m.id}
                 message={m}

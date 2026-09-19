@@ -15,7 +15,7 @@ export function partsText(content: Part[]): string {
 export function activeWindow(messages: Message[]): Message[] {
   let start = 0;
   for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'divider') {
+    if (messages[i].role === 'divider' && !messages[i].deletedAt) {
       start = i + 1;
       break;
     }
@@ -33,6 +33,7 @@ export async function buildChatMessages(
 ): Promise<ChatMessage[]> {
   const out: ChatMessage[] = [];
   for (const m of activeWindow(messages)) {
+    if (m.deletedAt) continue;
     if (m.role !== 'user' && m.role !== 'assistant') continue;
     let text = partsText(m.content);
 

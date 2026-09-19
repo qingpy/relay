@@ -36,7 +36,7 @@ sessions    { id, folderId (preset), title, systemPrompt?,
 messages    { id, sessionId, parentId|null,                   // tree edge → branching
               role: 'user'|'assistant'|'system'|'divider',
               content: Part[], reasoning?, reasoningMs?, toolCalls?, citations?,
-              attachments?: fileId[], model?, usage?, error?, createdAt }
+              attachments?: fileId[], model?, usage?, error?, deletedAt?, createdAt }
 files       { id, sessionId, messageId, name, mimeType, size, blob, hash?,
               removedAt?, stripped?,                          // bytes-less tombstone/placeholder
               createdAt }
@@ -57,7 +57,10 @@ Key ideas:
   root → `session.currentLeafId`. Regenerate creates assistant siblings under
   a user turn (`‹ n/m ›` on the reply). Branch on an assistant turn sets the
   leaf there so the next user message is a sibling fork (`‹ n/m ›` on that
-  input). Editing a user turn rewrites it in place. See `src/lib/tree.ts`.
+  input). Editing a user turn rewrites it in place. Deleting a ‹ n/m ›
+  variant or a shared ancestor sets `deletedAt` (placeholder, omitted from
+  the provider); a message on only one path is spliced out.
+  See `src/lib/tree.ts`.
 - Context divider: a `role:'divider'` message; everything before the latest
   divider stays on screen but is excluded from the request (`activeWindow` in
   `src/lib/conversation.ts`).

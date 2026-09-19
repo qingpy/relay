@@ -236,7 +236,6 @@ async function migrateFromPersistent(): Promise<boolean> {
 export async function initLocalStore(): Promise<void> {
   if (!USE_LOCAL_STORE) return; // persistent-IndexedDB mode: nothing to do
   if (initialized) return;
-  initialized = true;
 
   const snap = await fetchSnapshot();
   if (snap) {
@@ -249,6 +248,7 @@ export async function initLocalStore(): Promise<void> {
   }
 
   attachHooks();
+  initialized = true;
   setDataStatus('saved');
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {

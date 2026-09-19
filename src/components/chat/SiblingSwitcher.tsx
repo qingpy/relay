@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { setCurrentLeaf } from '@/db/repo';
 import type { Message } from '@/db/types';
-import { leafOf, siblingsOf } from '@/lib/tree';
+import { leafOf, roleSiblings } from '@/lib/tree';
 
 /**
  * `‹ 2/3 ›` on the active turn. User siblings are Branch forks (new input
@@ -14,9 +14,7 @@ export function SiblingSwitcher({
   message: Message;
   allMessages: Message[];
 }) {
-  const sibs = siblingsOf(allMessages, message).filter(
-    (m) => m.role === message.role,
-  );
+  const sibs = roleSiblings(allMessages, message);
   if (sibs.length < 2) return null;
 
   const index = sibs.findIndex((m) => m.id === message.id);

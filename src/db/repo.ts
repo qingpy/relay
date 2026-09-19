@@ -19,6 +19,7 @@ import type {
 } from './types';
 import { DEFAULT_URL, flavorOf } from '@/lib/models';
 import { sha256Hex } from '@/lib/attachments';
+import { childrenOf, hasOtherBranches, leafOf } from '@/lib/tree';
 
 export const NEW_SESSION_TITLE = 'New chat';
 
@@ -384,25 +385,57 @@ export async function setCurrentLeaf(
   await db.sessions.update(sessionId, { currentLeafId: leafId });
 }
 
-/** Remove a single message, re-parenting its children to its parent so the rest
- *  of the branch (its replies) is preserved — used both to restore a divider and
- *  to delete one message without dropping everything below it. The message's own
- *  attachments are cleaned up. */
-export async function spliceMessage(id: string): Promise<void> {
+/** Remove a message. If other branches still use this node (a ‹ n/m › sibling
+ *  or a shared ancestor), keep it as a `deletedAt` placeholder so the tree and
+ *  switcher stay intact. Otherwise splice it out and re-parent its children.
+ *  `force` always splices (empty stream husks must not become placeholders). */
+export async function spliceMessage(
+  id: string,
+  opts?: { force?: boolean },
+): Promise<void> {
   const msg = await db.messages.get(id);
   if (!msg) return;
   await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
+    const all = await db.messages
+      .where('sessionId')
+      .equals(msg.sessionId)
+      .toArray();
+    const session = await db.sessions.get(msg.sessionId);
+    if (!opts?.force && hasOtherBranches(all, msg)) {
+      if (!msg.deletedAt) await db.messages.update(id, { deletedAt: Date.now() });
+      if (session?.currentLeafId === id) {
+        const kids = childrenOf(all, id);
+        if (kids.length) {
+          await db.sessions.update(msg.sessionId, {
+            currentLeafId: leafOf(all, kids[kids.length - 1].id),
+          });
+        }
+      }
+      return;
+    }
+    const kids = childrenOf(all, id);
     await db.messages
       .where('parentId')
       .equals(id)
       .modify({ parentId: msg.parentId });
     await db.messages.delete(id);
     await db.files.where('messageId').equals(id).delete();
-    const session = await db.sessions.get(msg.sessionId);
     if (session?.currentLeafId === id) {
-      await db.sessions.update(msg.sessionId, {
-        currentLeafId: msg.parentId ?? undefined,
-      });
+      const next = kids.length
+        ? leafOf(
+            all.map((m) =>
+              m.parentId === id ? { ...m, parentId: msg.parentId } : m,
+            ),
+            kids[kids.length - 1].id,
+          )
+        : msg.parentId;
+      if (next) {
+        await db.sessions.update(msg.sessionId, { currentLeafId: next });
+      } else {
+        await db.sessions.where('id').equals(msg.sessionId).modify((s) => {
+          delete s.currentLeafId;
+        });
+      }
     }
   });
 }
