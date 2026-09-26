@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckSquare } from '@/components/ui/check-square';
 import { confirm } from '@/components/ui/confirm';
@@ -14,7 +14,7 @@ import { getMessages, getSession, setCurrentLeaf, spliceMessage } from '@/db/rep
 import type { Message } from '@/db/types';
 import { partsText } from '@/lib/conversation';
 import { activePath, segmentTree, visibleLeafOf, type Segment } from '@/lib/tree';
-import { cn } from '@/lib/utils';
+import { cn, rangeBetween } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 
 function snippet(m: Message): string {
@@ -58,7 +58,8 @@ function allMessageIds(tree: Segment[]): string[] {
 /**
  * Branch map: a modal skeleton of the conversation tree. Each row is a linear
  * stretch between forks (a divider is its own row). Parallel heads sit as
- * siblings. Select mode checks individual messages. Delete splices those turns.
+ * siblings. Select mode: click toggles a message (a collapsed head toggles the
+ * whole stretch); shift-click extends the range. Delete splices those turns.
  */
 export function TreeMap({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
@@ -87,6 +88,11 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   const [sel, setSel] = useState<Record<string, true>>({});
   const selCount = Object.keys(sel).length;
   const allChecked = messageIds.length > 0 && selCount === messageIds.length;
+  const anchorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    anchorRef.current = null;
+  }, [selectMode]);
 
   const reset = (v: boolean) => {
     setOpen(v);
@@ -121,13 +127,21 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
     setExpanded(Object.fromEntries(canExpand.map((id) => [id, true])));
   const collapseAll = () => setExpanded({});
 
-  const toggleMessage = (id: string) =>
+  const selectAt = (ids: string[], shift: boolean) => {
+    const range = shift ? rangeBetween(messageIds, anchorRef.current, ids) : null;
     setSel((s) => {
       const next = { ...s };
-      if (next[id]) delete next[id];
-      else next[id] = true;
+      if (range) {
+        for (const id of range) next[id] = true;
+        return next;
+      }
+      const allOn = ids.length > 0 && ids.every((id) => next[id]);
+      if (allOn) for (const id of ids) delete next[id];
+      else for (const id of ids) next[id] = true;
       return next;
     });
+    anchorRef.current = ids[0] ?? null;
+  };
 
   const deleteSelected = async () => {
     const ids = Object.keys(sel);
@@ -135,7 +149,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
     if (ids.length > 1) {
       const ok = await confirm({
         title: 'Delete messages?',
-        description: `${ids.length} messages will be removed. Replies are kept.`,
+        description: `${ids.length} messages will be removed. Later messages stay in the conversation.`,
         confirmLabel: 'Delete',
         destructive: true,
       });
@@ -236,7 +250,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
                 expanded={expanded}
                 selectMode={selectMode}
                 sel={sel}
-                onToggle={toggleMessage}
+                onSelect={selectAt}
                 onExpand={toggleExpand}
                 onShow={show}
               />
@@ -255,7 +269,7 @@ function BranchRow({
   expanded,
   selectMode,
   sel,
-  onToggle,
+  onSelect,
   onExpand,
   onShow,
 }: {
@@ -265,20 +279,32 @@ function BranchRow({
   expanded: Record<string, true>;
   selectMode: boolean;
   sel: Record<string, true>;
-  onToggle: (id: string) => void;
+  onSelect: (ids: string[], shift: boolean) => void;
   onExpand: (id: string) => void;
   onShow: (m: Message) => void;
 }) {
   const head = seg.messages[0];
   const n = seg.messages.length;
   const open = !!expanded[seg.id];
-  const checked = !!sel[head.id];
+  const collapsed = n > 1 && !open;
+  const groupOn = collapsed
+    ? seg.messages.reduce((c, m) => c + (sel[m.id] ? 1 : 0), 0)
+    : 0;
+  const checked = collapsed ? groupOn === n : !!sel[head.id];
+  const partial = collapsed && groupOn > 0 && groupOn < n;
   const onPath = seg.messages.some((m) => activeSet.has(m.id));
   const here = seg.messages.some((m) => m.id === currentLeafId);
   const divider = head.role === 'divider';
 
-  const onRow = (m: Message) =>
-    selectMode ? onToggle(m.id) : onShow(m);
+  const onRow = (m: Message, shift: boolean) => {
+    if (!selectMode) {
+      onShow(m);
+      return;
+    }
+    const ids =
+      collapsed && m.id === head.id ? seg.messages.map((x) => x.id) : [m.id];
+    onSelect(ids, shift);
+  };
 
   return (
     <div>
@@ -287,10 +313,10 @@ function BranchRow({
           'group flex cursor-pointer select-none items-center gap-2 py-1.5 pr-1 text-sm transition-colors hover:bg-accent/60',
           divider && 'italic',
           onPath ? 'text-foreground' : 'text-muted-foreground',
-          checked && 'bg-primary/5',
-          here && !checked && 'bg-accent',
+          (checked || partial) && 'bg-primary/5',
+          here && !checked && !partial && 'bg-accent',
         )}
-        onClick={() => onRow(head)}
+        onClick={(e) => onRow(head, e.shiftKey)}
       >
         {n > 1 ? (
           <button
@@ -307,7 +333,7 @@ function BranchRow({
         ) : (
           <span className="w-3 shrink-0" />
         )}
-        {selectMode && <CheckSquare checked={checked} />}
+        {selectMode && <CheckSquare checked={checked} partial={partial} />}
         {!divider && (
           <span
             className={cn(
@@ -349,7 +375,7 @@ function BranchRow({
             seg.messages.slice(1).map((m) => (
               <div
                 key={m.id}
-                onClick={() => onRow(m)}
+                onClick={(e) => onRow(m, e.shiftKey)}
                 className={cn(
                   'group/in flex cursor-pointer select-none items-center gap-2 py-1 pr-1 text-sm transition-colors hover:bg-accent/60',
                   m.role === 'divider' && 'italic',
@@ -378,7 +404,7 @@ function BranchRow({
               expanded={expanded}
               selectMode={selectMode}
               sel={sel}
-              onToggle={onToggle}
+              onSelect={onSelect}
               onExpand={onExpand}
               onShow={onShow}
             />

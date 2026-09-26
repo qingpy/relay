@@ -242,9 +242,11 @@ insert/move. Clicking an attachment opens an in-app preview (image, PDF,
 or text). Deleting the open chat advances to the preset's next chat; deleting
 another leaves the open chat in place. The branch map is a modal skeleton
 of the tree: each row is a linear stretch between forks (a divider is its
-own row); parallel heads sit as siblings. Select mode checks individual
-messages (not whole branches). Expand all / Collapse all. Delete splices
-the checked turns.
+own row); parallel heads sit as siblings. Select mode: click a message to
+toggle it; shift-click extends the selection. A collapsed stretch's head
+selects every message in it; an expanded head selects only that turn.
+Expand all / Collapse all. Delete splices the checked turns (later
+messages stay attached).
 
 Design system "Unboxed Stationery": airy grey canvas, hairline borders, no
 shadows, sharp corners, one slate-blue accent, uppercase-monospace labels.

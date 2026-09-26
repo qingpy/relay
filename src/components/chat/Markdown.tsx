@@ -52,17 +52,18 @@ const rehypePlugins: PluggableList = [
   [rehypeHighlight, { detect: true, ignoreMissing: true }],
 ];
 
-/** CommonMark will not open `**` when the inner side is punctuation
- *  (`complete**.**`, `**[**`). Wrap punctuation-only spans so they parse as
+/** CommonMark will not open/close `**` when an inner edge is punctuation
+ *  (`word**—text.**`, `complete**.**`, `**[**`). Insert ZWSP so they parse as
  *  strong. Skip fences, inline code, math, and `|` so adjacent table cells
  *  (`**a** | **b**`) are not treated as one span. */
-const PUNCT_STRONG = /\*\*([^\p{L}\p{N}*|\n]+)\*\*/gu;
+const STRONG = /\*\*([^*|\n]+)\*\*/gu;
+const PUNCT_EDGE = /^[^\p{L}\p{N}]|[^\p{L}\p{N}]$/u;
 const ZW = '\u200b';
 
 function wrapPunctStrong(md: string): string {
   const apply = (s: string) =>
-    s.replace(PUNCT_STRONG, (_, inner: string) =>
-      inner.trim() ? `**${ZW}${inner}${ZW}**` : `**${inner}**`,
+    s.replace(STRONG, (full, inner: string) =>
+      inner.trim() && PUNCT_EDGE.test(inner) ? `**${ZW}${inner}${ZW}**` : full,
     );
   return md
     .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|\$\$[\s\S]*?\$\$)/)
