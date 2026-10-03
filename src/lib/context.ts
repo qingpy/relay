@@ -1,6 +1,5 @@
 import type { Message } from '@/db/types';
-import { activeWindow } from '@/lib/conversation';
-import { activePath } from '@/lib/tree';
+import { activePath, activeWindow } from '@/lib/tree';
 
 /**
  * Context-size readout for a chat, taken straight from the provider — no

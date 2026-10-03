@@ -96,7 +96,7 @@ export function AsideThread({
               useChatStore.getState().stopAside(user.sessionId);
             }}
           >
-            Pause
+            Stop
           </Marginalia>
         )}
         <Marginalia

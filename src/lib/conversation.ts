@@ -2,6 +2,7 @@ import type { Message, Part } from '@/db/types';
 import { getFilesByIds } from '@/db/repo';
 import type { Attachment, ChatMessage } from '@/providers/types';
 import { fileToAttachment, fileUnavailable } from './attachments';
+import { activeWindow } from './tree';
 
 /** Concatenate the text content of a message's parts. */
 export function partsText(content: Part[]): string {
@@ -9,31 +10,6 @@ export function partsText(content: Part[]): string {
     .filter((p): p is Extract<Part, { type: 'text' }> => p.type === 'text')
     .map((p) => p.text)
     .join('');
-}
-
-/** Messages after the *latest* divider (ARCHITECTURE.md §3). Aside turns are
- *  omitted. A divider anywhere in the session cuts off older turns, including
- *  on other branches. */
-export function activeWindow(
-  path: Message[],
-  all: Message[] = path,
-): Message[] {
-  let start = 0;
-  for (let i = path.length - 1; i >= 0; i--) {
-    if (path[i].role === 'divider' && !path[i].deletedAt) {
-      start = i + 1;
-      break;
-    }
-  }
-  let window = path.slice(start).filter((m) => !m.aside);
-  const cuts = all.filter((m) => m.role === 'divider' && !m.deletedAt);
-  if (cuts.length) {
-    const latest = cuts.reduce((a, b) =>
-      a.createdAt >= b.createdAt ? a : b,
-    );
-    window = window.filter((m) => m.createdAt > latest.createdAt);
-  }
-  return window;
 }
 
 /**

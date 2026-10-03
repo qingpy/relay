@@ -6,6 +6,7 @@ import {
   getMessages,
   getSession,
   listConnections,
+  reviveUserMessage,
   saveAttachments,
   setCurrentLeaf,
   spliceMessage,
@@ -18,7 +19,7 @@ import { newId } from '@/db/db';
 import type { Citation, Message, Session, ToolCall, Usage } from '@/db/types';
 import { buildChatMessages, deriveTitle } from '@/lib/conversation';
 import { resolveConfig, type ResolvedConfig } from '@/lib/resolve';
-import { activePath } from '@/lib/tree';
+import { activePath, attachParentId, isEmptyUserSlot } from '@/lib/tree';
 import { readSSE } from '@/lib/sse';
 import { providerForConnection } from '@/providers/registry';
 import { NEW_SESSION_TITLE } from '@/db/repo';
@@ -507,30 +508,32 @@ export const useChatStore = create<ChatState>((set, get, api) => {
         return;
       }
 
-      // User turn branches off the active leaf; show it immediately.
-      let parentId = session.currentLeafId ?? null;
-      if (parentId) {
-        let parent = await getMessage(parentId);
-        while (parentId && (!parent || parent.deletedAt)) {
-          parentId = parent?.parentId ?? null;
-          parent = parentId ? await getMessage(parentId) : undefined;
-        }
-      }
+      const all = await getMessages(sessionId);
+      const leaf = session.currentLeafId
+        ? all.find((m) => m.id === session.currentLeafId)
+        : undefined;
+      const content = trimmed ? [textPart(trimmed)] : [];
 
       let userMsg: Message | undefined;
       try {
-        userMsg = await addMessage({
-          sessionId,
-          parentId,
-          role: 'user',
-          content: trimmed ? [textPart(trimmed)] : [],
-        });
+        if (leaf && isEmptyUserSlot(all, leaf)) {
+          userMsg = await reviveUserMessage(leaf.id, content);
+          if (!userMsg) throw new Error('Failed to fill the empty branch.');
+        } else {
+          userMsg = await addMessage({
+            sessionId,
+            parentId: attachParentId(all, session.currentLeafId),
+            role: 'user',
+            content,
+          });
+        }
         if (files?.length) {
           const ids = await saveAttachments(sessionId, userMsg.id, files);
           await updateMessage(userMsg.id, { attachments: ids });
         }
       } catch (e) {
-        if (userMsg) await spliceMessage(userMsg.id, { force: true });
+        if (userMsg && userMsg.id !== leaf?.id)
+          await spliceMessage(userMsg.id, { force: true });
         set((s) => {
           const activeBySession = { ...s.activeBySession };
           delete activeBySession[sessionId];

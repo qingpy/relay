@@ -63,19 +63,24 @@ Key ideas:
   the provider); a message on only one path is spliced out. After a splice,
   orphan deleted stubs (no live descendant, not a ‹ n/m › sibling of a live
   turn) are removed so an emptied chat does not sprout a ghost ‹ 2/2 ›.
-  See `src/lib/tree.ts`.
+  Send fills a deleted empty user slot in place, or parents via
+  `attachParentId`: sibling of an empty user head, or onto a deleted
+  assistant variant, so ‹ n/m › with the live fork stays. See
+  `src/lib/tree.ts`.
 - Context divider: Clear inserts one `role:'divider'` under the active
   leaf. The map lifts it (no row); the chat path still includes it.
   Later turns on other branches stay in the tree. `activeWindow` drops
   everything before the latest divider in the session. Manual delete
-  only when it has no descendants.
+  only when it has no descendants. Leftover root dividers (`parentId`
+  null) are reparented onto the path they cut.
 - Pin: a view mark on the map (visible even when its stretch is collapsed).
   It does not split a stretch or change fold/select of the head.
 - Aside (`/btw`): one-round side question, parallel with the main turn.
-  Saved in the chat list (click to expand, click outside to fold; Pause
-  while streaming). Omitted from the model context and the map. Fork
-  copies the path without the divider, plus that exchange, keeping the
-  old title.
+  Saved in the chat list (click to expand, click outside to fold; Stop
+  while streaming). Omitted from the model context and the map. Main
+  and aside streams Stop independently. Fork copies the model window
+  (turns after the latest divider) plus that exchange, keeping the old
+  title.
 - Markdown (`src/lib/markdown.ts`): math is isolated from the source before
   remark parses (GFM tables and indent cannot steal `|` / `&` from
   `aligned`), `<br>` in tables becomes a break, then KaTeX.

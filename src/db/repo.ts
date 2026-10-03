@@ -20,12 +20,13 @@ import type {
 import { DEFAULT_URL, flavorOf } from '@/lib/models';
 import { sha256Hex } from '@/lib/attachments';
 import {
-  activePath,
   canDeleteDivider,
   childrenOf,
+  copyablePath,
   hasOtherBranches,
   leafOf,
   liveLeafId,
+  reparentRootDividers,
   retainMessageIds,
 } from '@/lib/tree';
 
@@ -350,11 +351,16 @@ export async function deletePrompt(id: string): Promise<void> {
   await db.prompts.delete(id);
 }
 
-export function getMessages(sessionId: string): Promise<Message[]> {
-  return db.messages
+export async function getMessages(sessionId: string): Promise<Message[]> {
+  const msgs = await db.messages
     .where('sessionId')
     .equals(sessionId)
     .sortBy('createdAt');
+  const next = reparentRootDividers(msgs);
+  if (next === msgs) return msgs;
+  const changed = next.filter((m, i) => m !== msgs[i]);
+  if (changed.length) await db.messages.bulkPut(changed);
+  return next;
 }
 
 export function getMessage(id: string): Promise<Message | undefined> {
@@ -393,6 +399,19 @@ export async function updateMessage(
   patch: Partial<Omit<Message, 'id' | 'sessionId'>>,
 ): Promise<void> {
   await db.messages.update(id, patch);
+}
+
+/** Fill a deleted empty user slot in place (same id and parentId). */
+export async function reviveUserMessage(
+  id: string,
+  content: Part[],
+): Promise<Message | undefined> {
+  await db.messages.where('id').equals(id).modify((m) => {
+    delete m.deletedAt;
+    delete m.error;
+    m.content = content;
+  });
+  return db.messages.get(id);
 }
 
 export async function setCurrentLeaf(
@@ -595,9 +614,7 @@ export async function forkAsideChat(
   const session = await getSession(sessionId);
   if (!session) return;
   const msgs = await getMessages(sessionId);
-  const path = activePath(msgs, session.currentLeafId).filter(
-    (m) => !m.deletedAt && m.role !== 'divider',
-  );
+  const path = copyablePath(msgs, session.currentLeafId);
   const orig = new Map(msgs.map((m) => [m.id, m]));
   const fileIds = path.flatMap((m) => m.attachments ?? []);
   const files = fileIds.length

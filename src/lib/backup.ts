@@ -1,6 +1,7 @@
 import { db, getAppConfig, type RelayDB } from '@/db/db';
 import { bytesToBase64, fileUnavailable, sha256Hex } from '@/lib/attachments';
 import { normalizeConnection } from '@/lib/models';
+import { reparentRootDividersAll } from '@/lib/tree';
 import type {
   AppConfig,
   Connection,
@@ -249,7 +250,7 @@ export async function importAll(
         database.connections.bulkPut((d.connections ?? []).map(normalizeConnection)),
         database.folders.bulkPut(d.folders ?? []),
         database.sessions.bulkPut((d.sessions ?? []).map(normalizeSession)),
-        database.messages.bulkPut(d.messages ?? []),
+        database.messages.bulkPut(reparentRootDividersAll(d.messages ?? [])),
         database.prompts.bulkPut(d.prompts ?? []),
         database.appConfig.bulkPut(d.appConfig ?? []),
         database.files.bulkPut(files),

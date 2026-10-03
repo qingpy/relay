@@ -262,7 +262,7 @@ export function Composer({
               onClick={() => sessionId && useChatStore.getState().stopAside(sessionId)}
               className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground"
             >
-              Pause
+              Stop
             </button>
           ) : asideMode ? (
             <button

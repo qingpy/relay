@@ -44,6 +44,96 @@ export function roleSiblings(messages: Message[], msg: Message): Message[] {
   return childrenOf(messages, msg.parentId).filter((m) => m.role === msg.role);
 }
 
+/**
+ * Where a new user turn attaches given `currentLeafId`.
+ *
+ * Live leaf (including a divider): the new user is its child.
+ * Deleted user: sibling of that empty slot (`parentId = leaf.parentId`) so
+ * ‹ n/m › with the live fork is preserved — never walk a deleted chain to
+ * `null` (that plants a new forest root and drops the other fork off the path).
+ * Deleted non-user (empty regenerated reply): stay on that variant so its
+ * ‹ n/m › siblings remain on the path.
+ * Missing leaf: no parent (treated as a new root).
+ */
+export function attachParentId(
+  messages: Message[],
+  leafId?: string | null,
+): string | null {
+  if (!leafId) return null;
+  const leaf = messages.find((m) => m.id === leafId);
+  if (!leaf) return null;
+  if (!leaf.deletedAt) return leaf.id;
+  if (leaf.role === 'user') return leaf.parentId ?? null;
+  return leaf.id;
+}
+
+/** Deleted user with no live main-line children: an empty ‹ n/m › slot to fill. */
+export function isEmptyUserSlot(messages: Message[], msg: Message): boolean {
+  if (msg.role !== 'user' || !msg.deletedAt) return false;
+  return !childrenOf(messages, msg.id).some((c) => !c.deletedAt);
+}
+
+/**
+ * Leftover forest-root dividers (`parentId: null`) sit beside the tree they
+ * cut. Reparent each onto that path so chat and map share one topology.
+ */
+export function reparentRootDividers(messages: Message[]): Message[] {
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const patches = new Map<string, string>();
+  for (const d of messages) {
+    if (d.role !== 'divider' || d.deletedAt) continue;
+    if ((d.parentId ?? null) !== null) continue;
+    let parent: string | null =
+      d.clearedFromId && byId.has(d.clearedFromId) ? d.clearedFromId : null;
+    if (!parent) {
+      let newest: Message | undefined;
+      for (const m of messages) {
+        if (m.id === d.id || m.role === 'divider') continue;
+        if (m.createdAt > d.createdAt) continue;
+        if (!newest || m.createdAt > newest.createdAt) newest = m;
+      }
+      parent = newest?.id ?? null;
+    }
+    if (!parent || parent === d.id) continue;
+    let cur = byId.get(parent);
+    const seen = new Set<string>();
+    let cycle = false;
+    while (cur) {
+      if (cur.id === d.id) {
+        cycle = true;
+        break;
+      }
+      if (seen.has(cur.id)) break;
+      seen.add(cur.id);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    if (!cycle) patches.set(d.id, parent);
+  }
+  if (patches.size === 0) return messages;
+  return messages.map((m) => {
+    const parentId = patches.get(m.id);
+    return parentId !== undefined ? { ...m, parentId } : m;
+  });
+}
+
+/** `reparentRootDividers` per session (import / snapshot). */
+export function reparentRootDividersAll(messages: Message[]): Message[] {
+  const sessions = new Map<string, Message[]>();
+  for (const m of messages) {
+    const g = sessions.get(m.sessionId);
+    if (g) g.push(m);
+    else sessions.set(m.sessionId, [m]);
+  }
+  let changed = false;
+  const out: Message[] = [];
+  for (const group of sessions.values()) {
+    const next = reparentRootDividers(group);
+    if (next !== group) changed = true;
+    out.push(...next);
+  }
+  return changed ? out : messages;
+}
+
 /** True if this turn is a live ‹ n/m › variant or an ancestor of more than one leaf. */
 export function hasOtherBranches(messages: Message[], msg: Message): boolean {
   if (descendantLeafCount(messages, msg.id) > 1) return true;
@@ -94,6 +184,38 @@ export function activePath(messages: Message[], leafId?: string): Message[] {
     cursor = m.parentId ?? undefined;
   }
   return path.reverse();
+}
+
+/** Turns the model sees: after the latest divider on the path, then anything
+ *  older than a divider anywhere in the session is dropped. Asides omitted. */
+export function activeWindow(
+  path: Message[],
+  all: Message[] = path,
+): Message[] {
+  let start = 0;
+  for (let i = path.length - 1; i >= 0; i--) {
+    if (path[i].role === 'divider' && !path[i].deletedAt) {
+      start = i + 1;
+      break;
+    }
+  }
+  let window = path.slice(start).filter((m) => !m.aside);
+  const cuts = all.filter((m) => m.role === 'divider' && !m.deletedAt);
+  if (cuts.length) {
+    const latest = cuts.reduce((a, b) =>
+      a.createdAt >= b.createdAt ? a : b,
+    );
+    window = window.filter((m) => m.createdAt > latest.createdAt);
+  }
+  return window;
+}
+
+/** Model window on the active path — what an aside fork copies. */
+export function copyablePath(messages: Message[], leafId?: string): Message[] {
+  return activeWindow(activePath(messages, leafId), messages).filter(
+    (m) =>
+      !m.deletedAt && (m.role === 'user' || m.role === 'assistant'),
+  );
 }
 
 /** Active path with aside threads inserted under the turns they hang from. */
