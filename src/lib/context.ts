@@ -17,7 +17,7 @@ export function measuredContextTokens(
   messages: Message[],
   leafId: string | undefined,
 ): number | undefined {
-  const window = activeWindow(activePath(messages, leafId), messages);
+  const window = activeWindow(activePath(messages, leafId));
   for (let i = window.length - 1; i >= 0; i--) {
     const u = window[i].usage;
     if (!u) continue;

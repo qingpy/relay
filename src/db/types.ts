@@ -185,8 +185,8 @@ export interface Message {
   /** Side question (`/btw`): shown in the chat, omitted from the model context
    *  and the map. */
   aside?: boolean;
-  /** On a leftover forest-root divider: the leaf it originally cut, used to
-   *  reparent it onto that path. */
+  /** Leaf Clear cut: the view stitches that path above the divider; ‹ n/m ›
+   *  in the stitched history updates this instead of leaving the new trunk. */
   clearedFromId?: string;
   createdAt: number;
 }

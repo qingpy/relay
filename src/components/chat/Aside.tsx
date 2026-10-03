@@ -13,7 +13,8 @@ const Markdown = lazy(() =>
 
 /**
  * A /btw exchange in the chat list: saved on the page, omitted from the
- * model context and the map. Click the card to expand; click outside to fold.
+ * model context and the map. Folded by default (and after the reply
+ * lands); click the card to expand, click outside to fold.
  */
 export function AsideThread({
   user,
@@ -22,13 +23,14 @@ export function AsideThread({
   user: Message;
   assistant?: Message;
 }) {
-  const [folded, setFolded] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   const buffer = useChatStore((s) =>
     assistant ? s.streams[assistant.id] : undefined,
   );
-  const streaming = !!buffer;
-  const answer = streaming
+  const asideBusy = useChatStore((s) => s.asideBySession[user.sessionId]);
+  const streaming = !!buffer || (!assistant && !!asideBusy);
+  const [folded, setFolded] = useState(!streaming);
+  const answer = buffer
     ? buffer.text
     : assistant
       ? partsText(assistant.content)
@@ -39,7 +41,7 @@ export function AsideThread({
   const canFork = !!question && !!answer && !streaming;
 
   useEffect(() => {
-    if (streaming) setFolded(false);
+    setFolded(!streaming);
   }, [streaming]);
 
   useEffect(() => {

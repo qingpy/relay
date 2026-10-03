@@ -23,11 +23,13 @@ import {
   canDeleteDivider,
   childrenOf,
   copyablePath,
+  detachClearDividers,
   hasOtherBranches,
   leafOf,
   liveLeafId,
-  reparentRootDividers,
   retainMessageIds,
+  retargetClearedFrom,
+  sanitizeClearRefs,
 } from '@/lib/tree';
 
 export const NEW_SESSION_TITLE = 'New chat';
@@ -356,7 +358,7 @@ export async function getMessages(sessionId: string): Promise<Message[]> {
     .where('sessionId')
     .equals(sessionId)
     .sortBy('createdAt');
-  const next = reparentRootDividers(msgs);
+  const next = sanitizeClearRefs(detachClearDividers(msgs));
   if (next === msgs) return msgs;
   const changed = next.filter((m, i) => m !== msgs[i]);
   if (changed.length) await db.messages.bulkPut(changed);
@@ -477,21 +479,27 @@ export async function spliceMessage(
             ),
             kids[kids.length - 1].id,
           )
-        : msg.parentId;
+        : (msg.parentId ?? msg.clearedFromId);
       if (next) {
         await db.sessions.update(msg.sessionId, { currentLeafId: next });
-      } else {
-        await db.sessions.where('id').equals(msg.sessionId).modify((s) => {
-          delete s.currentLeafId;
-        });
       }
+      // else leave the stale id; the keep-prune below retargets to liveLeafId.
     }
 
     const remaining = await db.messages
       .where('sessionId')
       .equals(msg.sessionId)
       .toArray();
-    const keep = retainMessageIds(remaining);
+    const retargeted = retargetClearedFrom(
+      remaining,
+      id,
+      msg.parentId ?? msg.clearedFromId,
+    );
+    if (retargeted !== remaining) {
+      const changed = retargeted.filter((m, i) => m !== remaining[i]);
+      if (changed.length) await db.messages.bulkPut(changed);
+    }
+    const keep = retainMessageIds(retargeted);
     const drop = remaining.filter((m) => !keep.has(m.id));
     if (drop.length) {
       await db.messages.bulkDelete(drop.map((m) => m.id));
@@ -501,7 +509,7 @@ export async function spliceMessage(
     }
     const sess = await db.sessions.get(msg.sessionId);
     if (sess?.currentLeafId && !keep.has(sess.currentLeafId)) {
-      const next = liveLeafId(remaining.filter((m) => keep.has(m.id)));
+      const next = liveLeafId(retargeted.filter((m) => keep.has(m.id)));
       if (next) {
         await db.sessions.update(msg.sessionId, { currentLeafId: next });
       } else {
@@ -520,8 +528,9 @@ export async function setMessagePinned(
   await db.messages.update(id, { pinned });
 }
 
-/** Insert one context divider under the active leaf. Other branches stay
- *  intact; the map lifts the divider so it does not appear as a row. */
+/** Insert one forest-root context divider. Chat stitches the cut leaf's
+ *  history above it. The map lifts the divider so later turns sit as a
+ *  first-level tree; an empty Clear does not appear on the map. */
 export async function clearContext(sessionId: string): Promise<void> {
   const session = await getSession(sessionId);
   if (!session) return;
@@ -531,14 +540,16 @@ export async function clearContext(sessionId: string): Promise<void> {
     : undefined;
   if (
     cur?.role === 'divider' &&
-    !childrenOf(all, cur.id).some((c) => !c.deletedAt)
+    !cur.deletedAt &&
+    !childrenOf(all, cur.id, { asides: true }).some((c) => !c.deletedAt)
   ) {
     return;
   }
   const divider = await addMessage({
     sessionId,
-    parentId: session.currentLeafId ?? null,
+    parentId: null,
     role: 'divider',
+    ...(session.currentLeafId ? { clearedFromId: session.currentLeafId } : {}),
   });
   await db.sessions.update(sessionId, { currentLeafId: divider.id });
 }
@@ -573,6 +584,9 @@ export async function duplicateSession(
     id: msgMap.get(m.id)!,
     sessionId: newSessionId,
     parentId: m.parentId ? (msgMap.get(m.parentId) ?? null) : null,
+    clearedFromId: m.clearedFromId
+      ? msgMap.get(m.clearedFromId)
+      : undefined,
     attachments: m.attachments
       ?.map((fid) => fileMap.get(fid))
       .filter((x): x is string => !!x),
@@ -630,7 +644,9 @@ export async function forkAsideChat(
   const newSession: Session = {
     id: newSessionId,
     folderId: session.folderId,
-    title: session.title,
+    title: session.title.startsWith('Fork of ')
+      ? session.title
+      : `Fork of ${session.title}`,
     systemPrompt: session.systemPrompt,
     createdAt: now,
     updatedAt: now,

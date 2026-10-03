@@ -20,29 +20,42 @@ export function asidesUnder(
   messages: Message[],
   id: string | null,
 ): Message[] {
-  const parent = id ?? null;
-  const heads = messages
-    .filter(
-      (m) => m.aside && !m.deletedAt && (m.parentId ?? null) === parent,
-    )
-    .sort((a, b) => a.createdAt - b.createdAt);
-  const out: Message[] = [];
-  for (const h of heads) {
-    out.push(h);
-    out.push(...asidesUnder(messages, h.id));
-  }
-  return out;
+  const walk = (parent: string | null, seen: Set<string>): Message[] => {
+    const heads = messages
+      .filter(
+        (m) =>
+          m.aside &&
+          !m.deletedAt &&
+          (m.parentId ?? null) === parent &&
+          !seen.has(m.id),
+      )
+      .sort((a, b) => a.createdAt - b.createdAt);
+    const out: Message[] = [];
+    for (const h of heads) {
+      seen.add(h.id);
+      out.push(h);
+      out.push(...walk(h.id, seen));
+    }
+    return out;
+  };
+  return walk(id ?? null, new Set());
 }
 
 /** How many live leaves sit in this node's subtree (deleted stubs count 0). */
-export function descendantLeafCount(messages: Message[], id: string): number {
+export function descendantLeafCount(
+  messages: Message[],
+  id: string,
+  seen: Set<string> = new Set(),
+): number {
+  if (seen.has(id)) return 0;
+  seen.add(id);
   const kids = childrenOf(messages, id);
   if (kids.length === 0) {
     const self = messages.find((m) => m.id === id);
     return self?.deletedAt ? 0 : 1;
   }
   let n = 0;
-  for (const k of kids) n += descendantLeafCount(messages, k.id);
+  for (const k of kids) n += descendantLeafCount(messages, k.id, seen);
   return n;
 }
 
@@ -82,70 +95,69 @@ export function isEmptyUserSlot(messages: Message[], msg: Message): boolean {
 }
 
 /**
- * Leftover forest-root dividers (`parentId: null`) sit beside the tree they
- * cut. Reparent each onto that path so chat and map share one topology.
+ * Clear is a new forest-root trunk. Continuation-era dividers (parented under
+ * the leaf they cut) are detached so the map shows that trunk beside the old
+ * tree. `clearedFromId` remembers the leaf so the view can stitch history.
  */
-export function reparentRootDividers(messages: Message[]): Message[] {
-  const byId = new Map(messages.map((m) => [m.id, m]));
-  const patches = new Map<string, string>();
+export function detachClearDividers(messages: Message[]): Message[] {
+  const ids = new Set<string>();
   for (const d of messages) {
     if (d.role !== 'divider' || d.deletedAt) continue;
-    if ((d.parentId ?? null) !== null) continue;
-    let parent: string | null =
-      d.clearedFromId && byId.has(d.clearedFromId) && !byId.get(d.clearedFromId)?.aside
-        ? d.clearedFromId
-        : null;
-    if (!parent) {
-      let newest: Message | undefined;
-      for (const m of messages) {
-        if (m.id === d.id || m.role === 'divider' || m.aside) continue;
-        if (m.createdAt > d.createdAt) continue;
-        if (!newest || m.createdAt > newest.createdAt) newest = m;
-      }
-      parent = newest?.id ?? null;
-    }
-    if (!parent || parent === d.id) continue;
-    let cur = byId.get(parent);
-    const seen = new Set<string>();
-    let cycle = false;
-    while (cur) {
-      if (cur.id === d.id) {
-        cycle = true;
-        break;
-      }
-      if (seen.has(cur.id)) break;
-      seen.add(cur.id);
-      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
-    }
-    if (!cycle) patches.set(d.id, parent);
+    if ((d.parentId ?? null) === null) continue;
+    ids.add(d.id);
   }
-  if (patches.size === 0) return messages;
+  if (ids.size === 0) return messages;
   return messages.map((m) => {
-    const parentId = patches.get(m.id);
-    return parentId !== undefined ? { ...m, parentId } : m;
+    if (!ids.has(m.id)) return m;
+    const clearedFromId = m.clearedFromId ?? m.parentId ?? undefined;
+    return {
+      ...m,
+      parentId: null,
+      ...(clearedFromId ? { clearedFromId } : {}),
+    };
   });
 }
 
-/** `reparentRootDividers` per session (import / snapshot). */
-export function reparentRootDividersAll(messages: Message[]): Message[] {
-  const sessions = new Map<string, Message[]>();
-  for (const m of messages) {
-    const g = sessions.get(m.sessionId);
-    if (g) g.push(m);
-    else sessions.set(m.sessionId, [m]);
+/**
+ * ‹ n/m › target. In stitched history, restitch the divider that sits
+ * immediately after that turn (the Clear that cut that segment). On the
+ * live tail after the last divider, walk to that sibling's leaf.
+ */
+export function switchSibling(
+  messages: Message[],
+  currentLeafId: string | undefined,
+  from: Message,
+  sib: Message,
+):
+  | { leafId: string }
+  | { stitchFrom: { dividerId: string; clearedFromId: string } } {
+  const view = stitchedMain(messages, currentLeafId);
+  const fromIdx = view.findIndex((m) => m.id === from.id);
+  const nextDiv =
+    fromIdx >= 0
+      ? view
+          .slice(fromIdx + 1)
+          .find((m) => m.role === 'divider' && !m.deletedAt)
+      : undefined;
+  if (nextDiv) {
+    return {
+      stitchFrom: {
+        dividerId: nextDiv.id,
+        clearedFromId: leafOf(messages, sib.id),
+      },
+    };
   }
-  let changed = false;
-  const out: Message[] = [];
-  for (const group of sessions.values()) {
-    const next = reparentRootDividers(group);
-    if (next !== group) changed = true;
-    out.push(...next);
-  }
-  return changed ? out : messages;
+  return { leafId: leafOf(messages, sib.id) };
 }
 
-/** True if this turn is a live ‹ n/m › variant or an ancestor of more than one leaf. */
+/** True if this turn is a live ‹ n/m › variant or an ancestor of more than one leaf.
+ *  Dividers are not ‹ n/m › — two forest-root Clears are parallel trunks. */
 export function hasOtherBranches(messages: Message[], msg: Message): boolean {
+  if (msg.role === 'divider') {
+    return childrenOf(messages, msg.id, { asides: true }).some(
+      (c) => !c.deletedAt,
+    );
+  }
   if (descendantLeafCount(messages, msg.id) > 1) return true;
   return roleSiblings(messages, msg).some(
     (m) => m.id !== msg.id && !m.deletedAt,
@@ -154,8 +166,11 @@ export function hasOtherBranches(messages: Message[], msg: Message): boolean {
 
 /** Descend from a node following the newest child each step to reach a leaf. */
 export function leafOf(messages: Message[], startId: string): string {
+  const seen = new Set<string>();
   let id = startId;
   for (;;) {
+    if (seen.has(id)) return id;
+    seen.add(id);
     const kids = childrenOf(messages, id);
     if (kids.length === 0) return id;
     id = kids[kids.length - 1].id;
@@ -196,12 +211,10 @@ export function activePath(messages: Message[], leafId?: string): Message[] {
   return path.reverse();
 }
 
-/** Turns the model sees: after the latest divider on the path, then anything
- *  older than a divider anywhere in the session is dropped. Asides omitted. */
-export function activeWindow(
-  path: Message[],
-  all: Message[] = path,
-): Message[] {
+/** Turns the model sees: after the latest divider on this path. A Clear on
+ *  another branch does not empty this window — branching a pre-clear turn
+ *  continues that trunk with its history. Asides omitted. */
+export function activeWindow(path: Message[]): Message[] {
   let start = 0;
   for (let i = path.length - 1; i >= 0; i--) {
     if (path[i].role === 'divider' && !path[i].deletedAt) {
@@ -209,26 +222,131 @@ export function activeWindow(
       break;
     }
   }
-  let window = path.slice(start).filter((m) => !m.aside);
-  const cuts = all.filter((m) => m.role === 'divider' && !m.deletedAt);
-  if (cuts.length) {
-    const latest = cuts.reduce((a, b) =>
-      a.createdAt >= b.createdAt ? a : b,
-    );
-    window = window.filter((m) => m.createdAt > latest.createdAt);
-  }
-  return window;
+  return path.slice(start).filter((m) => !m.aside);
 }
 
 /** Model window on the active path — what an aside fork copies. */
 export function copyablePath(messages: Message[], leafId?: string): Message[] {
-  return activeWindow(activePath(messages, leafId), messages).filter(
+  return activeWindow(activePath(messages, leafId)).filter(
     (m) =>
       !m.deletedAt && (m.role === 'user' || m.role === 'assistant'),
   );
 }
 
-/** Active path with aside threads inserted under the turns they hang from. */
+/** Parent walk to `id` with no defaultLeaf fallback (missing id → []). */
+function strictPath(messages: Message[], id: string): Message[] {
+  const byId = new Map<string, Message>(messages.map((x) => [x.id, x]));
+  if (!byId.has(id)) return [];
+  const path: Message[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined = id;
+  while (cursor && byId.has(cursor) && !seen.has(cursor)) {
+    seen.add(cursor);
+    const row: Message = byId.get(cursor)!;
+    if (!row.aside) path.push(row);
+    cursor = row.parentId ?? undefined;
+  }
+  return path.reverse();
+}
+
+function previousDivider(messages: Message[], d: Message): Message | undefined {
+  let best: Message | undefined;
+  for (const m of messages) {
+    if (m.sessionId !== d.sessionId) continue;
+    if (m.role !== 'divider' || m.deletedAt || m.id === d.id) continue;
+    if (m.createdAt >= d.createdAt) continue;
+    if (!best || m.createdAt > best.createdAt) best = m;
+  }
+  return best;
+}
+
+/** Dividers whose `clearedFromId` is gone point at the previous Clear. */
+export function sanitizeClearRefs(messages: Message[]): Message[] {
+  const exist = new Set(messages.map((m) => m.id));
+  let changed = false;
+  const next = messages.map((m) => {
+    if (m.role !== 'divider' || !m.clearedFromId) return m;
+    if (exist.has(m.clearedFromId)) return m;
+    const clearedFromId = previousDivider(messages, m)?.id;
+    changed = true;
+    return { ...m, clearedFromId };
+  });
+  return changed ? next : messages;
+}
+
+/** After a splice: dividers that remembered `goneId` point at `fallbackId`
+ *  or the previous Clear. */
+export function retargetClearedFrom(
+  messages: Message[],
+  goneId: string,
+  fallbackId?: string | null,
+): Message[] {
+  const exist = new Set(messages.map((m) => m.id));
+  const fb =
+    fallbackId && exist.has(fallbackId) && fallbackId !== goneId
+      ? fallbackId
+      : undefined;
+  let changed = false;
+  const next = messages.map((m) => {
+    if (m.role !== 'divider' || m.clearedFromId !== goneId) return m;
+    const clearedFromId = fb ?? previousDivider(messages, m)?.id;
+    if (clearedFromId === m.clearedFromId) return m;
+    changed = true;
+    return { ...m, clearedFromId };
+  });
+  return changed ? next : messages;
+}
+
+/** Main-line view for a leaf: each Clear prepends the full stitched history
+ *  of the leaf it cut, so multiple Clears stack every previous chat.
+ *  A missing `clearedFromId` (spliced middle) falls back to the previous
+ *  Clear instead of `defaultLeaf`, which would recurse into this trunk. */
+export function stitchedMain(
+  messages: Message[],
+  leafId?: string,
+): Message[] {
+  const used = new Set<string>();
+  const walking = new Set<string>();
+  const take = (nodes: Message[]): Message[] => {
+    const out: Message[] = [];
+    for (const m of nodes) {
+      if (used.has(m.id)) continue;
+      used.add(m.id);
+      out.push(m);
+    }
+    return out;
+  };
+  const walk = (id: string | undefined, fallback: boolean): Message[] => {
+    if (id && walking.has(id)) return [];
+    if (id) walking.add(id);
+    const path = fallback
+      ? activePath(messages, id)
+      : id
+        ? strictPath(messages, id)
+        : [];
+    let dIdx = -1;
+    for (let i = path.length - 1; i >= 0; i--) {
+      if (path[i].role === 'divider' && !path[i].deletedAt) {
+        dIdx = i;
+        break;
+      }
+    }
+    if (dIdx < 0) return take(path);
+    const d = path[dIdx];
+    if (used.has(d.id)) return take(path.slice(dIdx));
+    const byId = new Map(messages.map((m) => [m.id, m]));
+    let from = d.clearedFromId && byId.has(d.clearedFromId)
+      ? d.clearedFromId
+      : undefined;
+    if (!from) from = previousDivider(messages, d)?.id;
+    const prefix = from ? walk(from, false) : [];
+    return [...prefix, ...take(path.slice(dIdx))];
+  };
+  return walk(leafId, true);
+}
+
+/** Chat view: asides plus `stitchedMain`. Branch / map onto an old tree is
+ *  that path alone (no divider; history goes to the model). */
 export function displayPath(messages: Message[], leafId?: string): Message[] {
   const out: Message[] = [];
   const used = new Set<string>();
@@ -238,7 +356,7 @@ export function displayPath(messages: Message[], leafId?: string): Message[] {
     used.add(a.id);
   };
   for (const a of asidesUnder(messages, null)) take(a);
-  for (const m of activePath(messages, leafId)) {
+  for (const m of stitchedMain(messages, leafId)) {
     if (used.has(m.id)) continue;
     out.push(m);
     used.add(m.id);
@@ -247,20 +365,15 @@ export function displayPath(messages: Message[], leafId?: string): Message[] {
   return out;
 }
 
-/** A divider may be removed only when nothing sits beneath it — no descendants
- *  (another divider counts) and no later root-level tree. */
+/** A divider may be removed only when nothing sits beneath it (asides count). */
 export function canDeleteDivider(messages: Message[], d: Message): boolean {
   if (d.role !== 'divider' || d.deletedAt) return false;
-  if (childrenOf(messages, d.id).some((c) => !c.deletedAt)) return false;
-  if ((d.parentId ?? null) !== null) return true;
-  return !childrenOf(messages, null).some(
-    (r) => !r.deletedAt && r.id !== d.id && r.createdAt > d.createdAt,
-  );
+  return !childrenOf(messages, d.id, { asides: true }).some((c) => !c.deletedAt);
 }
 
 /**
  * A linear stretch from a fork head (or root) until the next fork or a leaf.
- * Context-cleared dividers are lifted so they do not appear on the map.
+ * Context-cleared dividers are omitted; their kids become first-level trees.
  * Pin is a view mark, not a segment break.
  */
 export interface Segment {
@@ -269,13 +382,19 @@ export interface Segment {
   children: Segment[];
 }
 
-/** Children with deleted placeholders and context dividers skipped (kids lift). Map only. */
-function visibleChildren(messages: Message[], id: string | null): Message[] {
+/** Deleted stubs lift in place. Dividers do not: their kids are collected as
+ *  forest roots in `segmentTree`, so an empty Clear does not appear on the map. */
+function visibleChildren(
+  messages: Message[],
+  id: string | null,
+  seen: Set<string> = new Set(),
+): Message[] {
   const out: Message[] = [];
   for (const k of childrenOf(messages, id)) {
-    if (k.deletedAt || k.role === 'divider') {
-      out.push(...visibleChildren(messages, k.id));
-    } else out.push(k);
+    if (seen.has(k.id)) continue;
+    seen.add(k.id);
+    if (k.deletedAt) out.push(...visibleChildren(messages, k.id, seen));
+    else if (k.role !== 'divider') out.push(k);
   }
   return out;
 }
@@ -285,14 +404,16 @@ function segmentFrom(
   start: Message,
 ): { chain: Message[]; next: Message[] } {
   const chain = [start];
+  const seen = new Set<string>([start.id]);
   let cur = start;
   for (;;) {
     const kids = visibleChildren(messages, cur.id);
-    if (kids.length === 1) {
+    if (kids.length === 1 && !seen.has(kids[0].id)) {
       cur = kids[0];
+      seen.add(cur.id);
       chain.push(cur);
     } else {
-      return { chain, next: kids };
+      return { chain, next: kids.filter((k) => !seen.has(k.id)) };
     }
   }
 }
@@ -303,7 +424,21 @@ export function segmentTree(messages: Message[]): Segment[] {
     const { chain, next } = segmentFrom(messages, head);
     return { id: head.id, messages: chain, children: next.map(build) };
   };
-  return visibleChildren(messages, null).map(build);
+  const heads: Message[] = [];
+  const seen = new Set<string>();
+  const take = (m: Message) => {
+    if (seen.has(m.id)) return;
+    seen.add(m.id);
+    heads.push(m);
+  };
+  for (const m of visibleChildren(messages, null)) take(m);
+  const dividers = messages
+    .filter((m) => m.role === 'divider' && !m.deletedAt)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  for (const d of dividers) {
+    for (const k of visibleChildren(messages, d.id)) take(k);
+  }
+  return heads.map(build);
 }
 
 /**
@@ -317,7 +452,9 @@ export function retainMessageIds(messages: Message[]): Set<string> {
     if (m.deletedAt) continue;
     if (m.role === 'divider') keep.add(m.id);
     let cur: Message | undefined = m;
-    while (cur) {
+    const seen = new Set<string>();
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
       keep.add(cur.id);
       cur = cur.parentId ? byId.get(cur.parentId) : undefined;
     }
@@ -328,8 +465,11 @@ export function retainMessageIds(messages: Message[]): Set<string> {
 
 /** Newest visible descendant — Map Show must not land on a hidden tombstone. */
 export function visibleLeafOf(messages: Message[], startId: string): string {
+  const seen = new Set<string>();
   let id = startId;
   for (;;) {
+    if (seen.has(id)) return id;
+    seen.add(id);
     const kids = visibleChildren(messages, id);
     if (kids.length === 0) return id;
     id = kids[kids.length - 1].id;

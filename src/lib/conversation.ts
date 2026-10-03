@@ -19,10 +19,9 @@ export function partsText(content: Part[]): string {
  */
 export async function buildChatMessages(
   path: Message[],
-  all: Message[] = path,
 ): Promise<ChatMessage[]> {
   const out: ChatMessage[] = [];
-  for (const m of activeWindow(path, all)) {
+  for (const m of activeWindow(path)) {
     if (m.deletedAt) continue;
     if (m.aside) continue;
     if (m.role !== 'user' && m.role !== 'assistant') continue;

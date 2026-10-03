@@ -172,10 +172,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
         : undefined;
       const connections = await listConnections();
       resolved = resolveConfig(session, folder, connections);
-      const chatMessages = await buildChatMessages(
-        history,
-        await getMessages(sessionId),
-      );
+      const chatMessages = await buildChatMessages(history);
 
       if (!resolved.connection || !resolved.model) {
         throw new Error(
@@ -414,7 +411,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
           );
         }
         const history = activePath(all, session.currentLeafId);
-        const chatMessages = await buildChatMessages(history, all);
+        const chatMessages = await buildChatMessages(history);
         const mainId = get().activeBySession[sessionId];
         const mainBuf = mainId ? get().streams[mainId] : undefined;
         if (mainBuf && (mainBuf.text || mainBuf.reasoning)) {

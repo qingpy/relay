@@ -1,25 +1,42 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { setCurrentLeaf } from '@/db/repo';
+import { setCurrentLeaf, updateMessage } from '@/db/repo';
 import type { Message } from '@/db/types';
-import { leafOf, roleSiblings } from '@/lib/tree';
+import { roleSiblings, switchSibling } from '@/lib/tree';
 
 /**
  * `‹ 2/3 ›` on the active turn. User siblings are Branch forks (new input
  * under the same assistant); assistant siblings are regenerated replies.
+ * After Clear, ‹ n/m › in the stitched history restitches that path and
+ * keeps the divider.
  */
 export function SiblingSwitcher({
   message,
   allMessages,
+  currentLeafId,
 }: {
   message: Message;
   allMessages: Message[];
+  currentLeafId?: string;
 }) {
   const sibs = roleSiblings(allMessages, message);
   if (sibs.length < 2) return null;
 
   const index = sibs.findIndex((m) => m.id === message.id);
-  const go = (i: number) =>
-    void setCurrentLeaf(message.sessionId, leafOf(allMessages, sibs[i].id));
+  const go = (i: number) => {
+    const next = switchSibling(
+      allMessages,
+      currentLeafId,
+      message,
+      sibs[i],
+    );
+    if ('stitchFrom' in next) {
+      void updateMessage(next.stitchFrom.dividerId, {
+        clearedFromId: next.stitchFrom.clearedFromId,
+      });
+      return;
+    }
+    void setCurrentLeaf(message.sessionId, next.leafId);
+  };
 
   const kind = message.role === 'user' ? 'branch' : 'reply';
 

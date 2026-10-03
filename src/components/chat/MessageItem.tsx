@@ -92,16 +92,24 @@ function StreamingDots() {
 export const MessageItem = memo(function MessageItem({
   message,
   siblings,
+  currentLeafId,
 }: {
   message: Message;
   siblings: Message[];
+  currentLeafId?: string;
 }) {
   const buffer = useChatStore((s) => s.streams[message.id]);
   const streaming = !!buffer;
   const [editing, setEditing] = useState(false);
 
   if (message.deletedAt) {
-    return <SiblingSwitcher message={message} allMessages={siblings} />;
+    return (
+      <SiblingSwitcher
+        message={message}
+        allMessages={siblings}
+        currentLeafId={currentLeafId}
+      />
+    );
   }
 
   if (message.role === 'divider') {
@@ -163,7 +171,11 @@ export const MessageItem = memo(function MessageItem({
           </div>
         )}
         <div className={cn('mt-3 flex items-center gap-4', INDENT)}>
-          <SiblingSwitcher message={message} allMessages={siblings} />
+          <SiblingSwitcher
+            message={message}
+            allMessages={siblings}
+            currentLeafId={currentLeafId}
+          />
           <MessageActions message={message} onEdit={() => setEditing(true)} />
         </div>
       </article>
@@ -242,7 +254,11 @@ export const MessageItem = memo(function MessageItem({
 
       {!streaming && (
         <div className={cn('mt-3 flex items-center gap-4', INDENT)}>
-          <SiblingSwitcher message={message} allMessages={siblings} />
+          <SiblingSwitcher
+            message={message}
+            allMessages={siblings}
+            currentLeafId={currentLeafId}
+          />
           <MessageActions message={message} />
         </div>
       )}

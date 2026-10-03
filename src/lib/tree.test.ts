@@ -4,13 +4,18 @@
 import type { Message, MessageRole } from '../db/types';
 import {
   activePath,
+  activeWindow,
   attachParentId,
   copyablePath,
+  canDeleteDivider,
+  detachClearDividers,
   displayPath,
+  hasOtherBranches,
+  retargetClearedFrom,
   isEmptyUserSlot,
-  reparentRootDividers,
-  reparentRootDividersAll,
   roleSiblings,
+  segmentTree,
+  switchSibling,
 } from './tree';
 
 let t = 0;
@@ -83,26 +88,32 @@ function eq(name: string, got: unknown, want: unknown) {
   );
 }
 
-// Live leaf and divider: attach as child.
+// Live leaf and forest-root divider: attach as child of the divider.
 {
   const u = msg('u', 'user');
   const a = msg('a', 'assistant', { parentId: 'u' });
-  const d = msg('d', 'divider', { parentId: 'a' });
+  const d = msg('d', 'divider', { clearedFromId: 'a' });
   const other = msg('other', 'user', { parentId: 'a' });
   eq('live leaf', attachParentId([u, a], 'a'), 'a');
   eq('divider leaf', attachParentId([u, a, d], 'd'), 'd');
   eq('missing leaf', attachParentId([u, a], 'gone'), null);
   eq('no leaf', attachParentId([u, a], null), null);
   const u2 = msg('u2', 'user', { parentId: attachParentId([u, a, d, other], 'd') });
+  const all = [u, a, d, other, u2];
   eq(
-    'clear then send stays on this path',
-    activePath([u, a, d, other, u2], 'u2').map((m) => m.id),
+    'clear then send is the new trunk',
+    activePath(all, 'u2').map((m) => m.id),
+    ['d', 'u2'],
+  );
+  eq(
+    'view stitches history above the divider',
+    displayPath(all, 'u2').map((m) => m.id),
     ['u', 'a', 'd', 'u2'],
   );
   eq(
     'other fork still a child of the same assistant',
-    [u, a, d, other, u2].filter((m) => m.parentId === 'a').map((m) => m.id),
-    ['d', 'other'],
+    all.filter((m) => m.parentId === 'a').map((m) => m.id),
+    ['other'],
   );
 }
 
@@ -114,52 +125,20 @@ function eq(name: string, got: unknown, want: unknown) {
   eq('deleted assistant attach to self', attachParentId([u, a1, a2], 'a2'), 'a2');
 }
 
-// Continuation divider is already on the path — leave it.
+// Continuation-era divider becomes a forest root and remembers the cut leaf.
 {
   const u = msg('u', 'user');
   const a = msg('a', 'assistant', { parentId: 'u' });
   const d = msg('d', 'divider', { parentId: 'a' });
-  const next = reparentRootDividers([u, a, d]);
-  eq('continuation divider unchanged', next[2].parentId, 'a');
-}
-
-// Leftover forest-root divider → sit on the path it cut.
-{
-  const u = msg('u', 'user');
-  const a = msg('a', 'assistant', { parentId: 'u' });
-  const d = msg('d', 'divider', {
-    parentId: null,
-    clearedFromId: 'a',
-    createdAt: 99,
-  });
-  const next = reparentRootDividers([u, a, d]);
-  eq('root divider reparented to clearedFromId', next[2].parentId, 'a');
-  const path = activePath(next, 'd').map((m) => m.id);
-  eq('chat path is history + divider', path, ['u', 'a', 'd']);
+  const u2 = msg('u2', 'user', { parentId: 'd' });
+  const next = detachClearDividers([u, a, d, u2]);
+  eq('continuation divider detached to root', next[2].parentId, null);
+  eq('detach remembers the leaf it cut', next[2].clearedFromId, 'a');
   eq(
-    'fork from that divider is the empty window',
-    copyablePath(next, 'd').map((m) => m.id),
-    [],
+    'view still stitches history',
+    displayPath(next, 'u2').map((m) => m.id),
+    ['u', 'a', 'd', 'u2'],
   );
-}
-
-{
-  const a = msg('a', 'user', { sessionId: 's1' });
-  const d = msg('d', 'divider', {
-    sessionId: 's2',
-    parentId: null,
-    createdAt: 50,
-  });
-  const next = reparentRootDividersAll([a, d]);
-  eq('reparent does not cross sessions', next[1].parentId, null);
-}
-
-{
-  const u = msg('u', 'user');
-  const a = msg('a', 'assistant', { parentId: 'u', createdAt: 2 });
-  const d = msg('d', 'divider', { parentId: null, createdAt: 3 });
-  const next = reparentRootDividers([u, a, d]);
-  eq('root divider without clearedFromId', next[2].parentId, 'a');
 }
 
 {
@@ -173,19 +152,11 @@ function eq(name: string, got: unknown, want: unknown) {
   );
 }
 
-{
-  const u = msg('u', 'user', { createdAt: 1 });
-  const aside = msg('as', 'user', { parentId: 'u', aside: true, createdAt: 2 });
-  const d = msg('d', 'divider', { parentId: null, createdAt: 3 });
-  const next = reparentRootDividers([u, aside, d]);
-  eq('root divider sits on the main leaf, not the aside', next[2].parentId, 'u');
-}
-
 // Fork copies the model window (after Clear), not pre-divider history.
 {
   const u = msg('u', 'user');
   const a = msg('a', 'assistant', { parentId: 'u' });
-  const d = msg('d', 'divider', { parentId: 'a' });
+  const d = msg('d', 'divider', { clearedFromId: 'a' });
   const u2 = msg('u2', 'user', { parentId: 'd' });
   const a2 = msg('a2', 'assistant', { parentId: 'u2' });
   const all = [u, a, d, u2, a2];
@@ -199,11 +170,145 @@ function eq(name: string, got: unknown, want: unknown) {
     copyablePath(all, 'd').map((m) => m.id),
     [],
   );
-  const rootD = msg('rd', 'divider', { parentId: null });
   eq(
-    'fork of a lone root divider is empty',
-    copyablePath([rootD], 'rd').map((m) => m.id),
-    [],
+    'real path after clear is the new trunk',
+    activePath(all, 'a2').map((m) => m.id),
+    ['d', 'u2', 'a2'],
+  );
+  eq(
+    'view after clear keeps history',
+    displayPath(all, 'a2').map((m) => m.id),
+    ['u', 'a', 'd', 'u2', 'a2'],
+  );
+  eq(
+    'map after clear is two first-level trees',
+    segmentTree(all).map((s) => s.messages.map((m) => m.id)),
+    [
+      ['u', 'a'],
+      ['u2', 'a2'],
+    ],
+  );
+}
+
+// Branch a pre-clear turn: that trunk's history, no divider. ‹ n/m › in the
+// stitched history restitches and keeps the divider.
+{
+  const u = msg('u', 'user');
+  const a1 = msg('a1', 'assistant', { parentId: 'u' });
+  const a2 = msg('a2', 'assistant', { parentId: 'u' });
+  const d = msg('d', 'divider', { clearedFromId: 'a1' });
+  const u2 = msg('u2', 'user', { parentId: 'd' });
+  const u3 = msg('u3', 'user', { parentId: 'a2' });
+  const all = [u, a1, a2, d, u2, u3];
+  eq(
+    'branch before clear shows the old path',
+    activePath(all, 'u3').map((m) => m.id),
+    ['u', 'a2', 'u3'],
+  );
+  eq(
+    'branch before clear has no divider in the view',
+    displayPath(all, 'u3').map((m) => m.id),
+    ['u', 'a2', 'u3'],
+  );
+  eq(
+    'branch before clear keeps history for the model',
+    activeWindow(activePath(all, 'u3')).map((m) => m.id),
+    ['u', 'a2', 'u3'],
+  );
+  eq(
+    'post-clear send has no pre-clear history',
+    activeWindow(activePath(all, 'u2')).map((m) => m.id),
+    ['u2'],
+  );
+  eq(
+    'map: old trunk and new trunk are first-level trees',
+    segmentTree(all).map((s) => s.messages.map((m) => m.id)),
+    [['u'], ['u2']],
+  );
+  const restitch = switchSibling(all, 'u2', a1, a2);
+  eq(
+    '‹ n/m › in stitched history restitches',
+    restitch,
+    { stitchFrom: { dividerId: 'd', clearedFromId: 'u3' } },
+  );
+  const restitched = all.map((m) =>
+    m.id === 'd' ? { ...m, clearedFromId: 'u3' } : m,
+  );
+  eq(
+    'restitched view keeps the divider',
+    displayPath(restitched, 'u2').map((m) => m.id),
+    ['u', 'a2', 'u3', 'd', 'u2'],
+  );
+  const onNew = switchSibling(all, 'u2', u2, u2);
+  eq('‹ n/m › on the new trunk is a leaf walk', 'leafId' in onNew, true);
+}
+
+// Two Clears: view stacks both previous chats.
+{
+  const u = msg('u', 'user');
+  const a = msg('a', 'assistant', { parentId: 'u' });
+  const d1 = msg('d1', 'divider', { clearedFromId: 'a' });
+  const u2 = msg('u2', 'user', { parentId: 'd1' });
+  const a2 = msg('a2', 'assistant', { parentId: 'u2' });
+  const d2 = msg('d2', 'divider', { clearedFromId: 'a2' });
+  const u3 = msg('u3', 'user', { parentId: 'd2' });
+  const all = [u, a, d1, u2, a2, d2, u3];
+  eq(
+    'two clears keep both previous chats',
+    displayPath(all, 'u3').map((m) => m.id),
+    ['u', 'a', 'd1', 'u2', 'a2', 'd2', 'u3'],
+  );
+  eq(
+    'model after the second clear is only the newest trunk',
+    activeWindow(activePath(all, 'u3')).map((m) => m.id),
+    ['u3'],
+  );
+  eq(
+    'map has a first-level tree per Clear',
+    segmentTree(all).map((s) => s.messages.map((m) => m.id)),
+    [['u', 'a'], ['u2', 'a2'], ['u3']],
+  );
+  const a1b = msg('a1b', 'assistant', { parentId: 'u' });
+  const withFork = [...all, a1b];
+  eq(
+    '‹ n/m › in the oldest segment restitches the first divider',
+    switchSibling(withFork, 'u3', a, a1b),
+    { stitchFrom: { dividerId: 'd1', clearedFromId: 'a1b' } },
+  );
+  const u2b = msg('u2b', 'user', { parentId: 'd1' });
+  const withMid = [...all, u2b];
+  eq(
+    '‹ n/m › between Clears restitches the following divider',
+    switchSibling(withMid, 'u3', u2, u2b),
+    { stitchFrom: { dividerId: 'd2', clearedFromId: 'u2b' } },
+  );
+}
+
+{
+  const u = msg('u', 'user');
+  const a = msg('a', 'assistant', { parentId: 'u' });
+  const d2 = msg('d2', 'divider', { clearedFromId: 'd1' });
+  const u3 = msg('u3', 'user', { parentId: 'd2' });
+  const afterRestore = retargetClearedFrom([u, a, d2, u3], 'd1', 'a');
+  eq(
+    'Restore of an empty stacked divider keeps the cut leaf',
+    afterRestore.find((m) => m.id === 'd2')?.clearedFromId,
+    'a',
+  );
+}
+
+// Middle trunk spliced: dangling clearedFromId must not recurse (blank page).
+{
+  const u = msg('u', 'user');
+  const a = msg('a', 'assistant', { parentId: 'u' });
+  const d1 = msg('d1', 'divider', { clearedFromId: 'a' });
+  const d2 = msg('d2', 'divider', { clearedFromId: 'gone' });
+  const u3 = msg('u3', 'user', { parentId: 'd2' });
+  const all = [u, a, d1, d2, u3];
+  eq(
+    'dangling clearedFromId falls back to the previous Clear',
+    displayPath(all, 'u3').map((m) => m.id),
+    ['u', 'a', 'd1', 'd2', 'u3'],
   );
 }
 
@@ -238,6 +343,31 @@ function eq(name: string, got: unknown, want: unknown) {
     'current leaf after a later send includes it',
     copyablePath(all, 'u2').map((m) => m.id),
     ['u', 'a', 'u2'],
+  );
+}
+
+{
+  const u = msg('u', 'user');
+  const a = msg('a', 'assistant', { parentId: 'u' });
+  const d = msg('d', 'divider', { clearedFromId: 'a' });
+  const all = [u, a, d];
+  eq('empty divider is deletable', canDeleteDivider(all, d), true);
+  eq('empty divider is not ‹ n/m ›', hasOtherBranches(all, d), false);
+  eq(
+    'empty clear still shows history',
+    displayPath(all, 'd').map((m) => m.id),
+    ['u', 'a', 'd'],
+  );
+  eq(
+    'empty Clear is omitted from the map',
+    segmentTree(all).map((s) => s.messages.map((m) => m.id)),
+    [['u', 'a']],
+  );
+  const aside = msg('as', 'user', { parentId: 'd', aside: true });
+  eq(
+    'aside on a divider blocks Restore',
+    canDeleteDivider([u, a, d, aside], d),
+    false,
   );
 }
 

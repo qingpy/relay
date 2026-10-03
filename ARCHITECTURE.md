@@ -67,20 +67,25 @@ Key ideas:
   `attachParentId`: sibling of an empty user head, or onto a deleted
   assistant variant, so ‹ n/m › with the live fork stays. See
   `src/lib/tree.ts`.
-- Context divider: Clear inserts one `role:'divider'` under the active
-  leaf. The map lifts it (no row); the chat path still includes it.
-  Later turns on other branches stay in the tree. `activeWindow` drops
-  everything before the latest divider in the session. Manual delete
-  only when it has no descendants. Leftover root dividers (`parentId`
-  null) are reparented onto the path they cut.
+- Context divider: Clear inserts a forest-root `role:'divider'` with
+  `clearedFromId` = the cut leaf. Chat on the new trunk stitches that
+  leaf's full view above the separator (nested Clears stack every
+  previous chat). ‹ n/m › in a stitched segment restitches the divider
+  that follows it. Branch or map onto an old tree is that path alone;
+  the model gets its history (`activeWindow` is path-local). The map
+  omits the divider; each Clear's kids become a first-level tree. An
+  empty Clear has no map row. Manual delete of an empty divider
+  restores the cut leaf. Continuation-era parented dividers are
+  detached to roots on load.
 - Pin: a view mark on the map (visible even when its stretch is collapsed).
   It does not split a stretch or change fold/select of the head.
 - Aside (`/btw`): one-round side question, parallel with the main turn.
   Saved in the chat list (click to expand, click outside to fold; Stop
   while streaming). Omitted from the model context and the map. Main
   and aside streams Stop independently. Fork copies the model window at
-  the node the aside hangs from (turns after the latest divider) plus
-  that exchange, keeping the old title.
+  the node the aside hangs from (turns after the latest divider on that
+  path) plus that exchange. Title is `Fork of` the original. The aside
+  card stays folded except while it is streaming.
 - Markdown (`src/lib/markdown.ts`): math is isolated from the source before
   remark parses (GFM tables and indent cannot steal `|` / `&` from
   `aligned`), `<br>` in tables becomes a break, then KaTeX.
@@ -265,7 +270,7 @@ insert/move. Clicking an attachment opens an in-app preview (image, PDF,
 or text). Deleting the open chat advances to the preset's next chat; deleting
 another leaves the open chat in place. The branch map is a modal skeleton
 of the tree: each row is a linear stretch between forks. A context-cleared
-divider is lifted off the map (kids stay on the same branch). Pinned turns
+divider is lifted off the map (its kids become a new first-level tree). Pinned turns
 stay visible in a collapsed stretch without changing fold or select of the
 head. Parallel heads sit as siblings. Select mode: click a message to
 toggle it; shift-click extends the selection. A collapsed stretch's head

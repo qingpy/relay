@@ -206,7 +206,11 @@ export function MessageList({ sessionId }: { sessionId: string }) {
                 checked={!!selected[m.id]}
                 onSelect={(shift) => selectAt(m.id, shift)}
               >
-                <MessageItem message={m} siblings={all} />
+                <MessageItem
+                  message={m}
+                  siblings={all}
+                  currentLeafId={session?.currentLeafId}
+                />
               </SelectableRow>
             ) : (
               <div
@@ -218,7 +222,11 @@ export function MessageList({ sessionId }: { sessionId: string }) {
                   flashId === m.id && 'ring-2 ring-primary/40',
                 )}
               >
-                <MessageItem message={m} siblings={all} />
+                <MessageItem
+                  message={m}
+                  siblings={all}
+                  currentLeafId={session?.currentLeafId}
+                />
               </div>
             );
           })}

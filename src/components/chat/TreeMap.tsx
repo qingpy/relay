@@ -69,7 +69,8 @@ function allMessageIds(tree: Segment[]): string[] {
 
 /**
  * Branch map: a modal skeleton of the conversation tree. Each row is a linear
- * stretch between forks. Context dividers are lifted off the map. Pinned turns
+ * stretch between forks. Context dividers are omitted; their kids become
+ * first-level trees. Pinned turns
  * stay visible in a collapsed stretch without changing fold/select of the head.
  * Select mode: click toggles a message (a collapsed head toggles the whole
  * stretch); shift-click extends the range. Delete splices those turns.
