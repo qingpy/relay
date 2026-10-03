@@ -180,6 +180,14 @@ export interface Message {
   /** Set when the turn was deleted but other branches still pass through this
    *  node. The row stays as a placeholder; the provider never sees it. */
   deletedAt?: number;
+  /** Map landmark: a pinned turn is its own row and stays visible when collapsed. */
+  pinned?: boolean;
+  /** Side question (`/btw`): shown in the chat, omitted from the model context
+   *  and the map. */
+  aside?: boolean;
+  /** On a root divider: the leaf of the previous tree, so the chat view can
+   *  stitch the old path above "Context cleared". */
+  clearedFromId?: string;
   createdAt: number;
 }
 

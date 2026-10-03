@@ -29,8 +29,7 @@ export function TrashDialog() {
 
   const purge = async (id: string, title: string) => {
     const ok = await confirm({
-      title: 'Delete forever?',
-      description: `"${title}" and its messages will be permanently removed.`,
+      title: `Delete “${title}” forever?`,
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -39,11 +38,11 @@ export function TrashDialog() {
 
   const empty = async () => {
     const ok = await confirm({
-      title: 'Empty trash?',
-      description: `${sessions.length} chat${
-        sessions.length > 1 ? 's' : ''
-      } will be permanently removed.`,
-      confirmLabel: 'Empty trash',
+      title:
+        sessions.length === 1
+          ? 'Empty trash?'
+          : `Empty trash (${sessions.length} chats)?`,
+      confirmLabel: 'Empty',
       destructive: true,
     });
     if (ok) await emptyTrash();

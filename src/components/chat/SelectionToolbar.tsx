@@ -1,3 +1,4 @@
+import { confirmMessageDelete } from '@/components/ui/confirm';
 import { Marginalia } from '@/components/ui/marginalia';
 import { getAppConfig } from '@/db/db';
 import { spliceMessage } from '@/db/repo';
@@ -46,6 +47,7 @@ export function SelectionToolbar({
   // re-parented, so nothing below them is lost.
   const remove = async () => {
     if (!count) return;
+    if (!(await confirmMessageDelete(count))) return;
     for (const id of ids) await spliceMessage(id);
     clearSelection();
   };

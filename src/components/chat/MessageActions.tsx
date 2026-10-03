@@ -6,6 +6,7 @@ import {
   getFilesByIds,
   removeFileContent,
   setCurrentLeaf,
+  setMessagePinned,
   spliceMessage,
 } from '@/db/repo';
 import type { Message, StoredFile } from '@/db/types';
@@ -17,7 +18,7 @@ import { useChatStore } from '@/store/chat';
 /**
  * The marginalia action row beneath a message — quiet uppercase text links
  * rather than icon buttons. User turns get Edit/Regenerate; assistant turns get
- * Download/Branch; both share Copy/Delete.
+ * Download/Branch; both share Copy/Delete, with Pin at the far right.
  */
 export function MessageActions({
   message,
@@ -81,6 +82,13 @@ export function MessageActions({
       )}
       {removable.length > 0 && <Marginalia onClick={clean}>Clean</Marginalia>}
       <Marginalia onClick={() => void remove()}>Delete</Marginalia>
+      <Marginalia
+        className="ml-auto"
+        onClick={() => void setMessagePinned(message.id, !message.pinned)}
+        active={!!message.pinned}
+      >
+        {message.pinned ? 'Unpin' : 'Pin'}
+      </Marginalia>
     </div>
   );
 }

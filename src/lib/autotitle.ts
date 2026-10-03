@@ -3,6 +3,7 @@ import {
   getConnection,
   getMessages,
   getSession,
+  NEW_SESSION_TITLE,
   updateSession,
 } from '@/db/repo';
 import { deriveTitle, partsText } from './conversation';
@@ -48,6 +49,12 @@ export async function generateTitle(
     if (opts.firstExchangeOnly) {
       if (!config.titleConnectionId || !config.titleModel) return;
       if (users.length !== 1 || convo.length < 2) return;
+      // A wiped chat still has its title. Only the first exchange of a new
+      // chat (still "New chat" or the first-message placeholder) is auto-titled.
+      const derived = deriveTitle(partsText(users[0].content));
+      if (session.title !== NEW_SESSION_TITLE && session.title !== derived) {
+        return;
+      }
     }
 
     if (!config.titleConnectionId || !config.titleModel) {

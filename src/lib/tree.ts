@@ -1,11 +1,30 @@
 import type { Message } from '@/db/types';
 
-/** Children of a message (or roots when id is null), ordered by createdAt. */
-export function childrenOf(messages: Message[], id: string | null): Message[] {
+/** Children of a message (or roots when id is null), ordered by createdAt.
+ *  Aside turns hang off the same parent but are skipped unless `asides`. */
+export function childrenOf(
+  messages: Message[],
+  id: string | null,
+  opts?: { asides?: boolean },
+): Message[] {
   const parent = id ?? null;
   return messages
     .filter((m) => (m.parentId ?? null) === parent)
+    .filter((m) => (opts?.asides ? true : !m.aside))
     .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Aside user/assistant hanging under `id` (and their aside replies). */
+export function asidesUnder(messages: Message[], id: string): Message[] {
+  const heads = messages
+    .filter((m) => m.aside && !m.deletedAt && m.parentId === id)
+    .sort((a, b) => a.createdAt - b.createdAt);
+  const out: Message[] = [];
+  for (const h of heads) {
+    out.push(h);
+    out.push(...asidesUnder(messages, h.id));
+  }
+  return out;
 }
 
 /** How many live leaves sit in this node's subtree (deleted stubs count 0). */
@@ -43,17 +62,18 @@ export function leafOf(messages: Message[], startId: string): string {
   }
 }
 
-/** Pick a default leaf: newest live message, else newest overall. */
-function defaultLeaf(messages: Message[]): string | undefined {
+/** Newest live message; `undefined` when the session has no live turns. */
+export function liveLeafId(messages: Message[]): string | undefined {
   let leaf: Message | undefined;
   for (const m of messages) {
-    if (m.deletedAt) continue;
+    if (m.deletedAt || m.aside) continue;
     if (!leaf || m.createdAt > leaf.createdAt) leaf = m;
   }
-  if (leaf) return leaf.id;
-  for (const m of messages)
-    if (!leaf || m.createdAt > leaf.createdAt) leaf = m;
   return leaf?.id;
+}
+
+function defaultLeaf(messages: Message[]): string | undefined {
+  return liveLeafId(messages);
 }
 
 /**
@@ -70,15 +90,44 @@ export function activePath(messages: Message[], leafId?: string): Message[] {
   while (cursor && byId.has(cursor) && !seen.has(cursor)) {
     seen.add(cursor);
     const m = byId.get(cursor)!;
-    path.push(m);
+    if (!m.aside) path.push(m);
     cursor = m.parentId ?? undefined;
   }
   return path.reverse();
 }
 
+/** Active path with aside threads inserted under the turns they hang from. */
+export function displayPath(messages: Message[], leafId?: string): Message[] {
+  const out: Message[] = [];
+  const used = new Set<string>();
+  for (const m of activePath(messages, leafId)) {
+    if (used.has(m.id)) continue;
+    out.push(m);
+    used.add(m.id);
+    for (const a of asidesUnder(messages, m.id)) {
+      if (used.has(a.id)) continue;
+      out.push(a);
+      used.add(a.id);
+    }
+  }
+  return out;
+}
+
+/** A divider may be removed only when nothing sits beneath it — no descendants
+ *  (another divider counts) and no later root-level tree. */
+export function canDeleteDivider(messages: Message[], d: Message): boolean {
+  if (d.role !== 'divider' || d.deletedAt) return false;
+  if (childrenOf(messages, d.id).some((c) => !c.deletedAt)) return false;
+  if ((d.parentId ?? null) !== null) return true;
+  return !childrenOf(messages, null).some(
+    (r) => !r.deletedAt && r.id !== d.id && r.createdAt > d.createdAt,
+  );
+}
+
 /**
- * A linear stretch from a fork head (or root) until the next fork, a divider,
- * or a leaf. Dividers are their own one-message segments so they stay selectable.
+ * A linear stretch from a fork head (or root) until the next fork or a leaf.
+ * Context-cleared dividers are lifted so they do not appear on the map.
+ * Pin is a view mark, not a segment break.
  */
 export interface Segment {
   id: string;
@@ -86,12 +135,13 @@ export interface Segment {
   children: Segment[];
 }
 
-/** Children with deleted placeholders skipped (their kids lift up). Map only. */
+/** Children with deleted placeholders and context dividers skipped (kids lift). Map only. */
 function visibleChildren(messages: Message[], id: string | null): Message[] {
   const out: Message[] = [];
   for (const k of childrenOf(messages, id)) {
-    if (k.deletedAt) out.push(...visibleChildren(messages, k.id));
-    else out.push(k);
+    if (k.deletedAt || k.role === 'divider') {
+      out.push(...visibleChildren(messages, k.id));
+    } else out.push(k);
   }
   return out;
 }
@@ -100,14 +150,11 @@ function segmentFrom(
   messages: Message[],
   start: Message,
 ): { chain: Message[]; next: Message[] } {
-  if (start.role === 'divider') {
-    return { chain: [start], next: visibleChildren(messages, start.id) };
-  }
   const chain = [start];
   let cur = start;
   for (;;) {
     const kids = visibleChildren(messages, cur.id);
-    if (kids.length === 1 && kids[0].role !== 'divider') {
+    if (kids.length === 1) {
       cur = kids[0];
       chain.push(cur);
     } else {
@@ -123,6 +170,26 @@ export function segmentTree(messages: Message[]): Segment[] {
     return { id: head.id, messages: chain, children: next.map(build) };
   };
   return visibleChildren(messages, null).map(build);
+}
+
+/**
+ * Messages that must stay after a splice: live turns, their ancestors, and
+ * deleted ‹ n/m › siblings of live turns. Everything else is an orphan stub.
+ */
+export function retainMessageIds(messages: Message[]): Set<string> {
+  const byId = new Map(messages.map((m) => [m.id, m]));
+  const keep = new Set<string>();
+  for (const m of messages) {
+    if (m.deletedAt) continue;
+    if (m.role === 'divider') keep.add(m.id);
+    let cur: Message | undefined = m;
+    while (cur) {
+      keep.add(cur.id);
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    for (const sib of roleSiblings(messages, m)) keep.add(sib.id);
+  }
+  return keep;
 }
 
 /** Newest visible descendant — Map Show must not land on a hidden tombstone. */

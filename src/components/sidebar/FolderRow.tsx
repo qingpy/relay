@@ -77,11 +77,7 @@ export function FolderRow({
 
   const onDelete = async () => {
     const ok = await confirm({
-      title: 'Delete preset?',
-      description:
-        count > 0
-          ? `"${folder.name}" will be deleted. Its ${count} chat(s) move to another preset.`
-          : `"${folder.name}" will be deleted.`,
+      title: `Delete preset “${folder.name}”?`,
       confirmLabel: 'Delete',
       destructive: true,
     });

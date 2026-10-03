@@ -19,6 +19,7 @@ import {
   partitionAllowed,
 } from '@/lib/attachments';
 import { partsText } from '@/lib/conversation';
+import { canDeleteDivider } from '@/lib/tree';
 import { formatStamp } from '@/lib/time';
 import { useResolvedConfig } from '@/lib/useResolved';
 import { cn } from '@/lib/utils';
@@ -104,19 +105,22 @@ export const MessageItem = memo(function MessageItem({
   }
 
   if (message.role === 'divider') {
+    const allowDelete = canDeleteDivider(siblings, message);
     return (
       <div className="group label-mono flex items-center gap-3 text-muted-foreground">
         <div className="h-px flex-1 bg-border" />
         <span className="flex items-center gap-1.5">
           Context cleared
-          <button
-            type="button"
-            onClick={() => void spliceMessage(message.id)}
-            aria-label="Restore context"
-            className="flex size-4 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
-          >
-            <X className="size-3" />
-          </button>
+          {allowDelete && (
+            <button
+              type="button"
+              onClick={() => void spliceMessage(message.id)}
+              aria-label="Restore context"
+              className="flex size-4 items-center justify-center text-muted-foreground opacity-0 transition hover:text-foreground group-hover:opacity-100"
+            >
+              <X className="size-3" />
+            </button>
+          )}
         </span>
         <div className="h-px flex-1 bg-border" />
       </div>
@@ -138,7 +142,8 @@ export const MessageItem = memo(function MessageItem({
       <article className="group flex flex-col">
         <header className="flex items-center justify-between gap-4">
           <RoleTag role="user" />
-          <span className="label-mono text-muted-foreground">
+          <span className="label-mono flex items-center gap-3 text-muted-foreground">
+            {message.pinned && <span className="text-primary">Pinned</span>}
             <Stamp at={message.createdAt} />
           </span>
         </header>
@@ -189,6 +194,7 @@ export const MessageItem = memo(function MessageItem({
       <header className="flex items-center justify-between gap-4">
         <RoleTag role="assistant" />
         <div className="label-mono flex items-center gap-3 text-muted-foreground">
+          {message.pinned && <span className="text-primary">Pinned</span>}
           {message.model && (
             <span className="max-w-[12rem] truncate">{message.model}</span>
           )}

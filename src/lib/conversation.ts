@@ -11,16 +11,29 @@ export function partsText(content: Part[]): string {
     .join('');
 }
 
-/** Messages after the *latest* divider (ARCHITECTURE.md §3 "context divider"). */
-export function activeWindow(messages: Message[]): Message[] {
+/** Messages after the *latest* divider (ARCHITECTURE.md §3). Aside turns are
+ *  omitted. A divider anywhere in the session cuts off older turns, including
+ *  on other branches. */
+export function activeWindow(
+  path: Message[],
+  all: Message[] = path,
+): Message[] {
   let start = 0;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i].role === 'divider' && !messages[i].deletedAt) {
+  for (let i = path.length - 1; i >= 0; i--) {
+    if (path[i].role === 'divider' && !path[i].deletedAt) {
       start = i + 1;
       break;
     }
   }
-  return messages.slice(start);
+  let window = path.slice(start).filter((m) => !m.aside);
+  const cuts = all.filter((m) => m.role === 'divider' && !m.deletedAt);
+  if (cuts.length) {
+    const latest = cuts.reduce((a, b) =>
+      a.createdAt >= b.createdAt ? a : b,
+    );
+    window = window.filter((m) => m.createdAt > latest.createdAt);
+  }
+  return window;
 }
 
 /**
@@ -29,11 +42,13 @@ export function activeWindow(messages: Message[]): Message[] {
  * so only user/assistant turns are sent.
  */
 export async function buildChatMessages(
-  messages: Message[],
+  path: Message[],
+  all: Message[] = path,
 ): Promise<ChatMessage[]> {
   const out: ChatMessage[] = [];
-  for (const m of activeWindow(messages)) {
+  for (const m of activeWindow(path, all)) {
     if (m.deletedAt) continue;
+    if (m.aside) continue;
     if (m.role !== 'user' && m.role !== 'assistant') continue;
     let text = partsText(m.content);
 

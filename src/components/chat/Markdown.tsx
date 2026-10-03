@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import type { PluggableList, Plugin } from 'unified';
 import remarkGfm from 'remark-gfm';
@@ -12,6 +12,12 @@ import 'katex/dist/katex.min.css';
 // Installs a global copy handler: selecting rendered math copies its LaTeX source.
 import 'katex/dist/contrib/copy-tex.mjs';
 import { CodeBlock } from './CodeBlock';
+import {
+  protectMath,
+  remarkHtmlBr,
+  remarkRestoreMath,
+  wrapPunctStrong,
+} from '@/lib/markdown';
 
 function stripZw(node: ReactNode): ReactNode {
   if (typeof node === 'string') return node.replace(/\u200b/g, '');
@@ -41,64 +47,38 @@ const remarkCjkFriendly: Plugin = function remarkCjkFriendly() {
   exts.push(cjkFriendlyExtension(), gfmStrikethroughCjkFriendly(GFM_STRIKE));
 };
 
-const remarkPlugins: PluggableList = [
-  [remarkGfm, GFM_STRIKE],
-  remarkCjkFriendly,
-  remarkBreaks,
-  remarkMath,
-];
 const rehypePlugins: PluggableList = [
-  rehypeKatex,
+  [rehypeKatex, { throwOnError: false, strict: false }],
   [rehypeHighlight, { detect: true, ignoreMissing: true }],
 ];
-
-/** CommonMark will not open/close `**` when an inner edge is punctuation
- *  (`word**—text.**`, `complete**.**`, `**[**`). Insert ZWSP so they parse as
- *  strong. Skip fences, inline code, math, and `|` so adjacent table cells
- *  (`**a** | **b**`) are not treated as one span. */
-const STRONG = /\*\*([^*|\n]+)\*\*/gu;
-const PUNCT_EDGE = /^[^\p{L}\p{N}]|[^\p{L}\p{N}]$/u;
-const ZW = '\u200b';
-
-function wrapPunctStrong(md: string): string {
-  const apply = (s: string) =>
-    s.replace(STRONG, (full, inner: string) =>
-      inner.trim() && PUNCT_EDGE.test(inner) ? `**${ZW}${inner}${ZW}**` : full,
-    );
-  return md
-    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|\$\$[\s\S]*?\$\$)/)
-    .map((chunk, i) => {
-      if (i % 2 === 1) return chunk;
-      const open = Math.max(
-        chunk.lastIndexOf('```'),
-        chunk.lastIndexOf('~~~'),
-        chunk.lastIndexOf('$$'),
-      );
-      const head = open >= 0 ? chunk.slice(0, open) : chunk;
-      const tail = open >= 0 ? chunk.slice(open) : '';
-      return (
-        head
-          .split(/(\$(?:\\\$|[^$\n])+\$|`[^`]*`)/)
-          .map((c, j) => (j % 2 === 1 ? c : apply(c)))
-          .join('') + tail
-      );
-    })
-    .join('');
-}
 
 export const Markdown = memo(function Markdown({
   children,
 }: {
   children: string;
 }) {
+  const { text, plugins } = useMemo(() => {
+    const { text: isolated, slots } = protectMath(children);
+    const remarkPlugins: PluggableList = [
+      // Leftover `$` after isolation: tokenize as math before GFM tables.
+      remarkMath,
+      [remarkGfm, GFM_STRIKE],
+      remarkCjkFriendly,
+      remarkBreaks,
+      remarkRestoreMath(slots),
+      remarkHtmlBr,
+    ];
+    return { text: wrapPunctStrong(isolated), plugins: remarkPlugins };
+  }, [children]);
+
   return (
     <div className="md">
       <ReactMarkdown
-        remarkPlugins={remarkPlugins}
+        remarkPlugins={plugins}
         rehypePlugins={rehypePlugins}
         components={components}
       >
-        {wrapPunctStrong(children)}
+        {text}
       </ReactMarkdown>
     </div>
   );

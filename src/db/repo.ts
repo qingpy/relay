@@ -19,7 +19,15 @@ import type {
 } from './types';
 import { DEFAULT_URL, flavorOf } from '@/lib/models';
 import { sha256Hex } from '@/lib/attachments';
-import { childrenOf, hasOtherBranches, leafOf } from '@/lib/tree';
+import {
+  activePath,
+  canDeleteDivider,
+  childrenOf,
+  hasOtherBranches,
+  leafOf,
+  liveLeafId,
+  retainMessageIds,
+} from '@/lib/tree';
 
 export const NEW_SESSION_TITLE = 'New chat';
 
@@ -90,9 +98,14 @@ export async function trashSession(id: string): Promise<void> {
   await db.sessions.update(id, { deletedAt: Date.now() });
 }
 
-/** Bring a chat back out of the trash. */
+/** Bring a chat back out of the trash, at the top of its preset (same as a new chat). */
 export async function restoreSession(id: string): Promise<void> {
-  await db.sessions.update(id, { deletedAt: undefined });
+  const now = Date.now();
+  await db.sessions.update(id, {
+    deletedAt: undefined,
+    order: -now,
+    updatedAt: now,
+  });
 }
 
 /** Permanently remove a chat and its messages/files. Irreversible. */
@@ -357,6 +370,8 @@ export async function addMessage(input: {
   role: MessageRole;
   content?: Part[];
   reasoning?: string;
+  aside?: boolean;
+  clearedFromId?: string;
 }): Promise<Message> {
   const message: Message = {
     id: input.id ?? newId(),
@@ -366,6 +381,8 @@ export async function addMessage(input: {
     content: input.content ?? [],
     createdAt: Date.now(),
     ...(input.reasoning ? { reasoning: input.reasoning } : {}),
+    ...(input.aside ? { aside: true } : {}),
+    ...(input.clearedFromId ? { clearedFromId: input.clearedFromId } : {}),
   };
   await db.messages.add(message);
   return message;
@@ -400,6 +417,13 @@ export async function spliceMessage(
       .where('sessionId')
       .equals(msg.sessionId)
       .toArray();
+    if (
+      !opts?.force &&
+      msg.role === 'divider' &&
+      !canDeleteDivider(all, msg)
+    ) {
+      return;
+    }
     const session = await db.sessions.get(msg.sessionId);
     if (!opts?.force && hasOtherBranches(all, msg)) {
       if (!msg.deletedAt) await db.messages.update(id, { deletedAt: Date.now() });
@@ -414,6 +438,21 @@ export async function spliceMessage(
       return;
     }
     const kids = childrenOf(all, id);
+    const asideKids = childrenOf(all, id, { asides: true }).filter((m) => m.aside);
+    const dropAside = (pid: string) => {
+      const ids = [pid];
+      for (const k of all.filter((m) => m.parentId === pid && m.aside)) {
+        ids.push(...dropAside(k.id));
+      }
+      return ids;
+    };
+    const asideIds = asideKids.flatMap((k) => dropAside(k.id));
+    if (asideIds.length) {
+      await db.messages.bulkDelete(asideIds);
+      for (const aid of asideIds) {
+        await db.files.where('messageId').equals(aid).delete();
+      }
+    }
     await db.messages
       .where('parentId')
       .equals(id)
@@ -437,16 +476,58 @@ export async function spliceMessage(
         });
       }
     }
+
+    const remaining = await db.messages
+      .where('sessionId')
+      .equals(msg.sessionId)
+      .toArray();
+    const keep = retainMessageIds(remaining);
+    const drop = remaining.filter((m) => !keep.has(m.id));
+    if (drop.length) {
+      await db.messages.bulkDelete(drop.map((m) => m.id));
+      for (const d of drop) {
+        await db.files.where('messageId').equals(d.id).delete();
+      }
+    }
+    const sess = await db.sessions.get(msg.sessionId);
+    if (sess?.currentLeafId && !keep.has(sess.currentLeafId)) {
+      const next = liveLeafId(remaining.filter((m) => keep.has(m.id)));
+      if (next) {
+        await db.sessions.update(msg.sessionId, { currentLeafId: next });
+      } else {
+        await db.sessions.where('id').equals(msg.sessionId).modify((s) => {
+          delete s.currentLeafId;
+        });
+      }
+    }
   });
 }
 
-/** Insert a context divider under the active tip and follow it. Messages before
- *  the divider stay on the page but leave the model context (ARCHITECTURE.md §3). */
+export async function setMessagePinned(
+  id: string,
+  pinned: boolean,
+): Promise<void> {
+  await db.messages.update(id, { pinned });
+}
+
+/** Insert one context divider under the active leaf. Other branches stay
+ *  intact; the map lifts the divider so it does not appear as a row. */
 export async function clearContext(sessionId: string): Promise<void> {
   const session = await getSession(sessionId);
+  if (!session) return;
+  const all = await getMessages(sessionId);
+  const cur = session.currentLeafId
+    ? all.find((m) => m.id === session.currentLeafId)
+    : undefined;
+  if (
+    cur?.role === 'divider' &&
+    !childrenOf(all, cur.id).some((c) => !c.deletedAt)
+  ) {
+    return;
+  }
   const divider = await addMessage({
     sessionId,
-    parentId: session?.currentLeafId ?? null,
+    parentId: session.currentLeafId ?? null,
     role: 'divider',
   });
   await db.sessions.update(sessionId, { currentLeafId: divider.id });
@@ -497,6 +578,92 @@ export async function duplicateSession(
     await db.sessions.add(newSession);
     await db.messages.bulkAdd(newMsgs);
     await db.files.bulkAdd(newFiles);
+  });
+  return newSession;
+}
+
+/** New chat: the active path plus one user/assistant exchange (aside fork). */
+export async function forkAsideChat(
+  sessionId: string,
+  exchange: {
+    question: string;
+    answer: string;
+    reasoning?: string;
+    model?: string;
+  },
+): Promise<Session | undefined> {
+  const session = await getSession(sessionId);
+  if (!session) return;
+  const msgs = await getMessages(sessionId);
+  const path = activePath(msgs, session.currentLeafId).filter(
+    (m) => !m.deletedAt && m.role !== 'divider',
+  );
+  const orig = new Map(msgs.map((m) => [m.id, m]));
+  const fileIds = path.flatMap((m) => m.attachments ?? []);
+  const files = fileIds.length
+    ? await db.files.where('id').anyOf([...new Set(fileIds)]).toArray()
+    : [];
+  const now = Date.now();
+  const newSessionId = newId();
+  const msgMap = new Map(path.map((m) => [m.id, newId()]));
+  const fileMap = new Map(files.map((f) => [f.id, newId()]));
+  const userId = newId();
+  const asstId = newId();
+  const mappedParent = (parentId: string | null): string | null => {
+    let p = parentId;
+    while (p && !msgMap.has(p)) p = orig.get(p)?.parentId ?? null;
+    return p ? (msgMap.get(p) ?? null) : null;
+  };
+
+  const newSession: Session = {
+    id: newSessionId,
+    folderId: session.folderId,
+    title: session.title,
+    systemPrompt: session.systemPrompt,
+    createdAt: now,
+    updatedAt: now,
+    order: -now,
+    currentLeafId: asstId,
+  };
+  const newMsgs: Message[] = path.map((m) => ({
+    ...m,
+    id: msgMap.get(m.id)!,
+    sessionId: newSessionId,
+    parentId: mappedParent(m.parentId),
+    attachments: m.attachments
+      ?.map((fid) => fileMap.get(fid))
+      .filter((x): x is string => !!x),
+  }));
+  const lastId = newMsgs.length ? newMsgs[newMsgs.length - 1].id : null;
+  newMsgs.push({
+    id: userId,
+    sessionId: newSessionId,
+    parentId: lastId,
+    role: 'user',
+    content: exchange.question ? [textPart(exchange.question)] : [],
+    createdAt: now,
+  });
+  newMsgs.push({
+    id: asstId,
+    sessionId: newSessionId,
+    parentId: userId,
+    role: 'assistant',
+    content: exchange.answer ? [textPart(exchange.answer)] : [],
+    ...(exchange.reasoning ? { reasoning: exchange.reasoning } : {}),
+    ...(exchange.model ? { model: exchange.model } : {}),
+    createdAt: now + 1,
+  });
+  const newFiles: StoredFile[] = files.map((f) => ({
+    ...f,
+    id: fileMap.get(f.id)!,
+    sessionId: newSessionId,
+    messageId: f.messageId ? (msgMap.get(f.messageId) ?? null) : null,
+  }));
+
+  await db.transaction('rw', db.sessions, db.messages, db.files, async () => {
+    await db.sessions.add(newSession);
+    await db.messages.bulkAdd(newMsgs);
+    if (newFiles.length) await db.files.bulkAdd(newFiles);
   });
   return newSession;
 }

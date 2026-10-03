@@ -54,7 +54,14 @@ export function messagesToMarkdown(
       continue;
     }
     if (m.role !== 'user' && m.role !== 'assistant') continue;
-    lines.push(m.role === 'user' ? '## You' : '## Assistant', '');
+    const heading = m.aside
+      ? m.role === 'user'
+        ? '## Aside · You'
+        : '## Aside · Assistant'
+      : m.role === 'user'
+        ? '## You'
+        : '## Assistant';
+    lines.push(heading, '');
     lines.push(messageToMarkdown(m, opts), '');
   }
   return lines.join('\n').trim() + '\n';

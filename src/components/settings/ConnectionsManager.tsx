@@ -196,8 +196,7 @@ function Editor({ conn }: { conn: Connection }) {
 
   const onDelete = async () => {
     const ok = await confirm({
-      title: 'Delete connection?',
-      description: `"${conn.name}" and its saved models will be removed.`,
+      title: `Delete connection “${conn.name}”?`,
       confirmLabel: 'Delete',
       destructive: true,
     });

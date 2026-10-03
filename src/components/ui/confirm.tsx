@@ -42,6 +42,17 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
   );
 }
 
+/** Confirm only when more than one message is being removed. */
+export async function confirmMessageDelete(count: number): Promise<boolean> {
+  if (count < 1) return false;
+  if (count === 1) return true;
+  return confirm({
+    title: `Delete ${count} messages?`,
+    confirmLabel: 'Delete',
+    destructive: true,
+  });
+}
+
 export function ConfirmDialog() {
   const open = useConfirmStore((s) => s.open);
   const options = useConfirmStore((s) => s.options);

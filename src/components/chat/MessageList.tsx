@@ -10,10 +10,11 @@ import { Button } from '@/components/ui/button';
 import { CheckSquare } from '@/components/ui/check-square';
 import { getMessages, getSession } from '@/db/repo';
 import type { Message } from '@/db/types';
-import { activePath, roleSiblings } from '@/lib/tree';
+import { displayPath, roleSiblings } from '@/lib/tree';
 import { cn, rangeBetween } from '@/lib/utils';
 import { useChatStore } from '@/store/chat';
 import { useUiStore } from '@/store/ui';
+import { AsideThread } from './Aside';
 import { MessageItem } from './MessageItem';
 import { SelectionToolbar } from './SelectionToolbar';
 
@@ -21,7 +22,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const all = useLiveQuery(() => getMessages(sessionId), [sessionId], []);
   const session = useLiveQuery(() => getSession(sessionId), [sessionId]);
   const messages = useMemo(
-    () => activePath(all, session?.currentLeafId),
+    () => displayPath(all, session?.currentLeafId),
     [all, session?.currentLeafId],
   );
   const visible = useMemo(
@@ -149,7 +150,7 @@ export function MessageList({ sessionId }: { sessionId: string }) {
   const selectableIds = useMemo(
     () =>
       messages
-        .filter((m) => m.role !== 'divider' && !m.deletedAt)
+        .filter((m) => m.role !== 'divider' && !m.deletedAt && !m.aside)
         .map((m) => m.id),
     [messages],
   );
@@ -175,8 +176,30 @@ export function MessageList({ sessionId }: { sessionId: string }) {
       )}
       <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto">
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-10 px-6 py-10">
-          {visible.map((m) =>
-            selectionMode && !m.deletedAt && m.role !== 'divider' ? (
+          {visible.map((m, i) => {
+            if (m.aside && m.role === 'assistant') return null;
+            if (m.aside && m.role === 'user') {
+              const reply =
+                visible[i + 1]?.aside &&
+                visible[i + 1]?.parentId === m.id &&
+                visible[i + 1]?.role === 'assistant'
+                  ? visible[i + 1]
+                  : undefined;
+              return (
+                <div
+                  key={m.id}
+                  data-role="aside"
+                  data-mid={m.id}
+                  className={cn(
+                    'transition-shadow duration-700',
+                    flashId === m.id && 'ring-2 ring-primary/40',
+                  )}
+                >
+                  <AsideThread user={m} assistant={reply} />
+                </div>
+              );
+            }
+            return selectionMode && !m.deletedAt && m.role !== 'divider' ? (
               <SelectableRow
                 key={m.id}
                 message={m}
@@ -197,8 +220,8 @@ export function MessageList({ sessionId }: { sessionId: string }) {
               >
                 <MessageItem message={m} siblings={all} />
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
       </div>
 

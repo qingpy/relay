@@ -43,6 +43,12 @@ export function Composer({
   const streaming = useChatStore((s) =>
     sessionId ? !!s.activeBySession[sessionId] : false,
   );
+  const asideMode = useChatStore((s) =>
+    sessionId ? !!s.asideMode[sessionId] : false,
+  );
+  const asideBusy = useChatStore((s) =>
+    sessionId ? !!s.asideBySession[sessionId] : false,
+  );
   const caps = resolved?.capabilities ?? FULL_CAPS;
 
   const slashQuery =
@@ -100,11 +106,17 @@ export function Composer({
 
   const submit = async () => {
     const text = value.trim();
+    const sid = sessionId ?? (await startNewSession()).id;
+    if (asideMode) {
+      if (!text || asideBusy) return;
+      setValue('');
+      await useChatStore.getState().sendAside(sid, text);
+      return;
+    }
     if ((!text && files.length === 0) || streaming) return;
     const sending = files;
     setValue('');
     setFiles([]);
-    const sid = sessionId ?? (await startNewSession()).id;
     await useChatStore.getState().send(sid, text, sending);
   };
 
@@ -173,14 +185,6 @@ export function Composer({
           dragOver && 'ring-2 ring-inset ring-primary',
         )}
       >
-        {paletteOpen && (
-          <SlashPalette
-            prompts={matches}
-            activeIndex={activeIndex}
-            onSelect={insertPrompt}
-          />
-        )}
-
         {(files.length > 0 || refusedNote) && (
           <div className="mb-1 flex flex-wrap items-center gap-2 px-1 pt-1">
             {files.map((f, i) => (
@@ -198,18 +202,29 @@ export function Composer({
           </div>
         )}
 
-        <textarea
-          ref={ref}
-          rows={1}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          onPaste={onPaste}
-          placeholder="Message…   / for prompts"
-          spellCheck
-          lang="en"
-          className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground"
-        />
+        <div className="relative">
+          {paletteOpen && (
+            <SlashPalette
+              prompts={matches}
+              activeIndex={activeIndex}
+              onSelect={insertPrompt}
+            />
+          )}
+          <textarea
+            ref={ref}
+            rows={1}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            placeholder={
+              asideMode ? 'Ask aside…' : 'Message…   / for prompts'
+            }
+            spellCheck
+            lang="en"
+            className="block min-h-9 w-full resize-none overflow-y-auto bg-transparent px-1 py-1.5 text-[15px] leading-relaxed outline-none placeholder:text-muted-foreground"
+          />
+        </div>
 
         <div className="mt-4 flex items-center gap-6 px-1">
           <input
@@ -232,8 +247,33 @@ export function Composer({
               Clear
             </Marginalia>
           )}
+          {sessionId && (
+            <Marginalia
+              onClick={() => useChatStore.getState().toggleAside(sessionId)}
+              active={asideMode}
+            >
+              Aside
+            </Marginalia>
+          )}
           <div className="ml-auto" />
-          {streaming ? (
+          {asideMode && asideBusy ? (
+            <button
+              type="button"
+              onClick={() => sessionId && useChatStore.getState().stopAside(sessionId)}
+              className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground"
+            >
+              Pause
+            </button>
+          ) : asideMode ? (
+            <button
+              type="button"
+              onClick={() => void submit()}
+              disabled={!value.trim()}
+              className="cursor-pointer px-2 font-mono text-xs font-bold uppercase tracking-wider text-primary transition-colors hover:text-foreground disabled:pointer-events-none disabled:text-muted-foreground/40"
+            >
+              Send
+            </button>
+          ) : streaming ? (
             <button
               type="button"
               onClick={() => sessionId && useChatStore.getState().stop(sessionId)}

@@ -36,7 +36,8 @@ sessions    { id, folderId (preset), title, systemPrompt?,
 messages    { id, sessionId, parentId|null,                   // tree edge → branching
               role: 'user'|'assistant'|'system'|'divider',
               content: Part[], reasoning?, reasoningMs?, toolCalls?, citations?,
-              attachments?: fileId[], model?, usage?, error?, deletedAt?, createdAt }
+              attachments?: fileId[], model?, usage?, error?, deletedAt?,
+              pinned?, aside?, clearedFromId?, createdAt }
 files       { id, sessionId, messageId, name, mimeType, size, blob, hash?,
               removedAt?, stripped?,                          // bytes-less tombstone/placeholder
               createdAt }
@@ -59,14 +60,31 @@ Key ideas:
   leaf there so the next user message is a sibling fork (`‹ n/m ›` on that
   input). Editing a user turn rewrites it in place. Deleting a ‹ n/m ›
   variant or a shared ancestor sets `deletedAt` (placeholder, omitted from
-  the provider); a message on only one path is spliced out.
+  the provider); a message on only one path is spliced out. After a splice,
+  orphan deleted stubs (no live descendant, not a ‹ n/m › sibling of a live
+  turn) are removed so an emptied chat does not sprout a ghost ‹ 2/2 ›.
   See `src/lib/tree.ts`.
-- Context divider: a `role:'divider'` message; everything before the latest
-  divider stays on screen but is excluded from the request (`activeWindow` in
-  `src/lib/conversation.ts`).
+- Context divider: Clear inserts one `role:'divider'` under the active
+  leaf. The map lifts it (no row); the chat path still includes it.
+  Later turns on other branches stay in the tree. `activeWindow` drops
+  everything before the latest divider in the session. Manual delete
+  only when it has no descendants.
+- Pin: a view mark on the map (visible even when its stretch is collapsed).
+  It does not split a stretch or change fold/select of the head.
+- Aside (`/btw`): one-round side question, parallel with the main turn.
+  Saved in the chat list (click to expand, click outside to fold; Pause
+  while streaming). Omitted from the model context and the map. Fork
+  copies the path without the divider, plus that exchange, keeping the
+  old title.
+- Markdown (`src/lib/markdown.ts`): math is isolated from the source before
+  remark parses (GFM tables and indent cannot steal `|` / `&` from
+  `aligned`), `<br>` in tables becomes a break, then KaTeX.
+- Auto-title after a send only when the title is still "New chat" or the
+  first-message placeholder, so a wiped chat keeps its name.
 - Trash: deleting a chat sets `deletedAt`; `listSessions()` hides those, the
-  Trash dialog restores / deletes forever; `purgeExpiredTrash()` on boot
-  hard-deletes past `trashRetentionDays`.
+  Trash dialog restores / deletes forever (restore places the chat at the
+  top of its preset); `purgeExpiredTrash()` on boot hard-deletes past
+  `trashRetentionDays`.
 - Attachments are copied, content-addressed bytes: `saveAttachments` reads the
   picked `File` immediately into an owned Blob (a `File` is a lazy path
   reference; reading it later throws once the source moves). Identical content
@@ -219,7 +237,7 @@ lib/       resolve.ts/useResolved.ts · models.ts · conversation.ts · tree.ts 
            useObjectUrl.ts
 components/
   layout/   ChatPane · Sidebar · KeyboardShortcuts
-  chat/     MessageList · MessageItem · Composer · Reasoning · ToolCard · Citations ·
+  chat/     MessageList · MessageItem · Composer · Aside · Reasoning · ToolCard · Citations ·
             TreeMap · SiblingSwitcher · ContextMeter · SessionControls · PresetControls ·
             ModelSelect · ExportMenu · SlashPalette · MessageActions · SelectionToolbar
   sidebar/  SessionTree · FolderRow (preset) · SessionRow · PresetEditor ·
@@ -241,8 +259,10 @@ preset. Composer file-drops attach; text drags use the textarea's native
 insert/move. Clicking an attachment opens an in-app preview (image, PDF,
 or text). Deleting the open chat advances to the preset's next chat; deleting
 another leaves the open chat in place. The branch map is a modal skeleton
-of the tree: each row is a linear stretch between forks (a divider is its
-own row); parallel heads sit as siblings. Select mode: click a message to
+of the tree: each row is a linear stretch between forks. A context-cleared
+divider is lifted off the map (kids stay on the same branch). Pinned turns
+stay visible in a collapsed stretch without changing fold or select of the
+head. Parallel heads sit as siblings. Select mode: click a message to
 toggle it; shift-click extends the selection. A collapsed stretch's head
 selects every message in it; an expanded head selects only that turn.
 Expand all / Collapse all. Delete splices the checked turns (later

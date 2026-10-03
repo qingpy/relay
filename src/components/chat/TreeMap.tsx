@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CheckSquare } from '@/components/ui/check-square';
-import { confirm } from '@/components/ui/confirm';
+import { confirmMessageDelete } from '@/components/ui/confirm';
 import {
   Dialog,
   DialogContent,
@@ -10,10 +10,22 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Marginalia } from '@/components/ui/marginalia';
-import { getMessages, getSession, setCurrentLeaf, spliceMessage } from '@/db/repo';
+import {
+  getMessages,
+  getSession,
+  setCurrentLeaf,
+  setMessagePinned,
+  spliceMessage,
+} from '@/db/repo';
 import type { Message } from '@/db/types';
 import { partsText } from '@/lib/conversation';
-import { activePath, segmentTree, visibleLeafOf, type Segment } from '@/lib/tree';
+import {
+  activePath,
+  canDeleteDivider,
+  segmentTree,
+  visibleLeafOf,
+  type Segment,
+} from '@/lib/tree';
 import { cn, rangeBetween } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 
@@ -57,9 +69,10 @@ function allMessageIds(tree: Segment[]): string[] {
 
 /**
  * Branch map: a modal skeleton of the conversation tree. Each row is a linear
- * stretch between forks (a divider is its own row). Parallel heads sit as
- * siblings. Select mode: click toggles a message (a collapsed head toggles the
- * whole stretch); shift-click extends the range. Delete splices those turns.
+ * stretch between forks. Context dividers are lifted off the map. Pinned turns
+ * stay visible in a collapsed stretch without changing fold/select of the head.
+ * Select mode: click toggles a message (a collapsed head toggles the whole
+ * stretch); shift-click extends the range. Delete splices those turns.
  */
 export function TreeMap({ sessionId }: { sessionId: string }) {
   const [open, setOpen] = useState(false);
@@ -146,16 +159,12 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   const deleteSelected = async () => {
     const ids = Object.keys(sel);
     if (ids.length === 0) return;
-    if (ids.length > 1) {
-      const ok = await confirm({
-        title: 'Delete messages?',
-        description: `${ids.length} messages will be removed. Later messages stay in the conversation.`,
-        confirmLabel: 'Delete',
-        destructive: true,
-      });
-      if (!ok) return;
+    if (!(await confirmMessageDelete(ids.length))) return;
+    for (const id of ids) {
+      const m = all.find((x) => x.id === id);
+      if (m?.role === 'divider' && !canDeleteDivider(all, m)) continue;
+      await spliceMessage(id);
     }
-    for (const id of ids) await spliceMessage(id);
     setSel({});
   };
 
@@ -350,50 +359,72 @@ function BranchRow({
             {n}
           </span>
         )}
+        {head.pinned && (
+          <span className="label-mono shrink-0 text-[10px] text-primary">
+            pin
+          </span>
+        )}
         {here && (
           <span className="label-mono shrink-0 text-[10px] text-primary">
             now
           </span>
         )}
         {!selectMode && (
-          <Marginalia
-            className="opacity-0 group-hover:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              onShow(head);
-            }}
-          >
-            Show
-          </Marginalia>
+          <>
+            <Marginalia
+              className="opacity-0 group-hover:opacity-100"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShow(head);
+              }}
+            >
+              Show
+            </Marginalia>
+            {!divider && (
+              <Marginalia
+                className="opacity-0 group-hover:opacity-100"
+                active={!!head.pinned}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void setMessagePinned(head.id, !head.pinned);
+                }}
+              >
+                {head.pinned ? 'Unpin' : 'Pin'}
+              </Marginalia>
+            )}
+          </>
         )}
       </div>
+
+      {collapsed &&
+        seg.messages
+          .slice(1)
+          .filter((m) => m.pinned)
+          .map((m) => (
+            <MapInnerRow
+              key={m.id}
+              m={m}
+              currentLeafId={currentLeafId}
+              selectMode={selectMode}
+              sel={sel}
+              onRow={onRow}
+              alignHead
+            />
+          ))}
 
       {(open && n > 1) || seg.children.length > 0 ? (
         <div className="ml-5 border-l border-border pl-3">
           {open &&
             n > 1 &&
             seg.messages.slice(1).map((m) => (
-              <div
+              <MapInnerRow
                 key={m.id}
-                onClick={(e) => onRow(m, e.shiftKey)}
-                className={cn(
-                  'group/in flex cursor-pointer select-none items-center gap-2 py-1 pr-1 text-sm transition-colors hover:bg-accent/60',
-                  m.role === 'divider' && 'italic',
-                  sel[m.id]
-                    ? 'bg-primary/5 text-foreground'
-                    : m.id === currentLeafId
-                      ? 'text-foreground'
-                      : 'text-muted-foreground',
-                )}
-              >
-                {selectMode && <CheckSquare checked={!!sel[m.id]} />}
-                {m.role !== 'divider' && (
-                  <span className="label-mono inline-flex w-7 shrink-0 items-center">
-                    {roleTag(m)}
-                  </span>
-                )}
-                <span className="min-w-0 flex-1 truncate">{snippet(m)}</span>
-              </div>
+                m={m}
+                currentLeafId={currentLeafId}
+                selectMode={selectMode}
+                sel={sel}
+                onRow={onRow}
+              />
             ))}
           {seg.children.map((child) => (
             <BranchRow
@@ -411,6 +442,58 @@ function BranchRow({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function MapInnerRow({
+  m,
+  currentLeafId,
+  selectMode,
+  sel,
+  onRow,
+  alignHead,
+}: {
+  m: Message;
+  currentLeafId?: string;
+  selectMode: boolean;
+  sel: Record<string, true>;
+  onRow: (m: Message, shift: boolean) => void;
+  alignHead?: boolean;
+}) {
+  return (
+    <div
+      onClick={(e) => onRow(m, e.shiftKey)}
+      className={cn(
+        'group/in flex cursor-pointer select-none items-center gap-2 py-1 pr-1 text-sm transition-colors hover:bg-accent/60',
+        sel[m.id]
+          ? 'bg-primary/5 text-foreground'
+          : m.id === currentLeafId
+            ? 'text-foreground'
+            : 'text-muted-foreground',
+      )}
+    >
+      {alignHead && <span className="w-3 shrink-0" />}
+      {selectMode && <CheckSquare checked={!!sel[m.id]} />}
+      <span className="label-mono inline-flex w-7 shrink-0 items-center">
+        {roleTag(m)}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{snippet(m)}</span>
+      {m.pinned && (
+        <span className="label-mono shrink-0 text-[10px] text-primary">pin</span>
+      )}
+      {!selectMode && (
+        <Marginalia
+          className="opacity-0 group-hover/in:opacity-100"
+          active={!!m.pinned}
+          onClick={(e) => {
+            e.stopPropagation();
+            void setMessagePinned(m.id, !m.pinned);
+          }}
+        >
+          {m.pinned ? 'Unpin' : 'Pin'}
+        </Marginalia>
+      )}
     </div>
   );
 }

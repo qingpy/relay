@@ -125,9 +125,7 @@ export function WebdavSettings() {
 
   const restoreBackup = async (name: string) => {
     const ok = await confirm({
-      title: 'Restore this backup?',
-      description:
-        'This replaces ALL current data with the backup. The app will reload.',
+      title: 'Replace all data with this backup?',
       confirmLabel: 'Restore',
       destructive: true,
     });
@@ -142,8 +140,7 @@ export function WebdavSettings() {
 
   const removeBackup = async (name: string) => {
     const ok = await confirm({
-      title: 'Delete this backup?',
-      description: name,
+      title: `Delete backup “${name}”?`,
       confirmLabel: 'Delete',
       destructive: true,
     });
@@ -156,9 +153,7 @@ export function WebdavSettings() {
   // pick a winner explicitly. "This device" pushes local up; "server" pulls down.
   const keepLocal = async () => {
     const ok = await confirm({
-      title: 'Keep this device?',
-      description:
-        'Your data on this device overwrites the server copy, and sync resumes.',
+      title: 'Overwrite server with this device?',
       confirmLabel: 'Keep this device',
     });
     if (!ok) return;
@@ -172,9 +167,7 @@ export function WebdavSettings() {
 
   const keepServer = async () => {
     const ok = await confirm({
-      title: 'Keep server copy?',
-      description:
-        'The server copy replaces ALL data on this device. The app will reload.',
+      title: 'Replace all data with the server copy?',
       confirmLabel: 'Keep server',
       destructive: true,
     });

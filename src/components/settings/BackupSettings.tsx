@@ -76,9 +76,7 @@ export function BackupSettings() {
     try {
       const parsed = await readBackupFile(file);
       const ok = await confirm({
-        title: 'Restore from this file?',
-        description:
-          'This replaces ALL current data (chats, connections, settings) with the backup. The app will reload.',
+        title: 'Replace all data with this file?',
         confirmLabel: 'Restore',
         destructive: true,
       });
@@ -92,9 +90,7 @@ export function BackupSettings() {
 
   const restore = async (name: string) => {
     const ok = await confirm({
-      title: 'Restore this backup?',
-      description:
-        'This replaces ALL current data with the backup. The app will reload.',
+      title: 'Replace all data with this backup?',
       confirmLabel: 'Restore',
       destructive: true,
     });
@@ -109,8 +105,7 @@ export function BackupSettings() {
 
   const remove = async (name: string) => {
     const ok = await confirm({
-      title: 'Delete this backup?',
-      description: name,
+      title: `Delete backup “${name}”?`,
       confirmLabel: 'Delete',
       destructive: true,
     });

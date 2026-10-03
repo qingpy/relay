@@ -45,6 +45,10 @@ interface ChatState {
   streams: Record<string, StreamBuffer>;
   /** sessionId -> streaming assistant message id (presence = streaming). */
   activeBySession: Record<string, string>;
+  /** Composer "Aside" mode: the next send is a /btw turn. */
+  asideMode: Record<string, boolean>;
+  /** sessionId -> streaming aside assistant id. Independent of the main turn. */
+  asideBySession: Record<string, string>;
   /** Send a new user turn under the active leaf and stream the reply. */
   send: (sessionId: string, text: string, files?: File[]) => Promise<void>;
   /** Answer a user turn: stream a fresh assistant child under it. If a reply
@@ -52,9 +56,13 @@ interface ChatState {
    *  stream in the chat is stopped first. */
   regenerate: (sessionId: string, userId: string) => Promise<void>;
   stop: (sessionId: string) => void;
+  toggleAside: (sessionId: string) => void;
+  sendAside: (sessionId: string, text: string) => Promise<void>;
+  stopAside: (sessionId: string) => void;
 }
 
 const controllers = new Map<string, AbortController>();
+const asideControllers = new Map<string, AbortController>();
 const PERSIST_INTERVAL = 400;
 
 /** Abort a stream after this long without a single byte from the provider — a
@@ -163,7 +171,10 @@ export const useChatStore = create<ChatState>((set, get, api) => {
         : undefined;
       const connections = await listConnections();
       resolved = resolveConfig(session, folder, connections);
-      const chatMessages = await buildChatMessages(history);
+      const chatMessages = await buildChatMessages(
+        history,
+        await getMessages(sessionId),
+      );
 
       if (!resolved.connection || !resolved.model) {
         throw new Error(
@@ -299,8 +310,184 @@ export const useChatStore = create<ChatState>((set, get, api) => {
   return {
     streams: {},
     activeBySession: {},
+    asideMode: {},
+    asideBySession: {},
 
     stop: (sessionId) => controllers.get(sessionId)?.abort(),
+
+    toggleAside: (sessionId) =>
+      set((s) => ({
+        asideMode: { ...s.asideMode, [sessionId]: !s.asideMode[sessionId] },
+      })),
+
+    stopAside: (sessionId) => asideControllers.get(sessionId)?.abort(),
+
+    sendAside: async (sessionId, text) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      if (get().asideBySession[sessionId]) return;
+
+      const session = await getSession(sessionId);
+      if (!session) return;
+      const all = await getMessages(sessionId);
+      const parentId = session.currentLeafId ?? null;
+
+      const userMsg = await addMessage({
+        sessionId,
+        parentId,
+        role: 'user',
+        content: [textPart(trimmed)],
+        aside: true,
+      });
+      const assistantId = newId();
+      set((s) => ({
+        asideMode: { ...s.asideMode, [sessionId]: false },
+        asideBySession: { ...s.asideBySession, [sessionId]: assistantId },
+        streams: { ...s.streams, [assistantId]: EMPTY_BUFFER },
+      }));
+      await addMessage({
+        id: assistantId,
+        sessionId,
+        parentId: userMsg.id,
+        role: 'assistant',
+        aside: true,
+      });
+
+      const controller = new AbortController();
+      asideControllers.set(sessionId, controller);
+
+      let buf: StreamBuffer = EMPTY_BUFFER;
+      let errored: string | null = null;
+      let timedOut = false;
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      const armIdleTimer = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, IDLE_TIMEOUT_MS);
+      };
+      let flushQueued = false;
+      let flushHandle = 0;
+      const flush = () => {
+        flushQueued = false;
+        set((s) => ({ streams: { ...s.streams, [assistantId]: buf } }));
+      };
+      const scheduleFlush = () => {
+        if (flushQueued) return;
+        flushQueued = true;
+        flushHandle = requestAnimationFrame(flush);
+      };
+      let model: string | undefined;
+      const persist = async (final: boolean) => {
+        await updateMessage(assistantId, {
+          content: buf.text ? [textPart(buf.text)] : [],
+          ...(model ? { model } : {}),
+          ...(final && errored ? { error: errored } : {}),
+        });
+      };
+
+      try {
+        const folder = session.folderId
+          ? await getFolder(session.folderId)
+          : undefined;
+        const connections = await listConnections();
+        const resolved = resolveConfig(session, folder, connections);
+        model = resolved.model;
+        if (!resolved.connection || !resolved.model) {
+          throw new Error(
+            'No model configured. Add a connection in Settings and pick a model for this chat or its preset.',
+          );
+        }
+        const history = activePath(all, session.currentLeafId);
+        const chatMessages = await buildChatMessages(history, all);
+        const mainId = get().activeBySession[sessionId];
+        const mainBuf = mainId ? get().streams[mainId] : undefined;
+        if (mainBuf && (mainBuf.text || mainBuf.reasoning)) {
+          const last = chatMessages[chatMessages.length - 1];
+          if (last?.role === 'assistant') {
+            last.text = mainBuf.text || last.text;
+          } else {
+            chatMessages.push({ role: 'assistant', text: mainBuf.text || '' });
+          }
+        }
+        chatMessages.push({ role: 'user', text: trimmed });
+        const provider = providerForConnection(resolved.connection);
+        const req = provider.buildRequest({
+          model: resolved.model,
+          messages: chatMessages,
+          settings: resolved.settings,
+          connectionId: resolved.connection.id,
+          url: resolved.connection.url,
+          project: resolved.connection.project,
+          region: resolved.connection.region,
+          clientEmail: resolved.connection.clientEmail,
+        });
+
+        armIdleTimer();
+        const res = await fetch(req.url, {
+          method: 'POST',
+          headers: req.headers,
+          body: JSON.stringify(req.body),
+          signal: controller.signal,
+        });
+        if (!res.ok || !res.body) {
+          const detail = await res
+            .json()
+            .then((j: { error?: string }) => j.error)
+            .catch(() => null);
+          throw new Error(detail || `Request failed (${res.status})`);
+        }
+
+        for await (const data of readSSE(res.body, controller.signal)) {
+          armIdleTimer();
+          for (const delta of provider.parseStreamChunk(data)) {
+            if (delta.kind === 'text') {
+              buf = { ...buf, text: buf.text + delta.text };
+            } else if (delta.kind === 'reasoning') {
+              buf = { ...buf, reasoning: buf.reasoning + delta.text };
+            } else if (delta.kind === 'error') {
+              errored = delta.message;
+            }
+          }
+          scheduleFlush();
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          if (timedOut) {
+            errored = `No data from the provider for ${IDLE_TIMEOUT_MS / 1000}s — request aborted.`;
+          }
+        } else {
+          errored = err instanceof Error ? err.message : String(err);
+        }
+      } finally {
+        clearTimeout(idleTimer);
+        if (flushQueued) cancelAnimationFrame(flushHandle);
+        const empty = !buf.text && !buf.reasoning;
+        const paused = controller.signal.aborted && !timedOut;
+        if (empty && !errored && !paused) {
+          errored = 'The model returned no output.';
+        }
+        try {
+          if (empty && !errored && !paused) {
+            await spliceMessage(assistantId, { force: true });
+            await spliceMessage(userMsg.id, { force: true });
+          } else {
+            await persist(true);
+          }
+        } catch (e) {
+          console.error('Failed to persist aside', e);
+        }
+        set((s) => {
+          const streams = { ...s.streams };
+          delete streams[assistantId];
+          const asideBySession = { ...s.asideBySession };
+          delete asideBySession[sessionId];
+          return { streams, asideBySession };
+        });
+        asideControllers.delete(sessionId);
+      }
+    },
 
     send: async (sessionId, text, files) => {
       const trimmed = text.trim();
@@ -321,11 +508,20 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       }
 
       // User turn branches off the active leaf; show it immediately.
+      let parentId = session.currentLeafId ?? null;
+      if (parentId) {
+        let parent = await getMessage(parentId);
+        while (parentId && (!parent || parent.deletedAt)) {
+          parentId = parent?.parentId ?? null;
+          parent = parentId ? await getMessage(parentId) : undefined;
+        }
+      }
+
       let userMsg: Message | undefined;
       try {
         userMsg = await addMessage({
           sessionId,
-          parentId: session.currentLeafId ?? null,
+          parentId,
           role: 'user',
           content: trimmed ? [textPart(trimmed)] : [],
         });
