@@ -56,6 +56,7 @@ export function AsideThread({
       question,
       answer,
       model: assistant?.model,
+      hungFromId: user.parentId,
     });
     if (!created) return;
     useUiStore.getState().setActiveSession(created.id);

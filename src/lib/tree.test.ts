@@ -6,6 +6,7 @@ import {
   activePath,
   attachParentId,
   copyablePath,
+  displayPath,
   isEmptyUserSlot,
   reparentRootDividers,
   reparentRootDividersAll,
@@ -161,6 +162,25 @@ function eq(name: string, got: unknown, want: unknown) {
   eq('root divider without clearedFromId', next[2].parentId, 'a');
 }
 
+{
+  const u = msg('u', 'user');
+  const aside = msg('as', 'user', { parentId: 'u', aside: true, deletedAt: 1 });
+  const reply = msg('ar', 'assistant', { parentId: 'as', aside: true });
+  eq(
+    'aside is not a fillable main slot',
+    isEmptyUserSlot([u, aside, reply], aside),
+    false,
+  );
+}
+
+{
+  const u = msg('u', 'user', { createdAt: 1 });
+  const aside = msg('as', 'user', { parentId: 'u', aside: true, createdAt: 2 });
+  const d = msg('d', 'divider', { parentId: null, createdAt: 3 });
+  const next = reparentRootDividers([u, aside, d]);
+  eq('root divider sits on the main leaf, not the aside', next[2].parentId, 'u');
+}
+
 // Fork copies the model window (after Clear), not pre-divider history.
 {
   const u = msg('u', 'user');
@@ -184,6 +204,40 @@ function eq(name: string, got: unknown, want: unknown) {
     'fork of a lone root divider is empty',
     copyablePath([rootD], 'rd').map((m) => m.id),
     [],
+  );
+}
+
+{
+  const rootAside = msg('ra', 'user', { aside: true });
+  const rootAns = msg('rr', 'assistant', { parentId: 'ra', aside: true });
+  eq(
+    'root asides show on an empty chat',
+    displayPath([rootAside, rootAns]).map((m) => m.id),
+    ['ra', 'rr'],
+  );
+  const u = msg('u', 'user');
+  eq(
+    'root asides stay at the head of a later main path',
+    displayPath([rootAside, rootAns, u], 'u').map((m) => m.id),
+    ['ra', 'rr', 'u'],
+  );
+}
+
+// Fork uses the node the aside hangs from, not a later main leaf.
+{
+  const u = msg('u', 'user');
+  const a = msg('a', 'assistant', { parentId: 'u' });
+  const later = msg('u2', 'user', { parentId: 'a' });
+  const all = [u, a, later];
+  eq(
+    'hung-from the original leaf omits later turns',
+    copyablePath(all, 'a').map((m) => m.id),
+    ['u', 'a'],
+  );
+  eq(
+    'current leaf after a later send includes it',
+    copyablePath(all, 'u2').map((m) => m.id),
+    ['u', 'a', 'u2'],
   );
 }
 

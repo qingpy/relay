@@ -327,25 +327,38 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       if (get().asideBySession[sessionId]) return;
-
-      const session = await getSession(sessionId);
-      if (!session) return;
-      const all = await getMessages(sessionId);
-      const parentId = session.currentLeafId ?? null;
-
-      const userMsg = await addMessage({
-        sessionId,
-        parentId,
-        role: 'user',
-        content: [textPart(trimmed)],
-        aside: true,
-      });
       const assistantId = newId();
       set((s) => ({
         asideMode: { ...s.asideMode, [sessionId]: false },
         asideBySession: { ...s.asideBySession, [sessionId]: assistantId },
         streams: { ...s.streams, [assistantId]: EMPTY_BUFFER },
       }));
+      const release = () => {
+        set((s) => {
+          const streams = { ...s.streams };
+          delete streams[assistantId];
+          const asideBySession = { ...s.asideBySession };
+          if (asideBySession[sessionId] === assistantId)
+            delete asideBySession[sessionId];
+          return { streams, asideBySession };
+        });
+        asideControllers.delete(sessionId);
+      };
+
+      let userMsg: Message | undefined;
+      try {
+      const session = await getSession(sessionId);
+      if (!session) return;
+      const all = await getMessages(sessionId);
+      const parentId = session.currentLeafId ?? null;
+
+      userMsg = await addMessage({
+        sessionId,
+        parentId,
+        role: 'user',
+        content: [textPart(trimmed)],
+        aside: true,
+      });
       await addMessage({
         id: assistantId,
         sessionId,
@@ -465,28 +478,24 @@ export const useChatStore = create<ChatState>((set, get, api) => {
         clearTimeout(idleTimer);
         if (flushQueued) cancelAnimationFrame(flushHandle);
         const empty = !buf.text && !buf.reasoning;
-        const paused = controller.signal.aborted && !timedOut;
-        if (empty && !errored && !paused) {
+        if (empty && !errored && !controller.signal.aborted) {
           errored = 'The model returned no output.';
         }
         try {
-          if (empty && !errored && !paused) {
+          if (empty && !errored) {
             await spliceMessage(assistantId, { force: true });
-            await spliceMessage(userMsg.id, { force: true });
           } else {
             await persist(true);
           }
         } catch (e) {
           console.error('Failed to persist aside', e);
         }
-        set((s) => {
-          const streams = { ...s.streams };
-          delete streams[assistantId];
-          const asideBySession = { ...s.asideBySession };
-          delete asideBySession[sessionId];
-          return { streams, asideBySession };
-        });
-        asideControllers.delete(sessionId);
+      }
+      } catch (e) {
+        if (userMsg) await spliceMessage(userMsg.id, { force: true });
+        throw e;
+      } finally {
+        release();
       }
     },
 

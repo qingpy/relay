@@ -14,10 +14,17 @@ export function childrenOf(
     .sort((a, b) => a.createdAt - b.createdAt);
 }
 
-/** Aside user/assistant hanging under `id` (and their aside replies). */
-export function asidesUnder(messages: Message[], id: string): Message[] {
+/** Aside user/assistant hanging under `id` (and their aside replies).
+ *  `id` null is forest-root asides (empty chat / wiped leaf). */
+export function asidesUnder(
+  messages: Message[],
+  id: string | null,
+): Message[] {
+  const parent = id ?? null;
   const heads = messages
-    .filter((m) => m.aside && !m.deletedAt && m.parentId === id)
+    .filter(
+      (m) => m.aside && !m.deletedAt && (m.parentId ?? null) === parent,
+    )
     .sort((a, b) => a.createdAt - b.createdAt);
   const out: Message[] = [];
   for (const h of heads) {
@@ -67,9 +74,10 @@ export function attachParentId(
   return leaf.id;
 }
 
-/** Deleted user with no live main-line children: an empty ‹ n/m › slot to fill. */
+/** Deleted user with no live main-line children: an empty ‹ n/m › slot to fill.
+ *  Aside turns are not slots (`childrenOf` skips them, so they would look empty). */
 export function isEmptyUserSlot(messages: Message[], msg: Message): boolean {
-  if (msg.role !== 'user' || !msg.deletedAt) return false;
+  if (msg.aside || msg.role !== 'user' || !msg.deletedAt) return false;
   return !childrenOf(messages, msg.id).some((c) => !c.deletedAt);
 }
 
@@ -84,11 +92,13 @@ export function reparentRootDividers(messages: Message[]): Message[] {
     if (d.role !== 'divider' || d.deletedAt) continue;
     if ((d.parentId ?? null) !== null) continue;
     let parent: string | null =
-      d.clearedFromId && byId.has(d.clearedFromId) ? d.clearedFromId : null;
+      d.clearedFromId && byId.has(d.clearedFromId) && !byId.get(d.clearedFromId)?.aside
+        ? d.clearedFromId
+        : null;
     if (!parent) {
       let newest: Message | undefined;
       for (const m of messages) {
-        if (m.id === d.id || m.role === 'divider') continue;
+        if (m.id === d.id || m.role === 'divider' || m.aside) continue;
         if (m.createdAt > d.createdAt) continue;
         if (!newest || m.createdAt > newest.createdAt) newest = m;
       }
@@ -222,15 +232,17 @@ export function copyablePath(messages: Message[], leafId?: string): Message[] {
 export function displayPath(messages: Message[], leafId?: string): Message[] {
   const out: Message[] = [];
   const used = new Set<string>();
+  const take = (a: Message) => {
+    if (used.has(a.id)) return;
+    out.push(a);
+    used.add(a.id);
+  };
+  for (const a of asidesUnder(messages, null)) take(a);
   for (const m of activePath(messages, leafId)) {
     if (used.has(m.id)) continue;
     out.push(m);
     used.add(m.id);
-    for (const a of asidesUnder(messages, m.id)) {
-      if (used.has(a.id)) continue;
-      out.push(a);
-      used.add(a.id);
-    }
+    for (const a of asidesUnder(messages, m.id)) take(a);
   }
   return out;
 }

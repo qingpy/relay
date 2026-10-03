@@ -78,9 +78,9 @@ Key ideas:
 - Aside (`/btw`): one-round side question, parallel with the main turn.
   Saved in the chat list (click to expand, click outside to fold; Stop
   while streaming). Omitted from the model context and the map. Main
-  and aside streams Stop independently. Fork copies the model window
-  (turns after the latest divider) plus that exchange, keeping the old
-  title.
+  and aside streams Stop independently. Fork copies the model window at
+  the node the aside hangs from (turns after the latest divider) plus
+  that exchange, keeping the old title.
 - Markdown (`src/lib/markdown.ts`): math is isolated from the source before
   remark parses (GFM tables and indent cannot steal `|` / `&` from
   `aligned`), `<br>` in tables becomes a break, then KaTeX.

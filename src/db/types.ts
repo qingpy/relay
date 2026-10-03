@@ -185,8 +185,8 @@ export interface Message {
   /** Side question (`/btw`): shown in the chat, omitted from the model context
    *  and the map. */
   aside?: boolean;
-  /** On a root divider: the leaf of the previous tree, so the chat view can
-   *  stitch the old path above "Context cleared". */
+  /** On a leftover forest-root divider: the leaf it originally cut, used to
+   *  reparent it onto that path. */
   clearedFromId?: string;
   createdAt: number;
 }

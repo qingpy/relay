@@ -238,7 +238,12 @@ export function Composer({
               e.target.value = '';
             }}
           />
-          <Marginalia onClick={() => fileInput.current?.click()}>Attach</Marginalia>
+          <Marginalia
+            onClick={() => fileInput.current?.click()}
+            disabled={asideMode}
+          >
+            Attach
+          </Marginalia>
           <Marginalia onClick={() => setExpanded((v) => !v)} active={expanded}>
             {expanded ? 'Shrink' : 'Expand'}
           </Marginalia>

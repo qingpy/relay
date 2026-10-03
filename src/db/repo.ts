@@ -406,10 +406,16 @@ export async function reviveUserMessage(
   id: string,
   content: Part[],
 ): Promise<Message | undefined> {
-  await db.messages.where('id').equals(id).modify((m) => {
-    delete m.deletedAt;
-    delete m.error;
-    m.content = content;
+  await db.transaction('rw', db.messages, db.files, async () => {
+    const row = await db.messages.get(id);
+    if (!row) return;
+    await db.files.where('messageId').equals(id).delete();
+    await db.messages.where('id').equals(id).modify((m) => {
+      delete m.deletedAt;
+      delete m.error;
+      delete m.attachments;
+      m.content = content;
+    });
   });
   return db.messages.get(id);
 }
@@ -457,21 +463,6 @@ export async function spliceMessage(
       return;
     }
     const kids = childrenOf(all, id);
-    const asideKids = childrenOf(all, id, { asides: true }).filter((m) => m.aside);
-    const dropAside = (pid: string) => {
-      const ids = [pid];
-      for (const k of all.filter((m) => m.parentId === pid && m.aside)) {
-        ids.push(...dropAside(k.id));
-      }
-      return ids;
-    };
-    const asideIds = asideKids.flatMap((k) => dropAside(k.id));
-    if (asideIds.length) {
-      await db.messages.bulkDelete(asideIds);
-      for (const aid of asideIds) {
-        await db.files.where('messageId').equals(aid).delete();
-      }
-    }
     await db.messages
       .where('parentId')
       .equals(id)
@@ -601,7 +592,7 @@ export async function duplicateSession(
   return newSession;
 }
 
-/** New chat: the active path plus one user/assistant exchange (aside fork). */
+/** New chat: the model window at the node the aside hangs from, plus that exchange. */
 export async function forkAsideChat(
   sessionId: string,
   exchange: {
@@ -609,12 +600,16 @@ export async function forkAsideChat(
     answer: string;
     reasoning?: string;
     model?: string;
+    /** Main-line node the aside hangs from (`asideUser.parentId`). */
+    hungFromId: string | null;
   },
 ): Promise<Session | undefined> {
   const session = await getSession(sessionId);
   if (!session) return;
   const msgs = await getMessages(sessionId);
-  const path = copyablePath(msgs, session.currentLeafId);
+  const path = exchange.hungFromId
+    ? copyablePath(msgs, exchange.hungFromId)
+    : [];
   const orig = new Map(msgs.map((m) => [m.id, m]));
   const fileIds = path.flatMap((m) => m.attachments ?? []);
   const files = fileIds.length
