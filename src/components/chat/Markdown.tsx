@@ -3,7 +3,6 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import type { PluggableList, Plugin } from 'unified';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import remarkMath from 'remark-math';
 import { cjkFriendlyExtension } from 'micromark-extension-cjk-friendly';
 import { gfmStrikethroughCjkFriendly } from 'micromark-extension-cjk-friendly-gfm-strikethrough';
 import rehypeKatex from 'rehype-katex';
@@ -13,9 +12,9 @@ import 'katex/dist/katex.min.css';
 import 'katex/dist/contrib/copy-tex.mjs';
 import { CodeBlock } from './CodeBlock';
 import {
-  protectMath,
   remarkHtmlBr,
-  remarkRestoreMath,
+  remarkMathChat,
+  remarkRestorePipes,
   wrapPunctStrong,
 } from '@/lib/markdown';
 
@@ -58,17 +57,15 @@ export const Markdown = memo(function Markdown({
   children: string;
 }) {
   const { text, plugins } = useMemo(() => {
-    const { text: isolated, slots } = protectMath(children);
     const remarkPlugins: PluggableList = [
-      // Leftover `$` after isolation: tokenize as math before GFM tables.
-      remarkMath,
+      remarkMathChat,
       [remarkGfm, GFM_STRIKE],
       remarkCjkFriendly,
       remarkBreaks,
-      remarkRestoreMath(slots),
+      remarkRestorePipes,
       remarkHtmlBr,
     ];
-    return { text: wrapPunctStrong(isolated), plugins: remarkPlugins };
+    return { text: wrapPunctStrong(children), plugins: remarkPlugins };
   }, [children]);
 
   return (

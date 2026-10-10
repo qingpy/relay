@@ -86,9 +86,11 @@ Key ideas:
   the node the aside hangs from (turns after the latest divider on that
   path) plus that exchange. Title is `Fork of` the original. The aside
   card stays folded except while it is streaming.
-- Markdown (`src/lib/markdown.ts`): math is isolated from the source before
-  remark parses (GFM tables and indent cannot steal `|` / `&` from
-  `aligned`), `<br>` in tables becomes a break, then KaTeX.
+- Markdown (`src/lib/markdown.ts`): math is a micromark construct (same
+  model as Cherry Studio / Streamdown `remark-math`). Inline `$` is
+  single-line and follows Pandoc's closer rule (not followed by a digit).
+  `$$` is flow. `\(` is CommonMark escaped `(`. `|` inside code is inert
+  for GFM tables. `<br>` in tables becomes a break, then KaTeX.
 - Auto-title after a send only when the title is still "New chat" or the
   first-message placeholder, so a wiped chat keeps its name.
 - Trash: deleting a chat sets `deletedAt`; `listSessions()` hides those, the
