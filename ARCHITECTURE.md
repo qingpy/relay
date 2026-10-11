@@ -95,8 +95,8 @@ Key ideas:
   first-message placeholder, so a wiped chat keeps its name.
 - Trash: deleting a chat sets `deletedAt`; `listSessions()` hides those, the
   Trash dialog restores / deletes forever (restore places the chat at the
-  top of its preset); `purgeExpiredTrash()` on boot hard-deletes past
-  `trashRetentionDays`.
+  top of its preset and keeps its last-activity time); `purgeExpiredTrash()`
+  on boot hard-deletes past `trashRetentionDays`.
 - Attachments are copied, content-addressed bytes: `saveAttachments` reads the
   picked `File` immediately into an owned Blob (a `File` is a lazy path
   reference; reading it later throws once the source moves). Identical content

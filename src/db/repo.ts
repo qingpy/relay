@@ -101,13 +101,12 @@ export async function trashSession(id: string): Promise<void> {
   await db.sessions.update(id, { deletedAt: Date.now() });
 }
 
-/** Bring a chat back out of the trash, at the top of its preset (same as a new chat). */
+/** Bring a chat back out of the trash, at the top of its preset.
+ *  The shown time stays the last activity, not the restore moment. */
 export async function restoreSession(id: string): Promise<void> {
-  const now = Date.now();
   await db.sessions.update(id, {
     deletedAt: undefined,
-    order: -now,
-    updatedAt: now,
+    order: -Date.now(),
   });
 }
 
