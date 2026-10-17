@@ -256,12 +256,20 @@ export const APP_CONFIG_ID = 'singleton' as const;
 export const DEFAULT_APP_CONFIG: AppConfig = {
   id: APP_CONFIG_ID,
   theme: 'system',
-  uiStyle: 'stationery',
+  uiStyle: 'relay',
 };
 
 export const DEFAULT_TITLE_PROMPT =
   'Summarize this conversation as a short, specific title of at most 6 words. ' +
   'Reply with the title only — no quotes, no trailing punctuation.';
+
+/** System prompt added to every aside (see AppConfig.asidePrompt). */
+export const DEFAULT_ASIDE_PROMPT = [
+  "It's a side question;",
+  'You must answer directly in a single response;',
+  "You're a separate, lightweight model, and the main model keeps working;",
+  'You have no tools, there are no follow-up turns, and you can only use the existing context.',
+].join('\n');
 
 /** Starter reasoning-effort choices (user-editable; see AppConfig.reasoningEfforts). */
 export const DEFAULT_REASONING_EFFORTS = ['minimal', 'low', 'medium', 'high'];
@@ -279,14 +287,18 @@ export async function getAppConfig(): Promise<AppConfig> {
   return config;
 }
 
-/** Merge a patch into the singleton config. */
-export async function updateAppConfig(
+/** Merge a patch into the singleton config. Read and write share one
+ *  transaction, so overlapping patches (a typed prompt, a sync timestamp)
+ *  apply in turn instead of one overwriting the other. */
+export function updateAppConfig(
   patch: Partial<Omit<AppConfig, 'id'>>,
 ): Promise<AppConfig> {
-  const current = await getAppConfig();
-  const next = { ...current, ...patch, id: APP_CONFIG_ID };
-  await db.appConfig.put(next);
-  return next;
+  return db.transaction('rw', db.appConfig, async () => {
+    const current = await getAppConfig();
+    const next = { ...current, ...patch, id: APP_CONFIG_ID };
+    await db.appConfig.put(next);
+    return next;
+  });
 }
 
 /** Ensure at least one connection exists so chats have a model to resolve to. */

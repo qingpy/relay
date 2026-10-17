@@ -15,7 +15,7 @@ import {
   updateMessage,
   updateSession,
 } from '@/db/repo';
-import { newId } from '@/db/db';
+import { DEFAULT_ASIDE_PROMPT, getAppConfig, newId } from '@/db/db';
 import type { Citation, Message, Session, ToolCall, Usage } from '@/db/types';
 import { buildChatMessages, deriveTitle } from '@/lib/conversation';
 import { resolveConfig, type ResolvedConfig } from '@/lib/resolve';
@@ -48,7 +48,8 @@ interface ChatState {
   activeBySession: Record<string, string>;
   /** Composer "Aside" mode: the next send is a /btw turn. */
   asideMode: Record<string, boolean>;
-  /** sessionId -> streaming aside assistant id. Independent of the main turn. */
+  /** sessionId -> the in-flight aside's question (user message) id.
+   *  Independent of the main turn. */
   asideBySession: Record<string, string>;
   /** Send a new user turn under the active leaf and stream the reply. */
   send: (sessionId: string, text: string, files?: File[]) => Promise<void>;
@@ -78,10 +79,32 @@ export const useChatStore = create<ChatState>((set, get, api) => {
     set((s) => {
       const streams = { ...s.streams };
       delete streams[messageId];
+      // A newer turn may already own the slot; release only our own.
+      if (s.activeBySession[sessionId] !== messageId) return { streams };
       const activeBySession = { ...s.activeBySession };
       delete activeBySession[sessionId];
       return { streams, activeBySession };
     });
+
+  /** Free a slot claimed as 'pending' before a turn started. */
+  const releasePending = (sessionId: string) =>
+    set((s) => {
+      if (s.activeBySession[sessionId] !== 'pending') return {};
+      const activeBySession = { ...s.activeBySession };
+      delete activeBySession[sessionId];
+      return { activeBySession };
+    });
+
+  /** Claim the session's slot with a Stop-able controller before any await,
+   *  so Stop works while attachments save and a racing call sees it taken. */
+  const claim = (sessionId: string): AbortController => {
+    const controller = new AbortController();
+    controllers.set(sessionId, controller);
+    set((s) => ({
+      activeBySession: { ...s.activeBySession, [sessionId]: 'pending' },
+    }));
+    return controller;
+  };
 
   /**
    * Create an assistant message under `parentId`, make it the active leaf, and
@@ -97,6 +120,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
     session: Session,
     parentId: string,
     history: Message[],
+    controller: AbortController,
   ) => {
     const sessionId = session.id;
 
@@ -108,9 +132,6 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       streams: { ...s.streams, [messageId]: EMPTY_BUFFER },
       activeBySession: { ...s.activeBySession, [sessionId]: messageId },
     }));
-
-    const controller = new AbortController();
-    controllers.set(sessionId, controller);
 
     let resolved: ResolvedConfig | undefined;
     let buf: StreamBuffer = EMPTY_BUFFER;
@@ -300,7 +321,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
           .getState()
           .setDataStatus('error', e instanceof Error ? e.message : String(e));
       }
-      controllers.delete(sessionId);
+      if (controllers.get(sessionId) === controller) controllers.delete(sessionId);
       clearStream(sessionId, messageId);
     }
   };
@@ -324,10 +345,11 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       const trimmed = text.trim();
       if (!trimmed) return;
       if (get().asideBySession[sessionId]) return;
+      const askId = newId();
       const assistantId = newId();
       set((s) => ({
         asideMode: { ...s.asideMode, [sessionId]: false },
-        asideBySession: { ...s.asideBySession, [sessionId]: assistantId },
+        asideBySession: { ...s.asideBySession, [sessionId]: askId },
         streams: { ...s.streams, [assistantId]: EMPTY_BUFFER },
       }));
       const release = () => {
@@ -335,7 +357,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
           const streams = { ...s.streams };
           delete streams[assistantId];
           const asideBySession = { ...s.asideBySession };
-          if (asideBySession[sessionId] === assistantId)
+          if (asideBySession[sessionId] === askId)
             delete asideBySession[sessionId];
           return { streams, asideBySession };
         });
@@ -350,6 +372,7 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       const parentId = session.currentLeafId ?? null;
 
       userMsg = await addMessage({
+        id: askId,
         sessionId,
         parentId,
         role: 'user',
@@ -423,11 +446,18 @@ export const useChatStore = create<ChatState>((set, get, api) => {
           }
         }
         chatMessages.push({ role: 'user', text: trimmed });
+        const asidePrompt = (
+          (await getAppConfig()).asidePrompt ?? DEFAULT_ASIDE_PROMPT
+        ).trim();
+        const systemPrompt =
+          [resolved.settings.systemPrompt, asidePrompt]
+            .filter(Boolean)
+            .join('\n\n') || undefined;
         const provider = providerForConnection(resolved.connection);
         const req = provider.buildRequest({
           model: resolved.model,
           messages: chatMessages,
-          settings: resolved.settings,
+          settings: { ...resolved.settings, systemPrompt },
           connectionId: resolved.connection.id,
           url: resolved.connection.url,
           project: resolved.connection.project,
@@ -474,9 +504,12 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       } finally {
         clearTimeout(idleTimer);
         if (flushQueued) cancelAnimationFrame(flushHandle);
-        const empty = !buf.text && !buf.reasoning;
+        // The card shows only the answer text: reasoning alone is no answer.
+        const empty = !buf.text;
         if (empty && !errored && !controller.signal.aborted) {
-          errored = 'The model returned no output.';
+          errored = buf.reasoning
+            ? 'The model only reasoned and returned no answer.'
+            : 'The model returned no output.';
         }
         try {
           if (empty && !errored) {
@@ -500,63 +533,58 @@ export const useChatStore = create<ChatState>((set, get, api) => {
       const trimmed = text.trim();
       if (!trimmed && !files?.length) return;
       if (get().activeBySession[sessionId]) return; // already streaming
-      set((s) => ({
-        activeBySession: { ...s.activeBySession, [sessionId]: 'pending' },
-      }));
+      const controller = claim(sessionId);
 
-      const session = await getSession(sessionId);
-      if (!session) {
-        set((s) => {
-          const activeBySession = { ...s.activeBySession };
-          delete activeBySession[sessionId];
-          return { activeBySession };
-        });
-        return;
-      }
-
-      const all = await getMessages(sessionId);
-      const leaf = session.currentLeafId
-        ? all.find((m) => m.id === session.currentLeafId)
-        : undefined;
-      const content = trimmed ? [textPart(trimmed)] : [];
-
-      let userMsg: Message | undefined;
+      let started = false;
       try {
-        if (leaf && isEmptyUserSlot(all, leaf)) {
-          userMsg = await reviveUserMessage(leaf.id, content);
-          if (!userMsg) throw new Error('Failed to fill the empty branch.');
-        } else {
-          userMsg = await addMessage({
-            sessionId,
-            parentId: attachParentId(all, session.currentLeafId),
-            role: 'user',
-            content,
-          });
-        }
-        if (files?.length) {
-          const ids = await saveAttachments(sessionId, userMsg.id, files);
-          await updateMessage(userMsg.id, { attachments: ids });
-        }
-      } catch (e) {
-        if (userMsg && userMsg.id !== leaf?.id)
-          await spliceMessage(userMsg.id, { force: true });
-        set((s) => {
-          const activeBySession = { ...s.activeBySession };
-          delete activeBySession[sessionId];
-          return { activeBySession };
-        });
-        throw e;
-      }
-      await setCurrentLeaf(sessionId, userMsg.id);
-      if (session.title === NEW_SESSION_TITLE) {
-        await updateSession(sessionId, { title: deriveTitle(trimmed) });
-      } else {
-        await touchSession(sessionId);
-      }
+        const session = await getSession(sessionId);
+        if (!session) return;
 
-      const history = activePath(await getMessages(sessionId), userMsg.id);
-      await runTurn(session, userMsg.id, history);
-      void maybeAutoTitle(sessionId);
+        const all = await getMessages(sessionId);
+        const leaf = session.currentLeafId
+          ? all.find((m) => m.id === session.currentLeafId)
+          : undefined;
+        const content = trimmed ? [textPart(trimmed)] : [];
+
+        let userMsg: Message | undefined;
+        try {
+          if (leaf && isEmptyUserSlot(all, leaf)) {
+            userMsg = await reviveUserMessage(leaf.id, content);
+            if (!userMsg) throw new Error('Failed to fill the empty branch.');
+          } else {
+            userMsg = await addMessage({
+              sessionId,
+              parentId: attachParentId(all, session.currentLeafId),
+              role: 'user',
+              content,
+            });
+          }
+          if (files?.length) {
+            const ids = await saveAttachments(sessionId, userMsg.id, files);
+            await updateMessage(userMsg.id, { attachments: ids });
+          }
+        } catch (e) {
+          if (userMsg && userMsg.id !== leaf?.id)
+            await spliceMessage(userMsg.id, { force: true });
+          throw e;
+        }
+        await setCurrentLeaf(sessionId, userMsg.id);
+        if (session.title === NEW_SESSION_TITLE) {
+          await updateSession(sessionId, { title: deriveTitle(trimmed) });
+        } else {
+          await touchSession(sessionId);
+        }
+
+        const history = activePath(await getMessages(sessionId), userMsg.id);
+        started = true;
+        await runTurn(session, userMsg.id, history, controller);
+        void maybeAutoTitle(sessionId);
+      } finally {
+        if (!started) {
+          if (controllers.get(sessionId) === controller) controllers.delete(sessionId);
+          releasePending(sessionId);
+        }
+      }
     },
 
     regenerate: async (sessionId, userId) => {
@@ -581,9 +609,20 @@ export const useChatStore = create<ChatState>((set, get, api) => {
         });
       }
 
-      await touchSession(sessionId);
-      const history = activePath(await getMessages(sessionId), user.id);
-      await runTurn(session, user.id, history);
+      if (get().activeBySession[sessionId]) return; // another call claimed it
+      const controller = claim(sessionId);
+      let started = false;
+      try {
+        await touchSession(sessionId);
+        const history = activePath(await getMessages(sessionId), user.id);
+        started = true;
+        await runTurn(session, user.id, history, controller);
+      } finally {
+        if (!started) {
+          if (controllers.get(sessionId) === controller) controllers.delete(sessionId);
+          releasePending(sessionId);
+        }
+      }
     },
   };
 });

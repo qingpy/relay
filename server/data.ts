@@ -15,8 +15,8 @@ import { atomicWrite, json, withRetry } from './util.ts';
  *   GET  /api/data        -> { rev, savedAt, data } (or { rev: 0 } if no file)
  *   PUT  /api/data        -> atomically write { rev, savedAt, data }
  *   GET  /api/data/info    -> { path, exists, size, savedAt } for the Settings readout
- *   GET  /api/data/sync-state -> { rev, lastSyncAt } the durable WebDAV sync cursor
- *   PUT  /api/data/sync-state -> persist { rev, lastSyncAt }
+ *   GET  /api/data/sync-state -> { rev, lastSyncAt, pending } the durable WebDAV sync cursor
+ *   PUT  /api/data/sync-state -> persist { rev, lastSyncAt, pending }
  *
  * The payload `data` is the same `BackupFile` produced by the client's
  * `exportAll()` — so the disk file, a downloaded backup, and the WebDAV snapshot
@@ -84,15 +84,20 @@ data.get('/info', async (c) => {
 // the client migrates from its legacy localStorage cursor on first run.
 data.get('/sync-state', async (c) => {
   const file = syncStateFile();
-  if (!existsSync(file)) return c.json({ rev: 0, lastSyncAt: 0 });
+  if (!existsSync(file)) return c.json({ rev: 0, lastSyncAt: 0, pending: false });
   try {
     const parsed = JSON.parse(await withRetry(() => readFile(file, 'utf-8'))) as {
       rev?: number;
       lastSyncAt?: number;
+      pending?: boolean;
     };
-    return c.json({ rev: parsed.rev ?? 0, lastSyncAt: parsed.lastSyncAt ?? 0 });
+    return c.json({
+      rev: parsed.rev ?? 0,
+      lastSyncAt: parsed.lastSyncAt ?? 0,
+      pending: parsed.pending === true,
+    });
   } catch {
-    return c.json({ rev: 0, lastSyncAt: 0 });
+    return c.json({ rev: 0, lastSyncAt: 0, pending: false });
   }
 });
 
@@ -101,12 +106,17 @@ data.put('/sync-state', async (c) => {
   const body = (await c.req.json().catch(() => null)) as {
     rev?: number;
     lastSyncAt?: number;
+    pending?: boolean;
   } | null;
   if (!body || typeof body.rev !== 'number') {
     return json({ error: 'Expected { rev, lastSyncAt }.' }, 400);
   }
   const file = syncStateFile();
-  const payload = JSON.stringify({ rev: body.rev, lastSyncAt: body.lastSyncAt ?? 0 });
+  const payload = JSON.stringify({
+    rev: body.rev,
+    lastSyncAt: body.lastSyncAt ?? 0,
+    pending: body.pending === true,
+  });
   try {
     await atomicWrite(file, payload);
     return c.json({ ok: true });

@@ -255,7 +255,12 @@ function Editor({ conn }: { conn: Connection }) {
               value={apiKey}
               onChange={(e) => {
                 setApiKey(e.target.value);
-                void putConnectionSecret(conn.id, { apiKey: e.target.value });
+                // Blank keeps the saved key (clearing the field never erases it).
+                if (e.target.value) {
+                  putConnectionSecret(conn.id, { apiKey: e.target.value }).catch(
+                    (err) => console.error(err),
+                  );
+                }
               }}
             />
           </Field>
@@ -320,7 +325,12 @@ function Editor({ conn }: { conn: Connection }) {
               value={privateKey}
               onChange={(e) => {
                 setPrivateKey(e.target.value);
-                void putConnectionSecret(conn.id, { privateKey: e.target.value });
+                // Blank keeps the saved key, as the placeholder says.
+                if (e.target.value) {
+                  putConnectionSecret(conn.id, { privateKey: e.target.value }).catch(
+                    (err) => console.error(err),
+                  );
+                }
               }}
               rows={3}
               className={`${fieldClass} resize-y font-mono text-[11px]`}

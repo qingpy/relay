@@ -78,10 +78,12 @@ export async function generateTitle(
       .join('\n\n')
       .slice(0, 6000);
 
+    const instruction = (config.titlePrompt ?? DEFAULT_TITLE_PROMPT).trim();
     const messages: ChatMessage[] = [
       {
         role: 'user',
-        text: `${config.titlePrompt || DEFAULT_TITLE_PROMPT}\n\n---\n${transcript}`,
+        // Unset = the built-in prompt; an emptied one sends the transcript alone.
+        text: instruction ? `${instruction}\n\n---\n${transcript}` : transcript,
       },
     ];
 
@@ -89,7 +91,7 @@ export async function generateTitle(
     const req = provider.buildRequest({
       model: config.titleModel,
       messages,
-      settings: { maxTokens: 32, temperature: 0.3 },
+      settings: { temperature: 0.3 },
       connectionId: connection.id,
       url: connection.url,
       project: connection.project,

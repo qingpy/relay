@@ -102,7 +102,6 @@ export interface Connection {
 export interface ModelSettings {
   temperature?: number;
   topP?: number;
-  maxTokens?: number;
   /**
    * Reasoning effort. Free text, because the accepted set varies by model and
    * protocol — OpenAI-compatible models take it as `reasoning_effort`,
@@ -248,18 +247,45 @@ export interface WebDavConfig {
 }
 
 export const UI_STYLES = [
-  'stationery',
-  'night',
-  'paper',
-  'ink',
-  'soft',
+  'relay',
+  'archival',
+  'monograph',
+  'botanical',
+  'studio',
+  'carbon',
+  'polar',
 ] as const;
 export type UiStyle = (typeof UI_STYLES)[number];
+/** Styles that render a dark color scheme (native controls, scrollbars).
+ *  Studio is light with its own dark sidebar scope. */
+export const DARK_STYLES: readonly UiStyle[] = ['carbon', 'polar'];
+
+/** Earlier style names, mapped to the style that absorbed them. */
+const LEGACY_STYLES: Record<string, UiStyle> = {
+  stationery: 'relay',
+  swiss: 'relay',
+  paper: 'archival',
+  editorial: 'archival',
+  ink: 'monograph',
+  soft: 'relay',
+  mist: 'botanical',
+  sand: 'botanical',
+  night: 'carbon',
+  graphite: 'carbon',
+  nord: 'polar',
+};
+
+/** The style to render for a stored value (old names, synced from older
+ *  installs, map forward; anything unknown is the default). */
+export function resolveStyle(value: string | undefined): UiStyle {
+  if ((UI_STYLES as readonly string[]).includes(value ?? '')) return value as UiStyle;
+  return LEGACY_STYLES[value ?? ''] ?? 'relay';
+}
 
 export interface AppConfig {
   id: 'singleton';
   theme: 'light' | 'dark' | 'system';
-  /** Named chrome: Stationery / Night / Paper / Ink / Soft. */
+  /** Named chrome (see UI_STYLES); stored values pass through resolveStyle. */
   uiStyle?: UiStyle;
   /** Include the model's "thinking" in markdown export/download (default off). */
   exportIncludeThinking?: boolean;
@@ -268,7 +294,11 @@ export interface AppConfig {
   /** Auto-titling: which connection/model and the instruction prompt. */
   titleConnectionId?: string;
   titleModel?: string;
+  /** Unset = DEFAULT_TITLE_PROMPT (follows app updates); empty = none. */
   titlePrompt?: string;
+  /** System prompt added after the chat's own for every aside (`/btw`).
+   *  Unset = DEFAULT_ASIDE_PROMPT (follows app updates); empty = none. */
+  asidePrompt?: string;
   /** Global, user-editable reasoning-effort choices offered in preset settings
    *  (the accepted set varies by model, so the list is yours to curate). */
   reasoningEfforts?: string[];

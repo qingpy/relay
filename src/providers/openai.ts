@@ -57,6 +57,8 @@ interface OpenAIChunk {
     delta?: {
       content?: string | null;
       reasoning?: string | null;
+      /** DeepSeek / Qwen / vLLM / LM Studio spelling of `reasoning`. */
+      reasoning_content?: string | null;
       tool_calls?: OpenAIToolCallDelta[];
       annotations?: OpenAIAnnotation[];
     };
@@ -103,8 +105,6 @@ export class OpenAICompatProvider implements Provider {
 
     if (settings.temperature != null) body.temperature = settings.temperature;
     if (settings.topP != null) body.top_p = settings.topP;
-    if (settings.maxTokens != null) body.max_tokens = settings.maxTokens;
-
     if (settings.reasoningEffort) {
       if (this.openRouter) {
         body.reasoning = { effort: settings.reasoningEffort };
@@ -146,7 +146,7 @@ export class OpenAICompatProvider implements Provider {
 
     const deltas: Delta[] = [];
     const choice = chunk.choices?.[0];
-    const reasoning = choice?.delta?.reasoning;
+    const reasoning = choice?.delta?.reasoning ?? choice?.delta?.reasoning_content;
     if (reasoning) deltas.push({ kind: 'reasoning', text: reasoning });
     const content = choice?.delta?.content;
     if (content) deltas.push({ kind: 'text', text: content });

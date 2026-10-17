@@ -18,7 +18,7 @@ export const Marginalia = forwardRef<
       ref={ref}
       type={type}
       className={cn(
-        'label-mono cursor-pointer transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
+        'label-mono cursor-pointer whitespace-nowrap transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40',
         active ? 'text-primary [font-weight:600]' : 'text-primary/70',
         className,
       )}

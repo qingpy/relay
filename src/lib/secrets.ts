@@ -49,7 +49,22 @@ async function fetchStatus(): Promise<SecretStatus> {
 }
 
 /** Set or clear a connection's secret (empty string clears the field). */
-export async function putConnectionSecret(
+const connectionWrites = new Map<string, Promise<unknown>>();
+
+/** Set a connection's key(s). Writes for one connection go out in order, so
+ *  per-keystroke saves can't land a stale prefix last. */
+export function putConnectionSecret(
+  id: string,
+  patch: { apiKey?: string; privateKey?: string },
+): Promise<void> {
+  const run = (connectionWrites.get(id) ?? Promise.resolve()).then(() =>
+    writeConnectionSecret(id, patch),
+  );
+  connectionWrites.set(id, run.catch(() => undefined));
+  return run;
+}
+
+async function writeConnectionSecret(
   id: string,
   patch: { apiKey?: string; privateKey?: string },
 ): Promise<void> {

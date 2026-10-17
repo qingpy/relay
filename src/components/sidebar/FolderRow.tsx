@@ -81,7 +81,12 @@ export function FolderRow({
       confirmLabel: 'Delete',
       destructive: true,
     });
-    if (ok) await deleteFolder(folder.id);
+    if (!ok) return;
+    const targetId = await deleteFolder(folder.id);
+    // Its chats moved to `targetId`; the selection follows them.
+    if (useUiStore.getState().activePresetId === folder.id) {
+      setActivePreset(targetId);
+    }
   };
 
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
@@ -95,7 +100,8 @@ export function FolderRow({
       role="button"
       tabIndex={0}
       onClick={onActivate}
-      onKeyDown={(e) => e.key === 'Enter' && onActivate()}
+      // Only Enter on the row itself (see SessionRow).
+      onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onActivate()}
       className={cn(
         'group flex cursor-pointer items-center gap-2 px-8 pb-3 pt-1 outline-none transition-colors',
         isDragging && 'opacity-50',

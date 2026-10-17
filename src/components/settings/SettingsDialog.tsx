@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import {
+  DEFAULT_ASIDE_PROMPT,
   DEFAULT_TRASH_RETENTION_DAYS,
   getAppConfig,
   updateAppConfig,
@@ -11,9 +12,10 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
+import { fieldClass, Input } from '@/components/ui/input';
+import { Marginalia } from '@/components/ui/marginalia';
 import { Switch } from '@/components/ui/switch';
-import { UI_STYLES, type UiStyle } from '@/db/types';
+import { resolveStyle, UI_STYLES, type UiStyle } from '@/db/types';
 import { cn } from '@/lib/utils';
 import { useUiStore } from '@/store/ui';
 import { AutoTitleSettings } from './AutoTitleSettings';
@@ -34,20 +36,25 @@ const ITEMS: { id: PanelId; title: string }[] = [
 ];
 
 const STYLE_LABEL: Record<UiStyle, string> = {
-  stationery: 'Stationery',
-  night: 'Night',
-  paper: 'Paper',
-  ink: 'Ink',
-  soft: 'Soft',
+  relay: 'Relay',
+  archival: 'Archival',
+  monograph: 'Monograph',
+  botanical: 'Botanical',
+  studio: 'Studio',
+  carbon: 'Carbon',
+  polar: 'Polar',
 };
 
-/** Canvas + accent chips for the style row (must match index.css palettes). */
-const STYLE_SWATCH: Record<UiStyle, { canvas: string; accent: string }> = {
-  stationery: { canvas: '#f4f5f6', accent: '#425a70' },
-  night: { canvas: '#16181c', accent: '#8aa4bc' },
-  paper: { canvas: '#f3eee4', accent: '#6b4a32' },
-  ink: { canvas: '#ffffff', accent: '#111111' },
-  soft: { canvas: '#f4f5f6', accent: '#425a70' },
+/** Sidebar / canvas / accent chips for the style row — a miniature of each
+ *  style's surface topology (must match index.css palettes). */
+const STYLE_SWATCH: Record<UiStyle, { side: string; canvas: string; accent: string }> = {
+  relay: { side: '#f4f5f6', canvas: '#f4f5f6', accent: '#425a70' },
+  archival: { side: '#ece5d8', canvas: '#fbf8f2', accent: '#7d2a2a' },
+  monograph: { side: '#ffffff', canvas: '#ffffff', accent: '#d92d1a' },
+  botanical: { side: '#e7ebe2', canvas: '#f5f3ee', accent: '#1f5240' },
+  studio: { side: '#18181b', canvas: '#f8f7f4', accent: '#c84b31' },
+  carbon: { side: '#0d0e11', canvas: '#111214', accent: '#e5a93c' },
+  polar: { side: '#191d24', canvas: '#191d24', accent: '#8fd3e8' },
 };
 
 export function SettingsDialog() {
@@ -97,6 +104,7 @@ export function SettingsDialog() {
                 <>
                   <StyleSettings />
                   <AutoTitleSettings />
+                  <AsideSettings />
                   <CodeBlockSettings />
                   <ExportSettings />
                   <TrashSettings />
@@ -119,7 +127,7 @@ export function SettingsDialog() {
 
 function StyleSettings() {
   const config = useLiveQuery(() => getAppConfig(), []);
-  const value = config?.uiStyle ?? 'stationery';
+  const value = resolveStyle(config?.uiStyle);
   return (
     <section className="flex flex-col gap-2">
       <SectionLabel>Style</SectionLabel>
@@ -136,17 +144,59 @@ function StyleSettings() {
               aria-pressed={on}
               onClick={() => void updateAppConfig({ uiStyle: id })}
               className={cn(
-                'flex size-8 shrink-0 flex-col overflow-hidden border transition-colors',
+                'flex size-8 shrink-0 overflow-hidden border transition-colors',
                 on ? 'border-foreground' : 'border-input hover:border-foreground',
               )}
-              style={id === 'soft' ? { borderRadius: 4 } : undefined}
             >
-              <span className="min-h-0 flex-1" style={{ background: sw.canvas }} />
-              <span className="h-1.5 shrink-0" style={{ background: sw.accent }} />
+              <span className="w-2 shrink-0 border-r border-black/10" style={{ background: sw.side }} />
+              <span className="flex min-w-0 flex-1 flex-col" style={{ background: sw.canvas }}>
+                <span className="min-h-0 flex-1" />
+                <span className="h-1.5 shrink-0" style={{ background: sw.accent }} />
+              </span>
             </button>
           );
         })}
       </div>
+    </section>
+  );
+}
+
+function AsideSettings() {
+  const config = useLiveQuery(() => getAppConfig(), []);
+  // Local buffer, as with the title prompt: a live-query round trip per
+  // keystroke resets the caret and breaks IME composition.
+  const [prompt, setPrompt] = useState<string | null>(null);
+  useEffect(() => {
+    if (config && prompt === null) {
+      setPrompt(config.asidePrompt ?? DEFAULT_ASIDE_PROMPT);
+    }
+  }, [config, prompt]);
+  if (!config || prompt === null) return null;
+
+  // As with the title prompt: unset follows the built-in default, only a
+  // customized prompt is stored, empty means none.
+  const save = (v: string) => {
+    setPrompt(v);
+    void updateAppConfig({ asidePrompt: v === DEFAULT_ASIDE_PROMPT ? undefined : v });
+  };
+  const reset = () => {
+    setPrompt(DEFAULT_ASIDE_PROMPT);
+    void updateAppConfig({ asidePrompt: undefined });
+  };
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-center justify-between">
+        <SectionLabel>Aside prompt</SectionLabel>
+        {config.asidePrompt !== undefined && (
+          <Marginalia onClick={reset}>Reset</Marginalia>
+        )}
+      </div>
+      <textarea
+        value={prompt}
+        onChange={(e) => save(e.target.value)}
+        rows={3}
+        className={`${fieldClass} resize-y`}
+      />
     </section>
   );
 }

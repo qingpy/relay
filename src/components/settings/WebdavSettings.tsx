@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { getAppConfig } from '@/db/db';
 import type { WebDavConfig } from '@/db/types';
+import { persistLocalStore } from '@/lib/localstore';
 import { putWebdavSecret, webdavSecretSet } from '@/lib/secrets';
 import { formatDateTime } from '@/lib/time';
 import {
@@ -118,6 +119,8 @@ export function WebdavSettings() {
       await syncNow();
       await backupNowToWebdav();
       await refreshBackups();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -132,6 +135,7 @@ export function WebdavSettings() {
     if (!ok) return;
     try {
       await restoreWebdavBackup(name);
+      await persistLocalStore();
       location.reload();
     } catch (e) {
       flash(e instanceof Error ? e.message : String(e));
@@ -145,8 +149,12 @@ export function WebdavSettings() {
       destructive: true,
     });
     if (!ok) return;
-    await deleteWebdavBackup(name);
-    await refreshBackups();
+    try {
+      await deleteWebdavBackup(name);
+      await refreshBackups();
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e));
+    }
   };
 
   // Resolve a paused conflict (both sides have data, this origin never synced):

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { fieldClass } from '@/components/ui/input';
 import { FlatSelect } from '@/components/ui/flat-select';
+import { Marginalia } from '@/components/ui/marginalia';
 import { DEFAULT_TITLE_PROMPT, getAppConfig, updateAppConfig } from '@/db/db';
 import { listConnections } from '@/db/repo';
 import { SectionLabel } from './SectionLabel';
@@ -25,10 +26,25 @@ export function AutoTitleSettings() {
 
   const conn = connections.find((c) => c.id === config.titleConnectionId);
   const models = conn?.models ?? [];
+  // Unset follows the built-in default (and its future updates); only a
+  // customized prompt is stored. Empty is a real choice: no prompt.
+  const savePrompt = (v: string) => {
+    setTitlePrompt(v);
+    void updateAppConfig({ titlePrompt: v === DEFAULT_TITLE_PROMPT ? undefined : v });
+  };
+  const reset = () => {
+    setTitlePrompt(DEFAULT_TITLE_PROMPT);
+    void updateAppConfig({ titlePrompt: undefined });
+  };
 
   return (
     <section className="flex flex-col gap-2">
-      <SectionLabel>Auto-title</SectionLabel>
+      <div className="flex items-center justify-between">
+        <SectionLabel>Auto-title</SectionLabel>
+        {config.titleConnectionId && config.titlePrompt !== undefined && (
+          <Marginalia onClick={reset}>Reset</Marginalia>
+        )}
+      </div>
       <div className="flex gap-2">
         <div className="flex-1">
           <FlatSelect
@@ -86,10 +102,7 @@ export function AutoTitleSettings() {
       {config.titleConnectionId && (
         <textarea
           value={titlePrompt ?? DEFAULT_TITLE_PROMPT}
-          onChange={(e) => {
-            setTitlePrompt(e.target.value);
-            void updateAppConfig({ titlePrompt: e.target.value });
-          }}
+          onChange={(e) => savePrompt(e.target.value)}
           rows={3}
           className={`${fieldClass} resize-y`}
         />

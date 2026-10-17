@@ -163,7 +163,7 @@ export const MessageItem = memo(function MessageItem({
         {text && (
           <div
             className={cn(
-              'mt-3 whitespace-pre-wrap text-base leading-relaxed',
+              'reading mt-3 whitespace-pre-wrap text-base leading-relaxed',
               INDENT,
             )}
           >

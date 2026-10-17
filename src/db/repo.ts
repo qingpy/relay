@@ -53,10 +53,11 @@ export async function createSession(input: {
   return session;
 }
 
-/** Live (non-trashed) sessions, ascending by `order` (newest first until reordered). */
-export async function listSessions(): Promise<Session[]> {
+/** Live (non-trashed) sessions, ascending by `order` (newest first until reordered).
+ *  `withTrashed` keeps trashed ones in place, for finding a neighbor. */
+export async function listSessions(withTrashed = false): Promise<Session[]> {
   const all = await db.sessions.orderBy('order').toArray();
-  return all.filter((s) => s.deletedAt == null);
+  return withTrashed ? all : all.filter((s) => s.deletedAt == null);
 }
 
 /** Trashed sessions, most-recently-deleted first. */
@@ -96,9 +97,25 @@ export async function setSessionSystemPrompt(
   await db.sessions.update(id, { systemPrompt: systemPrompt || undefined });
 }
 
-/** Move a chat to the trash: hidden from the sidebar, restorable until purged. */
-export async function trashSession(id: string): Promise<void> {
-  await db.sessions.update(id, { deletedAt: Date.now() });
+/** Move chats to the trash in one write: hidden from the sidebar, restorable
+ *  until purged. */
+export async function trashSessions(ids: string[]): Promise<void> {
+  await db.sessions.where('id').anyOf(ids).modify({ deletedAt: Date.now() });
+}
+
+/** Chats among `ids` with no live content: no turn or aside that isn't a
+ *  deleted placeholder or a context divider. Deleting these skips the trash. */
+export async function emptySessionIds(ids: string[]): Promise<Set<string>> {
+  const empty = new Set<string>();
+  for (const id of ids) {
+    const live = await db.messages
+      .where('sessionId')
+      .equals(id)
+      .filter((m) => !m.deletedAt && m.role !== 'divider')
+      .count();
+    if (live === 0) empty.add(id);
+  }
+  return empty;
 }
 
 /** Bring a chat back out of the trash, at the top of its preset.
@@ -239,7 +256,7 @@ export async function updateFolderConfig(
 
 /** Delete a preset, moving its chats into another preset (chats are never
  *  loose). If it was the last preset, a fresh "General" preset is created. */
-export async function deleteFolder(id: string): Promise<void> {
+export async function deleteFolder(id: string): Promise<string> {
   const others = (await listFolders()).filter((f) => f.id !== id);
   let targetId = others[0]?.id ?? null;
   if (!targetId) targetId = (await createFolder('General')).id;
@@ -248,6 +265,7 @@ export async function deleteFolder(id: string): Promise<void> {
     await db.folders.where('parentId').equals(id).modify({ parentId: null });
     await db.folders.delete(id);
   });
+  return targetId;
 }
 
 export async function persistFolderOrder(
@@ -352,16 +370,15 @@ export async function deletePrompt(id: string): Promise<void> {
   await db.prompts.delete(id);
 }
 
+/** A chat's messages with divider refs repaired in memory. Read-only: it runs
+ *  inside live queries, where a write throws. Writers repair on save
+ *  (spliceMessage) and imports repair on load. */
 export async function getMessages(sessionId: string): Promise<Message[]> {
   const msgs = await db.messages
     .where('sessionId')
     .equals(sessionId)
     .sortBy('createdAt');
-  const next = sanitizeClearRefs(detachClearDividers(msgs));
-  if (next === msgs) return msgs;
-  const changed = next.filter((m, i) => m !== msgs[i]);
-  if (changed.length) await db.messages.bulkPut(changed);
-  return next;
+  return sanitizeClearRefs(detachClearDividers(msgs));
 }
 
 export function getMessage(id: string): Promise<Message | undefined> {
@@ -471,14 +488,17 @@ export async function spliceMessage(
     await db.messages.delete(id);
     await db.files.where('messageId').equals(id).delete();
     if (session?.currentLeafId === id) {
+      // With no kids, land on the surviving sibling branch under the parent
+      // (a stopped empty regenerate shows the earlier reply again), else the
+      // parent itself.
+      const rest = all
+        .filter((m) => m.id !== id)
+        .map((m) => (m.parentId === id ? { ...m, parentId: msg.parentId } : m));
       const next = kids.length
-        ? leafOf(
-            all.map((m) =>
-              m.parentId === id ? { ...m, parentId: msg.parentId } : m,
-            ),
-            kids[kids.length - 1].id,
-          )
-        : (msg.parentId ?? msg.clearedFromId);
+        ? leafOf(rest, kids[kids.length - 1].id)
+        : msg.parentId
+          ? leafOf(rest, msg.parentId)
+          : msg.clearedFromId;
       if (next) {
         await db.sessions.update(msg.sessionId, { currentLeafId: next });
       }
@@ -505,6 +525,11 @@ export async function spliceMessage(
       for (const d of drop) {
         await db.files.where('messageId').equals(d.id).delete();
       }
+      // Dividers that remembered a dropped stub now point at nothing.
+      const kept = retargeted.filter((m) => keep.has(m.id));
+      const repaired = sanitizeClearRefs(kept);
+      const fixed = repaired.filter((m, i) => m !== kept[i]);
+      if (fixed.length) await db.messages.bulkPut(fixed);
     }
     const sess = await db.sessions.get(msg.sessionId);
     if (sess?.currentLeafId && !keep.has(sess.currentLeafId)) {
@@ -643,9 +668,7 @@ export async function forkAsideChat(
   const newSession: Session = {
     id: newSessionId,
     folderId: session.folderId,
-    title: session.title.startsWith('Fork of ')
-      ? session.title
-      : `Fork of ${session.title}`,
+    title: `Fork of ${session.title}`,
     systemPrompt: session.systemPrompt,
     createdAt: now,
     updatedAt: now,

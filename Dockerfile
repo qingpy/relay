@@ -12,7 +12,10 @@ RUN npm run build && npm run build:server
 #     the proxy's only deps (hono, @hono/node-server) are bundled in. ---
 FROM node:22-alpine AS run
 WORKDIR /app
+# HOST: listen on the container's interfaces; `-p` decides who can reach it
+# (`-p 127.0.0.1:8787:8787` keeps it on the host machine).
 ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
     API_PORT=8787 \
     RELAY_DATA_FILE=/data/relay.json \
     RELAY_SECRETS_FILE=/data/secrets.json \

@@ -2,6 +2,7 @@ import { db, getAppConfig, onDbChange, updateAppConfig } from '@/db/db';
 import { backupFilename, exportAll, importAll, type BackupFile } from '@/lib/backup';
 import { webdavSecretSet } from '@/lib/secrets';
 import type { WebDavConfig } from '@/db/types';
+import { persistLocalStore } from '@/lib/localstore';
 import { useUiStore } from '@/store/ui';
 
 /**
@@ -57,6 +58,9 @@ export const isSyncConflict = (): boolean => conflicted;
 let cursorRev = 0;
 let cursorLastSync = 0;
 let cursorLoaded = false;
+// `dirty` is mirrored into the cursor as `pending`, so edits made before a
+// restart (tab closed mid-push, offline) still win on the next open instead
+// of being overwritten by a newer server copy.
 
 /** Load the durable cursor once. If the proxy has none yet (first run after the
  *  upgrade, or a genuinely fresh machine), seed it from this browser's legacy
@@ -67,10 +71,15 @@ async function loadCursor(): Promise<void> {
   try {
     const res = await fetch('/api/data/sync-state');
     if (res.ok) {
-      const s = (await res.json()) as { rev?: number; lastSyncAt?: number };
+      const s = (await res.json()) as {
+        rev?: number;
+        lastSyncAt?: number;
+        pending?: boolean;
+      };
       if ((s.rev ?? 0) > 0) {
         cursorRev = s.rev ?? 0;
         cursorLastSync = s.lastSyncAt ?? 0;
+        if (s.pending) dirty = true;
         return;
       }
     }
@@ -87,11 +96,18 @@ async function loadCursor(): Promise<void> {
 }
 
 async function persistCursor(): Promise<void> {
+  // Before the load, the in-memory cursor is a placeholder (rev 0) that must
+  // never overwrite the durable one.
+  if (!cursorLoaded) return;
   try {
     await fetch('/api/data/sync-state', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ rev: cursorRev, lastSyncAt: cursorLastSync }),
+      body: JSON.stringify({
+        rev: cursorRev,
+        lastSyncAt: cursorLastSync,
+        pending: dirty,
+      }),
     });
   } catch {
     // Best-effort: the in-memory value still drives this session, and the next
@@ -204,11 +220,14 @@ async function applyRemote(snap: Snapshot): Promise<void> {
   applyingRemote = true;
   try {
     await importAll(snap.data);
-    setRev(snap.rev);
-    dirty = false;
   } finally {
     applyingRemote = false;
   }
+  // The pulled data must be on disk before the cursor claims it: a reload
+  // in between would otherwise restart on old data marked as synced.
+  await persistLocalStore();
+  dirty = false;
+  setRev(snap.rev);
 }
 
 /** The snapshot WebDAV gets — attachment bytes included unless the WebDAV
@@ -220,6 +239,7 @@ function exportForWebdav(c: WebDavConfig): Promise<BackupFile> {
 
 async function push(c: WebDavConfig, baseRev: number): Promise<void> {
   dirty = false; // clear up-front; writes during the upload re-flag it
+  // (persisted with the new rev below; a failure re-persists `pending`)
   let data: BackupFile;
   try {
     data = await exportForWebdav(c);
@@ -236,6 +256,7 @@ async function push(c: WebDavConfig, baseRev: number): Promise<void> {
     setRev(snap.rev);
   } catch (e) {
     dirty = true; // upload failed — keep the change pending
+    void persistCursor();
     throw e;
   }
 }
@@ -281,7 +302,8 @@ function parseBackupList(xml: string): WebdavBackup[] {
     const len = r.getElementsByTagNameNS('*', 'getcontentlength')[0]?.textContent ?? '';
     out.push({ name, mtime: lm ? Date.parse(lm) : 0, size: len ? Number(len) : 0 });
   }
-  return out.sort((a, b) => b.mtime - a.mtime);
+  // Names embed the timestamp; `getlastmodified` is optional on some servers.
+  return out.sort((a, b) => b.name.localeCompare(a.name) || b.mtime - a.mtime);
 }
 
 /** List the versioned backups on the server, newest first. */
@@ -386,7 +408,17 @@ export async function maybeRunScheduledWebdavBackup(): Promise<void> {
  * local data automatically — anything ambiguous pauses with a visible conflict,
  * and a past version can always be taken back via Restore (the backup list).
  */
-async function reconcile(): Promise<void> {
+let reconciling: Promise<void> | null = null;
+
+/** One sync at a time: the timer, tab-hide, and settings saves share a run. */
+function reconcile(): Promise<void> {
+  reconciling ??= runReconcile().finally(() => {
+    reconciling = null;
+  });
+  return reconciling;
+}
+
+async function runReconcile(): Promise<void> {
   const cfg = (await getAppConfig()).webdav;
   if (!configured(cfg)) {
     setStatus('off');
@@ -413,6 +445,12 @@ async function reconcile(): Promise<void> {
           'This device and the server both have data — sync is paused so nothing is overwritten. Use Restore to adopt a server backup.',
         );
       }
+    } else if (remote.rev < getRev()) {
+      // The server copy went backwards (folder reset, another device
+      // re-seeded it): ambiguous, so neither side overwrites the other.
+      throw new ConflictError(
+        'The server copy is older than this device last synced — sync is paused so nothing is overwritten. Choose which copy to keep.',
+      );
     } else if (dirty) {
       await push(cfg, remote.rev); // local edits win
     } else if (remote.rev > getRev()) {
@@ -496,7 +534,9 @@ function attachHooks(): void {
   if (hooksAttached) return;
   hooksAttached = true;
   onDbChange(() => {
-    if (!applyingRemote) dirty = true;
+    if (applyingRemote || dirty) return;
+    dirty = true;
+    void persistCursor(); // first edit since the last sync: make it durable
   });
 }
 

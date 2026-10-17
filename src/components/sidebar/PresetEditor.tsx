@@ -348,22 +348,6 @@ function Form({ folder, session }: { folder: Folder; session?: Session }) {
         onChange={(v) => saveSettings({ topP: v })}
       />
 
-      <div className={FIELD}>
-        <GroupHeader label="Max tokens" />
-        <input
-          type="number"
-          min={1}
-          placeholder="Provider default"
-          value={settings.maxTokens ?? ''}
-          onChange={(e) =>
-            saveSettings({
-              maxTokens: e.target.value ? Number(e.target.value) : undefined,
-            })
-          }
-          className={FLAT_INPUT}
-        />
-      </div>
-
       {reasoning === 'effort' && (
         <EffortField
           value={settings.reasoningEffort}

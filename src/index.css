@@ -1,58 +1,55 @@
 @import 'tailwindcss';
 
 /* ---------------------------------------------------------------------------
-   Relay — "Unboxed Stationery" design system.
+   Relay design tokens. The language is flat and editorial: hairline borders,
+   surface contrast for depth, zero shadows, uppercase-monospace labels, one
+   pigment accent per style, and a typeface per style for all text but the
+   labels and code.
 
-   A strictly-flat, airy, editorial look: a light grey canvas, pure-white only
-   for elevated surfaces (the input strip, menus, dialogs), delicate hairline
-   dividers, a single calm slate-blue accent, and monospace for labels/metadata.
-
-   Palette is deliberately limited to black · white · grey · slate-blue.
-   No rounded corners, no shadows — separation comes from hairlines and the
-   white/grey surface contrast. Named styles (Night, Paper, Ink, Soft) remap
-   these tokens on `html[data-style]`.
+   Relay (default, below) is the original Stationery: airy grey canvas shared
+   with the sidebar, white cards, slate-blue ink, delete in ink.
+   Six archetypes (html[data-style]) spread over three surface topologies:
+     Recessed desk  - sidebar darker than a bright canvas, white cards:
+                      Archival, Botanical, Carbon.
+     Flush grid     - sidebar = canvas = card, structure from hairlines:
+                      Monograph, Polar.
+     Split frame    - dark sidebar beside a light reading canvas: Studio
+                      (its sidebar re-scopes the tokens via [data-pane]).
+   Each archetype pairs its accent (--primary) with one annotation hue for
+   --destructive and code strings / literals; keywords take the accent,
+   builtins and comments stay neutral.
 --------------------------------------------------------------------------- */
 :root {
   --radius: 0;
 
-  /* Core surfaces & ink */
-  --background: #f4f5f6;          /* airy canvas grey */
-  --foreground: #1a1c20;          /* soft, highly readable ink */
-
-  --card: #ffffff;                /* elevated surfaces */
+  --background: #f4f5f6;
+  --foreground: #1a1c20;
+  --card: #ffffff;
   --card-foreground: #1a1c20;
-
   --popover: #ffffff;
   --popover-foreground: #1a1c20;
-
-  /* The one accent — a calm slate-blue */
   --primary: #425a70;
   --primary-foreground: #ffffff;
-
-  /* Subtle grey fills */
   --secondary: #eaecee;
   --secondary-foreground: #1a1c20;
-
   --muted: #edeef0;
-  --muted-foreground: #828a94;    /* mid-grey for metadata */
-
-  --accent: #e8eaec;              /* hover wash */
+  --muted-foreground: #828a94;
+  --accent: #e8eaec;
   --accent-foreground: #1a1c20;
-
-  /* No red in the palette — "destructive" reads as final, high-contrast ink. */
+  /* Delete reads as final, high-contrast ink. */
   --destructive: #1a1c20;
   --destructive-foreground: #ffffff;
-
-  --border: #e2e4e6;              /* delicate fineliner */
+  --border: #e2e4e6;
   --input: #e2e4e6;
   --ring: #425a70;
-
-  /* Sidebar shares the canvas; a single hairline separates it from the work area. */
   --sidebar: #f4f5f6;
   --sidebar-foreground: #1a1c20;
   --sidebar-border: #e2e4e6;
   --sidebar-accent: #e8eaec;
   --sidebar-accent-foreground: #1a1c20;
+
+  /* Message text size (.md / .reading); each style may tune it. */
+  --reading-size: 1rem;
 }
 
 @theme inline {
@@ -82,7 +79,7 @@
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 
-  /* Strictly flat by default (`--radius: 0`). Soft remaps `--radius`.
+  /* Strictly flat by default (`--radius: 0`). Botanical remaps `--radius`.
      `rounded-full` stays circular for dots. */
   --radius-xs: var(--radius);
   --radius-sm: var(--radius);
@@ -103,11 +100,14 @@
   --shadow-xl: none;
   --shadow-2xl: none;
 
-  /* Latin first (Inter, then platform sans); Chinese & other CJK fall through to
-     the bundled Noto Sans SC — a clean humanist sans tuned to sit beside Inter,
-     replacing the browser's serif (SimSun) default. Per-glyph fallback keeps
-     Latin on Inter while ideographs pick Noto Sans SC; PingFang/YaHei stay as a
-     last resort for any glyph it lacks. */
+}
+
+/* Fonts sit in a plain (var-referencing) theme block so a style can swap
+   them at runtime: `font-mono` utilities, label-mono, and code all follow.
+   Latin first (Inter, then platform sans); Chinese & other CJK fall through to
+   the bundled Noto Sans SC, a clean humanist sans tuned to sit beside Inter.
+   PingFang/YaHei stay as a last resort for any glyph it lacks. */
+@theme {
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica,
     Arial, 'Noto Sans SC Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', SFMono-Regular, Menlo,
@@ -186,8 +186,11 @@
 /* ---------------------------------------------------------------------------
    Markdown ("prose") — compact, tuned for chat density and the flat aesthetic.
 --------------------------------------------------------------------------- */
+.md,
+.reading {
+  font-size: var(--reading-size);
+}
 .md {
-  font-size: 1rem;
   line-height: 1.75;
   word-wrap: break-word;
 }
@@ -288,141 +291,326 @@
 .md img { max-width: 100%; }
 
 /* ---------------------------------------------------------------------------
-   Syntax highlighting — kept calm and on-palette: ink, grey, and slate only,
-   so code blocks read as quiet stationery rather than a rainbow.
+   Syntax highlighting. Relay (below) uses fountain-pen inks around its slate
+   keyword; the archetypes use three tones: the accent for keywords and
+   titles, the annotation hue for strings / numbers / literals, neutral ink
+   for builtins, attributes, and comments.
 --------------------------------------------------------------------------- */
 :root {
-  --hl-comment: #9aa1ab;
+  --hl-comment: #8c95a0;
   --hl-keyword: #425a70;
-  --hl-string: #5f6b78;
-  --hl-number: #1a1c20;
-  --hl-title: #34506b;
-  --hl-attr: #5f6b78;
-  --hl-builtin: #425a70;
-  --hl-literal: #1a1c20;
+  --hl-title: #1e3a56;
+  --hl-string: #3b6654;
+  --hl-number: #8c4a32;
+  --hl-literal: #8c4a32;
+  --hl-attr: #6b5344;
+  --hl-builtin: #5b4b70;
 }
 
-html[data-style='night'] {
-  color-scheme: dark;
-  --background: #16181c;
-  --foreground: #eceef0;
-  --card: #1e2126;
-  --card-foreground: #eceef0;
-  --popover: #1e2126;
-  --popover-foreground: #eceef0;
-  --primary: #8aa4bc;
-  --primary-foreground: #16181c;
-  --secondary: #2a2e34;
-  --secondary-foreground: #eceef0;
-  --muted: #262a30;
-  --muted-foreground: #8b929c;
-  --accent: #2a2e34;
-  --accent-foreground: #eceef0;
-  --destructive: #eceef0;
-  --destructive-foreground: #16181c;
-  --border: #2f343b;
-  --input: #2f343b;
-  --ring: #8aa4bc;
-  --sidebar: #16181c;
-  --sidebar-foreground: #eceef0;
-  --sidebar-border: #2f343b;
-  --sidebar-accent: #2a2e34;
-  --sidebar-accent-foreground: #eceef0;
-  --hl-comment: #7a818c;
-  --hl-keyword: #8aa4bc;
-  --hl-string: #a8b0ba;
-  --hl-number: #eceef0;
-  --hl-title: #9db4c8;
-  --hl-attr: #a8b0ba;
-  --hl-builtin: #8aa4bc;
-  --hl-literal: #eceef0;
+/* Archival: cotton paper, warm-stone sidebar, oxblood ink, serif reading. */
+html[data-style='archival'] {
+  --background: #fbf8f2;
+  --foreground: #221c16;
+  --card: #fffdf9;
+  --card-foreground: #221c16;
+  --popover: #fffdf9;
+  --popover-foreground: #221c16;
+  --primary: #7d2a2a;
+  --primary-foreground: #fffdf9;
+  --secondary: #efe8dc;
+  --secondary-foreground: #221c16;
+  --muted: #f2ece1;
+  --muted-foreground: #857a6b;
+  --accent: #ece4d6;
+  --accent-foreground: #221c16;
+  --destructive: #a4561e;
+  --destructive-foreground: #fffdf9;
+  --border: #e3d9c8;
+  --input: #d6cab6;
+  --ring: #7d2a2a;
+  --sidebar: #ece5d8;
+  --sidebar-foreground: #221c16;
+  --sidebar-border: #ddd2bf;
+  --sidebar-accent: #e3dacb;
+  --sidebar-accent-foreground: #221c16;
+  --hl-comment: #9b8f7f;
+  --hl-keyword: #7d2a2a;
+  --hl-string: #9a5a24;
+  --hl-number: #9a5a24;
+  --hl-title: #5e1f1f;
+  --hl-attr: #5f574d;
+  --hl-builtin: #5f574d;
+  --hl-literal: #9a5a24;
 }
 
-html[data-style='paper'] {
-  --background: #f3eee4;
-  --foreground: #2c2416;
-  --card: #faf6ee;
-  --card-foreground: #2c2416;
-  --popover: #faf6ee;
-  --popover-foreground: #2c2416;
-  --primary: #6b4a32;
-  --primary-foreground: #faf6ee;
-  --secondary: #e8dfd0;
-  --secondary-foreground: #2c2416;
-  --muted: #ebe4d6;
-  --muted-foreground: #8a7d6b;
-  --accent: #e8dfd0;
-  --accent-foreground: #2c2416;
-  --destructive: #2c2416;
-  --destructive-foreground: #faf6ee;
-  --border: #e0d4c2;
-  --input: #e0d4c2;
-  --ring: #6b4a32;
-  --sidebar: #f3eee4;
-  --sidebar-foreground: #2c2416;
-  --sidebar-border: #e0d4c2;
-  --sidebar-accent: #e8dfd0;
-  --sidebar-accent-foreground: #2c2416;
-  --hl-comment: #9a8d7a;
-  --hl-keyword: #6b4a32;
-  --hl-string: #7a6a56;
-  --hl-number: #2c2416;
-  --hl-title: #5a3d28;
-  --hl-attr: #7a6a56;
-  --hl-builtin: #6b4a32;
-  --hl-literal: #2c2416;
-}
-
-html[data-style='ink'] {
+/* Monograph: flush pure white, pitch ink, black structural hairlines,
+   electric vermilion. */
+html[data-style='monograph'] {
   --background: #ffffff;
-  --foreground: #111111;
+  --foreground: #0a0a0a;
   --card: #ffffff;
-  --card-foreground: #111111;
+  --card-foreground: #0a0a0a;
   --popover: #ffffff;
-  --popover-foreground: #111111;
-  --primary: #111111;
+  --popover-foreground: #0a0a0a;
+  --primary: #d92d1a;
   --primary-foreground: #ffffff;
   --secondary: #f0f0f0;
-  --secondary-foreground: #111111;
-  --muted: #f0f0f0;
-  --muted-foreground: #5c5c5c;
-  --accent: #ececec;
-  --accent-foreground: #111111;
-  --destructive: #111111;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f2f2f2;
+  --muted-foreground: #6b6b6b;
+  --accent: #efefef;
+  --accent-foreground: #0a0a0a;
+  --destructive: #c4210f;
   --destructive-foreground: #ffffff;
-  --border: #bdbdbd;
-  --input: #bdbdbd;
-  --ring: #111111;
+  --border: #111111;
+  --input: #111111;
+  --ring: #d92d1a;
   --sidebar: #ffffff;
-  --sidebar-foreground: #111111;
-  --sidebar-border: #bdbdbd;
-  --sidebar-accent: #ececec;
-  --sidebar-accent-foreground: #111111;
-  --hl-comment: #6a6a6a;
-  --hl-keyword: #111111;
-  --hl-string: #3a3a3a;
-  --hl-number: #111111;
-  --hl-title: #111111;
-  --hl-attr: #3a3a3a;
-  --hl-builtin: #111111;
-  --hl-literal: #111111;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-border: #111111;
+  --sidebar-accent: #efefef;
+  --sidebar-accent-foreground: #0a0a0a;
+  --hl-comment: #8a8a8a;
+  --hl-keyword: #d92d1a;
+  --hl-string: #3346a8;
+  --hl-number: #3346a8;
+  --hl-title: #0a0a0a;
+  --hl-attr: #555555;
+  --hl-builtin: #555555;
+  --hl-literal: #3346a8;
 }
 
-html[data-style='soft'] {
-  --radius: 0.25rem;
-  --radius-xs: 0.25rem;
-  --radius-sm: 0.25rem;
-  --radius-md: 0.25rem;
-  --radius-lg: 0.25rem;
-  --radius-xl: 0.25rem;
-  --radius-2xl: 0.25rem;
-  --radius-3xl: 0.25rem;
-  --radius-4xl: 0.25rem;
+/* Botanical: warm alabaster, sage-stone sidebar, soft borders, pine ink,
+   terracotta annotation, rounded corners. */
+html[data-style='botanical'] {
+  --radius: 0.375rem;
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.375rem;
+  --radius-xl: 0.375rem;
+  --radius-2xl: 0.375rem;
+  --radius-3xl: 0.375rem;
+  --radius-4xl: 0.375rem;
+  --background: #f5f3ee;
+  --foreground: #232a24;
+  --card: #fbfaf7;
+  --card-foreground: #232a24;
+  --popover: #fbfaf7;
+  --popover-foreground: #232a24;
+  --primary: #1f5240;
+  --primary-foreground: #fbfaf7;
+  --secondary: #ebe8e0;
+  --secondary-foreground: #232a24;
+  --muted: #eeebe4;
+  --muted-foreground: #7f8579;
+  --accent: #e8e6dd;
+  --accent-foreground: #232a24;
+  --destructive: #b0583a;
+  --destructive-foreground: #fbfaf7;
+  --border: #e2ded3;
+  --input: #d5d1c4;
+  --ring: #1f5240;
+  --sidebar: #e7ebe2;
+  --sidebar-foreground: #232a24;
+  --sidebar-border: #dce0d5;
+  --sidebar-accent: #dde3d6;
+  --sidebar-accent-foreground: #232a24;
+  --hl-comment: #979c91;
+  --hl-keyword: #1f5240;
+  --hl-string: #a5563a;
+  --hl-number: #a5563a;
+  --hl-title: #1a4535;
+  --hl-attr: #5d6659;
+  --hl-builtin: #5d6659;
+  --hl-literal: #a5563a;
+}
+
+/* Studio: split frame. Charcoal sidebar, warm daylight canvas, Braun
+   persimmon ink, petrol annotation in code, oxide red for delete. */
+html[data-style='studio'] {
+  --background: #f8f7f4;
+  --foreground: #1c1b19;
+  --card: #ffffff;
+  --card-foreground: #1c1b19;
+  --popover: #ffffff;
+  --popover-foreground: #1c1b19;
+  --primary: #c84b31;
+  --primary-foreground: #ffffff;
+  --secondary: #efede8;
+  --secondary-foreground: #1c1b19;
+  --muted: #f0eee9;
+  --muted-foreground: #7d7a73;
+  --accent: #ecebe6;
+  --accent-foreground: #1c1b19;
+  --destructive: #9b2f1c;
+  --destructive-foreground: #ffffff;
+  --border: #e3e1db;
+  --input: #d4d1c9;
+  --ring: #c84b31;
+  --sidebar: #18181b;
+  --sidebar-foreground: #ececee;
+  --sidebar-border: #18181b;
+  --sidebar-accent: #27272a;
+  --sidebar-accent-foreground: #ececee;
+  --hl-comment: #9a978f;
+  --hl-keyword: #c84b31;
+  --hl-string: #2e6475;
+  --hl-number: #2e6475;
+  --hl-title: #9e3a24;
+  --hl-attr: #5e5c57;
+  --hl-builtin: #5e5c57;
+  --hl-literal: #2e6475;
+}
+
+/* Studio's sidebar is a dark pane: every token inside it is re-scoped. */
+html[data-style='studio'] [data-pane='sidebar'] {
+  color-scheme: dark;
+  --background: #18181b;
+  --foreground: #ececee;
+  --card: #1f1f23;
+  --card-foreground: #ececee;
+  --popover: #1f1f23;
+  --popover-foreground: #ececee;
+  --primary: #ec7a5c;
+  --primary-foreground: #18181b;
+  --secondary: #27272a;
+  --secondary-foreground: #ececee;
+  --muted: #222226;
+  --muted-foreground: #8b8b93;
+  --accent: #27272a;
+  --accent-foreground: #ececee;
+  --destructive: #f08a7e;
+  --destructive-foreground: #18181b;
+  --border: #2a2a2f;
+  --input: #3a3a40;
+  --ring: #ec7a5c;
+}
+
+/* Carbon: deep carbon, recessed black sidebar, amber phosphor, coral
+   annotation, monospace reading (a literary terminal). */
+html[data-style='carbon'] {
+  color-scheme: dark;
+  --background: #111214;
+  --foreground: #e8e6e1;
+  --card: #181a1d;
+  --card-foreground: #e8e6e1;
+  --popover: #181a1d;
+  --popover-foreground: #e8e6e1;
+  --primary: #e5a93c;
+  --primary-foreground: #111214;
+  --secondary: #1f2125;
+  --secondary-foreground: #e8e6e1;
+  --muted: #1c1e22;
+  --muted-foreground: #8e8f93;
+  --accent: #202327;
+  --accent-foreground: #e8e6e1;
+  --destructive: #e2725b;
+  --destructive-foreground: #111214;
+  --border: #26292e;
+  --input: #33373d;
+  --ring: #e5a93c;
+  --sidebar: #0d0e11;
+  --sidebar-foreground: #e8e6e1;
+  --sidebar-border: #1f2226;
+  --sidebar-accent: #1a1c20;
+  --sidebar-accent-foreground: #e8e6e1;
+  --hl-comment: #6c6e73;
+  --hl-keyword: #e5a93c;
+  --hl-string: #d9826a;
+  --hl-number: #d9826a;
+  --hl-title: #f0c060;
+  --hl-attr: #b5b6b9;
+  --hl-builtin: #9a9ca1;
+  --hl-literal: #d9826a;
+}
+
+/* Polar: flush abyssal blue-slate, icy cyan ink, sage / ochre code. */
+html[data-style='polar'] {
+  color-scheme: dark;
+  --background: #191d24;
+  --foreground: #e3e8ef;
+  --card: #212631;
+  --card-foreground: #e3e8ef;
+  --popover: #212631;
+  --popover-foreground: #e3e8ef;
+  --primary: #8fd3e8;
+  --primary-foreground: #191d24;
+  --secondary: #252b35;
+  --secondary-foreground: #e3e8ef;
+  --muted: #20252e;
+  --muted-foreground: #8792a2;
+  --accent: #252b35;
+  --accent-foreground: #e3e8ef;
+  --destructive: #e0866a;
+  --destructive-foreground: #191d24;
+  --border: #2b313c;
+  --input: #36404c;
+  --ring: #8fd3e8;
+  --sidebar: #191d24;
+  --sidebar-foreground: #e3e8ef;
+  --sidebar-border: #2b313c;
+  --sidebar-accent: #222833;
+  --sidebar-accent-foreground: #e3e8ef;
+  --hl-comment: #667183;
+  --hl-keyword: #8fd3e8;
+  --hl-string: #a8c49a;
+  --hl-number: #d6b46c;
+  --hl-title: #b5e4f2;
+  --hl-attr: #aab4c3;
+  --hl-builtin: #8c97a8;
+  --hl-literal: #d6b46c;
+}
+
+/* Typefaces: each style sets the interface face (--font-sans: messages,
+   composer, sidebar, settings); labels and code keep --font-mono, and
+   --reading-size tunes message text only. Every face is bundled (fontsource /
+   lxgw webfont, unicode-range subsetted), so it only downloads while its
+   style is on. */
+html[data-style='archival'] {
+  /* Contemporary literary serif, Latin and Chinese at one stroke weight. */
+  --font-sans: 'Newsreader Variable', 'Literata Variable', 'Source Han Serif SC',
+    'Noto Serif SC Variable', 'Songti SC', serif;
+  --reading-size: 1.0625rem;
+}
+html[data-style='monograph'] {
+  /* Swiss geometric / neo-brutalist sans. */
+  --font-sans: 'Plus Jakarta Sans Variable', 'DM Sans', 'Helvetica Neue',
+    'HarmonyOS Sans SC', 'PingFang SC', 'Noto Sans SC Variable', sans-serif;
+  --reading-size: 0.96875rem;
+}
+html[data-style='botanical'] {
+  /* Warm humanist sans with a handwritten-kai Chinese. */
+  --font-sans: 'Source Sans 3 Variable', 'Optima', 'Candara', 'LXGW WenKai',
+    'PingFang SC', sans-serif;
+  --reading-size: 1.03125rem;
+}
+html[data-style='studio'] {
+  /* Technical industrial grotesque; IBM Plex Mono for labels and code. */
+  --font-sans: 'IBM Plex Sans Variable', 'Space Grotesk', 'Noto Sans SC Variable',
+    sans-serif;
+  --reading-size: 0.96875rem;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, 'Noto Sans SC Variable',
+    'PingFang SC', 'Microsoft YaHei', monospace;
+}
+html[data-style='carbon'] {
+  /* Literary terminal. */
+  --font-sans: 'iA Writer Quattro', 'iA Writer Quattro S', 'iA Writer Duospace',
+    'JetBrains Mono', 'Sarasa Gothic SC', 'Noto Sans SC Variable', monospace;
+  --reading-size: 0.9375rem;
+}
+html[data-style='polar'] {
+  /* High-x-height screen sans. */
+  --font-sans: 'Atkinson Hyperlegible Next Variable', 'Atkinson Hyperlegible',
+    'Geist', 'Segoe UI', 'Source Han Sans SC', 'Noto Sans SC Variable', sans-serif;
+  --reading-size: 1rem;
 }
 
 /* Rebind Tailwind's --color-* aliases on the themed root so portaled
-   dialogs/menus inherit live values instead of :root's computed stationery. */
-html[data-style] {
+   dialogs/menus inherit live values, and on panes (Studio's sidebar) so
+   re-scoped tokens take effect inside them. */
+html[data-style],
+[data-pane] {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -449,8 +637,8 @@ html[data-style] {
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 }
 
-html[data-style='soft'] :where(.border, .border-t, .border-b, .border-l, .border-r, .border-input):not(.rounded-full) {
-  border-radius: 0.25rem;
+html[data-style='botanical'] :where(.border, .border-t, .border-b, .border-l, .border-r, .border-input):not(.rounded-full) {
+  border-radius: 0.375rem;
 }
 
 /* Floating surfaces: bind to raw tokens so portaled dialogs/menus follow the

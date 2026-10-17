@@ -1,9 +1,12 @@
 import {
   createSession,
   ensureDefaultPreset,
+  getFolder,
+  emptySessionIds,
   getSession,
   listSessions,
-  trashSession,
+  purgeSession,
+  trashSessions as trashSessionRows,
 } from '@/db/repo';
 import type { Session } from '@/db/types';
 import { useUiStore } from '@/store/ui';
@@ -21,6 +24,8 @@ export async function startNewSession(
   if (!target && ui.activeSessionId) {
     target = (await getSession(ui.activeSessionId))?.folderId ?? null;
   }
+  // A deleted preset's id would make an orphan no sidebar row can reach.
+  if (target && !(await getFolder(target))) target = null;
   if (!target) target = await ensureDefaultPreset();
 
   const session = await createSession({ folderId: target });
@@ -30,39 +35,46 @@ export async function startNewSession(
 }
 
 /**
- * Move one or more chats to the trash. If the chat on screen is among them
- * (including when a menu click lands on the deleted row after the menu closes),
- * advance to the next surviving chat in its preset (then the previous), falling
- * back to that preset's blank view when none remain — never leaving a trashed
- * chat showing.
+ * Delete chats. One with content goes to the trash (restorable); an empty one
+ * (no live turn or aside: never sent, or emptied) is removed outright, since
+ * the trash would only hold a blank. The open chat, if among them, steps to
+ * its neighbor first, so the pane never shows a chat mid-removal.
  */
 export async function trashSessions(ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const removed = new Set(ids);
-  // Snapshot siblings before trashing so we can pick a replacement.
-  const all = await listSessions();
+  const ui = useUiStore.getState();
+  const open = ui.activeSessionId;
+  if (open && removed.has(open)) {
+    stepOff(open, await listSessions(true), removed);
+  }
+  const empty = await emptySessionIds(ids);
+  await trashSessionRows(ids.filter((id) => !empty.has(id)));
+  for (const id of empty) await purgeSession(id);
+}
 
-  for (const id of ids) await trashSession(id);
+/**
+ * Step off a chat that is gone (trashed or missing). ChatPane calls this
+ * whenever the open chat turns out to be gone, so no path — a menu
+ * click-through, a sync, a restore — can leave one on screen.
+ */
+export async function leaveChat(id: string): Promise<void> {
+  const all = await listSessions(true);
+  if (useUiStore.getState().activeSessionId !== id) return;
+  stepOff(id, all, new Set());
+}
 
-  const leaveGhost = () => {
-    const ui = useUiStore.getState();
-    const current = ui.activeSessionId;
-    if (!current || !removed.has(current)) return;
-    const presetId = all.find((s) => s.id === current)?.folderId ?? null;
-    const siblings = all.filter((s) => s.folderId === presetId);
-    const i = siblings.findIndex((s) => s.id === current);
-    let nextId: string | null = null;
-    for (let j = i + 1; j < siblings.length && nextId === null; j++) {
-      if (!removed.has(siblings[j].id)) nextId = siblings[j].id;
-    }
-    for (let j = i - 1; j >= 0 && nextId === null; j--) {
-      if (!removed.has(siblings[j].id)) nextId = siblings[j].id;
-    }
-    if (presetId) ui.setActivePreset(presetId);
-    ui.setActiveSession(nextId);
-  };
-
-  leaveGhost();
-  // The row under a just-closed dropdown can still receive the same click.
-  requestAnimationFrame(leaveGhost);
+/** Open the next live chat in `id`'s preset, then the previous, else that
+ *  preset's blank view. `removed` are chats about to go (still live in `all`). */
+function stepOff(id: string, all: Session[], removed: Set<string>): void {
+  const ui = useUiStore.getState();
+  const presetId = all.find((s) => s.id === id)?.folderId ?? ui.activePresetId;
+  const siblings = all.filter((s) => s.folderId === presetId);
+  const i = siblings.findIndex((s) => s.id === id);
+  const live = (s: Session) => !s.deletedAt && !removed.has(s.id);
+  const next =
+    siblings.slice(i + 1).find(live) ??
+    siblings.slice(0, Math.max(i, 0)).reverse().find(live);
+  if (presetId) ui.setActivePreset(presetId);
+  ui.setActiveSession(next?.id ?? null);
 }

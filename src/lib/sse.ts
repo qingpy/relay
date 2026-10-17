@@ -54,24 +54,30 @@ export async function* readSSE(
   }
 }
 
+/** A Test or a title must not spin forever on a provider that stalls. */
+const COLLECT_TIMEOUT_MS = 60_000;
+
 /** POST a built provider request and collect the streamed text deltas into one
  *  string — the simple consumer shared by auto-title and connection tests (the
- *  chat engine has its own full delta loop). An error delta stops collection. */
+ *  chat engine has its own full delta loop). An error delta stops collection;
+ *  a stall past the timeout rejects. */
 export async function collectStreamText(
   provider: Provider,
   req: ProxyRequest,
 ): Promise<{ text: string; error?: string }> {
+  const signal = AbortSignal.timeout(COLLECT_TIMEOUT_MS);
   const res = await fetch(req.url, {
     method: 'POST',
     headers: req.headers,
     body: JSON.stringify(req.body),
+    signal,
   });
   if (!res.ok || !res.body) {
     const j = (await res.json().catch(() => null)) as { error?: string } | null;
     return { text: '', error: j?.error || `HTTP ${res.status}` };
   }
   let text = '';
-  for await (const data of readSSE(res.body)) {
+  for await (const data of readSSE(res.body, signal)) {
     for (const d of provider.parseStreamChunk(data)) {
       if (d.kind === 'text') text += d.text;
       else if (d.kind === 'error') return { text, error: d.message };

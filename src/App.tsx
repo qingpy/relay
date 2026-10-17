@@ -7,6 +7,7 @@ import { TrashDialog } from '@/components/sidebar/TrashDialog';
 import { ConfirmDialog } from '@/components/ui/confirm';
 import { APP_CONFIG_ID, db } from '@/db/db';
 import { ensureDefaultPreset, purgeExpiredTrash } from '@/db/repo';
+import { DARK_STYLES, resolveStyle } from '@/db/types';
 import { maybeRunScheduledBackup } from '@/lib/backupClient';
 import { initLocalStore } from '@/lib/localstore';
 import { initSecrets } from '@/lib/secrets';
@@ -16,6 +17,9 @@ import {
   maybeRunScheduledWebdavSync,
 } from '@/lib/webdav';
 import { useUiStore } from '@/store/ui';
+
+/** Last applied style, read by the inline script in index.html. */
+const STYLE_CACHE_KEY = 'relay.style';
 
 // Settings (with its connection/backup/prompt managers) loads on first open.
 const SettingsDialog = lazy(() =>
@@ -75,18 +79,26 @@ export default function App() {
     document.documentElement.classList.toggle('code-nowrap', wrapCode === false);
   }, [wrapCode]);
 
+  // `null` until the config has loaded: applying a default before then would
+  // flash it over the style index.html already restored from the cache.
   const uiStyle = useLiveQuery(
-    () => db.appConfig.get(APP_CONFIG_ID).then((c) => c?.uiStyle ?? 'stationery'),
+    () =>
+      db.appConfig
+        .get(APP_CONFIG_ID)
+        .then((c) => (c ? resolveStyle(c.uiStyle) : null)),
     [],
   );
   useEffect(() => {
-    const style = uiStyle ?? 'stationery';
-    document.documentElement.dataset.style = style;
-    const scheme = style === 'night' ? 'dark' : 'light';
+    if (!uiStyle) return;
+    document.documentElement.dataset.style = uiStyle;
+    const scheme = DARK_STYLES.includes(uiStyle) ? 'dark' : 'light';
     document.documentElement.style.colorScheme = scheme;
     document
       .querySelector('meta[name="color-scheme"]')
       ?.setAttribute('content', scheme);
+    // Paint-time cache for index.html's inline script (the data file only
+    // arrives after first paint).
+    localStorage.setItem(STYLE_CACHE_KEY, JSON.stringify({ style: uiStyle, scheme }));
   }, [uiStyle]);
 
   // Background work while the app is open: local backups + WebDAV sync. Each

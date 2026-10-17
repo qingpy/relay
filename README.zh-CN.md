@@ -12,12 +12,14 @@
 Docker：
 
 ```bash
-docker run -d --name relay -p 8787:8787 -v relay-data:/data \
+docker run -d --name relay -p 127.0.0.1:8787:8787 -v relay-data:/data \
   ghcr.io/qingpy/relay:latest
 ```
 
 打开 http://localhost:8787。数据、密钥、备份在 `relay-data` 卷里；想放在
-普通目录就用 `-v /path/on/host:/data`。没有 HTTP 鉴权，只绑你信任的网络。
+普通目录就用 `-v /path/on/host:/data`。没有 HTTP 鉴权：默认只有本机能访问。
+要从其他设备使用，Docker 发布 `-p 8787:8787`，或设置 `HOST=0.0.0.0`，
+并只在你信任的网络里这样做。
 
 压缩包（Node 20+）：从[最新 Release](https://github.com/qingpy/relay/releases/latest)
 下载 `relay-x.y.z.zip`，解压后 `node server-dist/index.js`。
@@ -50,6 +52,7 @@ Vertex 服务账号 JSON。
 | `RELAY_DATA_FILE` | `./data/relay.json` |
 | `RELAY_SECRETS_FILE` | `%APPDATA%\Relay\secrets.json` 或 `~/.config/relay/secrets.json` |
 | `API_PORT` | `8787` |
+| `HOST` | `127.0.0.1`（仅本机；`0.0.0.0` 对网络开放；Docker 已设置） |
 | `RELAY_BACKUP_DIR` | `./backups` |
 | `OPENROUTER_KEY` / `OPENAI_KEY` | OpenAI 式连接的后备 key |
 | `GOOGLE_VERTEX_CREDENTIALS` / `_FILE` | 后备 Vertex 服务账号 |

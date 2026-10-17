@@ -54,7 +54,9 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
 
   const onDuplicate = async () => {
     const copy = await duplicateSession(session.id);
-    if (copy) setActive(copy.id);
+    if (!copy) return;
+    setActivePreset(copy.folderId);
+    setActive(copy.id);
   };
 
   const onRowClick = () => {
@@ -83,7 +85,9 @@ export function SessionRow({ session }: { session: Session; nested?: boolean }) 
       tabIndex={0}
       onClick={onRowClick}
       onDoubleClick={() => !selecting && setEditing(true)}
-      onKeyDown={(e) => e.key === 'Enter' && onRowClick()}
+      // Only Enter on the row itself: menu items and the trigger re-dispatch
+      // Enter as a click and let the keydown bubble here through the portal.
+      onKeyDown={(e) => e.key === 'Enter' && e.target === e.currentTarget && onRowClick()}
       className={cn(
         'group flex cursor-pointer items-start justify-between gap-2 py-2 pl-12 pr-6 outline-none transition-colors',
         isDragging && 'opacity-50',

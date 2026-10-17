@@ -22,7 +22,7 @@ export async function testConnection(
   const req = provider.buildRequest({
     model,
     messages: [{ role: 'user', text: 'Reply with exactly: ok' }],
-    settings: { maxTokens: 16, temperature: 0 },
+    settings: { temperature: 0 },
     connectionId: conn.id,
     url: conn.url,
     project: conn.project,

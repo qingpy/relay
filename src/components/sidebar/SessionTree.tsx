@@ -6,7 +6,6 @@ import {
   type DragEndEvent,
   type DragStartEvent,
   DragOverlay,
-  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -14,7 +13,6 @@ import {
 import {
   arrayMove,
   SortableContext,
-  sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import {
@@ -39,7 +37,6 @@ export function SessionTree() {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
   const inFolder = (fid: string) => sessions.filter((s) => s.folderId === fid);

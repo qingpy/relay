@@ -84,8 +84,17 @@ Key ideas:
   while streaming). Omitted from the model context and the map. Main
   and aside streams Stop independently. Fork copies the model window at
   the node the aside hangs from (turns after the latest divider on that
-  path) plus that exchange. Title is `Fork of` the original. The aside
-  card stays folded except while it is streaming.
+  path) plus that exchange. Title is `Fork of` the original, stacking
+  on a fork of a fork (as `Copy of` does). The aside card loads folded,
+  opens while streaming, and stays open after the reply lands until a
+  click outside. Every aside request appends the Aside prompt
+  (`appConfig.asidePrompt`, Settings → Chats) after the preset + chat
+  system prompts.
+- Built-in prompts (Aside, auto-title): unset follows the built-in default,
+  so an app update that changes it applies to everyone who never edited
+  it. Only a customized prompt is stored (typing the default text back
+  stores nothing); empty is a real choice and means no prompt. Reset
+  returns to unset.
 - Markdown (`src/lib/markdown.ts`): math is a micromark construct (same
   model as Cherry Studio / Streamdown `remark-math`). Inline `$` is
   single-line and follows Pandoc's closer rule (not followed by a digit).
@@ -96,7 +105,9 @@ Key ideas:
 - Trash: deleting a chat sets `deletedAt`; `listSessions()` hides those, the
   Trash dialog restores / deletes forever (restore places the chat at the
   top of its preset and keeps its last-activity time); `purgeExpiredTrash()`
-  on boot hard-deletes past `trashRetentionDays`.
+  on boot hard-deletes past `trashRetentionDays`. An empty chat (no live
+  turn or aside: never sent, or emptied) is removed outright on delete, so
+  the trash only holds chats worth restoring.
 - Attachments are copied, content-addressed bytes: `saveAttachments` reads the
   picked `File` immediately into an owned Blob (a `File` is a lazy path
   reference; reading it later throws once the source moves). Identical content
@@ -147,15 +158,20 @@ snapshots on boot.
    pristine device, a blank remote never clobbers content, a pristine device
    never seeds a blank snapshot; anything ambiguous pauses as a visible
    conflict, resolved in Settings → Sync (Keep this device / Keep server).
-   Pull on open, scheduled push (interval in hours), flush on hide. The sync
-   cursor (`rev`, `lastSyncAt`) lives in the proxy's `.sync` sidecar so every
-   browser on the machine shares it; first run seeds from the legacy
-   localStorage cursor. Versioned backups: millisecond-stamped copies in a
+   A server copy older than the cursor (folder reset, re-seeded elsewhere)
+   counts as ambiguous too. Pull on open, scheduled push (interval in hours),
+   flush on hide; one reconcile runs at a time. The sync cursor (`rev`,
+   `lastSyncAt`, `pending`) lives in the proxy's `.sync` sidecar so every
+   browser on the machine shares it; `pending` marks unsynced local edits
+   durably (set on the first edit after a sync), so they still win after a
+   restart. A pull is written to the data file before the cursor advances.
+   First run seeds from the legacy localStorage cursor. Versioned backups: millisecond-stamped copies in a
    `backups/` subfolder, one per interval plus each manual Backup, pruned to
    `backupsKeep` (default 10; 0 disables).
 3. **Backups (portable).** `src/lib/backupClient.ts` + `server/backup.ts`
    write timestamped snapshots to `RELAY_BACKUP_DIR`, plus file
-   download/import and scheduled backups. Restore replaces the DB and reloads.
+   download/import and scheduled backups. Restore replaces the DB, waits for
+   `persistLocalStore()` (the data file holds it), then reloads.
 
 ## 4. Providers
 
@@ -225,16 +241,21 @@ PUT  /api/secrets/webdav     # set/clear the WebDAV password
 
 `server/index.ts` mounts these under `/api` and, in production, serves `dist/`
 with an SPA fallback. No state, no DB; shared helpers (JSON responses, URL
-check, retry, serialized atomic writes) in `server/util.ts`. Upstream URLs are
-user config, used verbatim after an http(s)-protocol check, acceptable because
-the proxy is local-only with no auth (§7).
+check, retry, serialized atomic writes that clean up their temp file) in
+`server/util.ts`. Every `/api` request that carries an `Origin` must name this
+host (loopback names count as one), so another site's page can't spend the
+stored keys. The server listens on 127.0.0.1 unless `HOST` is set (the
+Docker image sets `0.0.0.0` and leaves exposure to `-p`); while local-only
+it also refuses a non-loopback `Host`, which stops DNS rebinding. Upstream URLs are user config, used verbatim after an
+http(s)-protocol check, acceptable because the proxy is single-user with no
+auth (§7).
 
 ## 6. Frontend layout (`src/`)
 
 ```
 main.tsx              React root (StrictMode)
 App.tsx               boot gating (load store → seed → WebDAV); top-level layout
-index.css             design tokens: the flat "Unboxed Stationery" theme + label-mono
+index.css             design tokens: Relay default + six archetypes, typefaces, label-mono
 db/        types.ts · db.ts (Dexie, in-memory backend, migrations) · repo.ts (all CRUD)
 store/     ui.ts (view state) · chat.ts (streaming engine: send/regenerate/stop;
            the assistant turn is created before any fallible work so failures
@@ -270,21 +291,53 @@ title. Drag a chat onto a preset title to move it to the top of that
 preset. Composer file-drops attach; text drags use the textarea's native
 insert/move. Clicking an attachment opens an in-app preview (image, PDF,
 or text). Deleting the open chat advances to the preset's next chat; deleting
-another leaves the open chat in place. The branch map is a modal skeleton
+another leaves the open chat in place. ChatPane steps off any open chat
+that is trashed or missing (next live sibling, else previous, else the
+preset's blank view), so no path can leave a deleted chat on screen. The branch map is a modal skeleton
 of the tree: each row is a linear stretch between forks. A context-cleared
 divider is lifted off the map (its kids become a new first-level tree). Pinned turns
 stay visible in a collapsed stretch without changing fold or select of the
 head. Parallel heads sit as siblings. Select mode: click a message to
 toggle it; shift-click extends the selection. A collapsed stretch's head
 selects every message in it; an expanded head selects only that turn.
-Expand all / Collapse all. Delete splices the checked turns (later
+One toggle reads Expand all until every stretch is open, then Collapse all. Delete splices the checked turns (later
 messages stay attached).
 
-Design system "Unboxed Stationery": airy grey canvas, hairline borders, no
-shadows, sharp corners, one slate-blue accent, uppercase-monospace labels.
-Named styles (Stationery, Night, Paper, Ink, Soft) remap tokens on
-`html[data-style]` in `src/index.css`; Soft is the same palette with 4px
-radius. Shared primitives: `Marginalia`, `CheckSquare`, `SectionLabel`, the
+Design language: flat and editorial. Hairline borders, surface contrast for
+depth, zero shadows, uppercase-monospace labels, one pigment accent per
+style, and a typeface per style for all text but labels and code. Styles
+remap tokens
+on `html[data-style]` in `src/index.css`:
+- Relay (default): the original Stationery palette (airy grey canvas shared
+  with the sidebar, white cards, slate-blue ink, delete in ink) with
+  fountain-pen code inks: slate keywords, Prussian titles, cypress strings,
+  sienna numbers / literals, walnut attributes, iron-gall builtins.
+- Recessed desk (sidebar darker than a bright canvas, white cards):
+  Archival (oxblood; Newsreader / Literata + Noto Serif SC),
+  Botanical (pine; 6px radius, soft borders; Source Sans 3 + LXGW WenKai),
+  Carbon (amber on carbon; iA Writer Quattro).
+- Flush grid (sidebar = canvas = card): Monograph (black hairlines,
+  vermilion; Plus Jakarta Sans), Polar (abyssal slate, icy cyan; Atkinson
+  Hyperlegible Next).
+- Split frame: Studio (charcoal sidebar on a daylight canvas, Braun
+  persimmon; IBM Plex Sans, and IBM Plex Mono replaces `--font-mono`). The
+  sidebar carries `data-pane="sidebar"`; Studio re-scopes every token inside
+  it, and the `--color-*` rebind also runs on `[data-pane]` so the scope
+  takes.
+Archetypes pair the accent with one annotation hue for `--destructive` and
+code strings / literals (Monograph and Studio, with red-orange accents, use
+a deeper red for delete and a cool blue / petrol for strings); keywords take
+the accent, builtins and comments stay neutral. A style's face is its
+`--font-sans` (messages, composer, sidebar, settings); `--reading-size`
+tunes message text only. Fonts live in a plain `@theme` block so a style
+can swap `--font-sans` / `--font-mono` at runtime. Every face is bundled and
+unicode-range subsetted, so it only downloads while its style is on screen.
+`DARK_STYLES` (Carbon, Polar) switch the native color scheme. The applied
+style is cached in localStorage (`relay.style`) and restored by an inline
+script in `index.html` before first paint, since the data file (the source
+of truth) arrives after it; App only applies the style once config loads.
+`resolveStyle()` maps the earlier style names forward (Stationery, Soft, and
+Swiss to Relay), so stored and synced configs keep working. Shared primitives: `Marginalia`, `CheckSquare`, `SectionLabel`, the
 `flat-*` components. Fonts: Inter / JetBrains Mono, with bundled,
 unicode-range-subsetted Noto Sans SC for CJK (self-hosted, no external
 font requests).
@@ -292,12 +345,13 @@ font requests).
 ## 7. Key decisions
 
 - Name Relay; default model OpenRouter `openai/gpt-4o-mini`. Chrome is
-  named styles (Stationery default), not a separate light/dark toggle.
+  named styles (Relay default), not a separate light/dark toggle.
 - Two protocols only: `openai` (OpenAI-compatible, covers most incl. Gemini
   AI Studio) and `vertex`.
 - Reasoning effort from a global user-editable list (seeded
   minimal/low/medium/high); Temp / Top-P explicit on/off (off = provider
-  default, knob omitted).
+  default, knob omitted). No max-tokens knob anywhere: providers treat it
+  as a hard cut the model never sees, so length is steered by prompts.
 - Stay run-locally: a public VPS deployment was built then reverted;
   cross-device needs are met by WebDAV sync.
 - Distribution is a local Docker image (`Dockerfile` → GHCR via

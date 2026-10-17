@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Marginalia } from '@/components/ui/marginalia';
 import { Composer } from '@/components/chat/Composer';
@@ -9,6 +10,7 @@ import { SessionControls } from '@/components/chat/SessionControls';
 import { TreeMap } from '@/components/chat/TreeMap';
 import { SaveIndicator } from '@/components/layout/SaveIndicator';
 import { getSession, listFolders } from '@/db/repo';
+import { leaveChat } from '@/lib/session-actions';
 import { useUiStore } from '@/store/ui';
 
 export function ChatPane() {
@@ -22,15 +24,21 @@ export function ChatPane() {
   const toggleSelectionMode = useUiStore((s) => s.toggleSelectionMode);
 
   const folders = useLiveQuery(() => listFolders(), [], []);
-  const session = useLiveQuery(
-    () => (activeId ? getSession(activeId) : undefined),
-    [activeId],
-  );
-  // A trashed id can land in `activeSessionId` for a frame (menu click-through
-  // onto the deleted row). Never render that ghost; fall back to the preset.
-  // While the query is still loading `session` is undefined — keep showing the
-  // id so the pane doesn't flash empty.
-  const openId = !activeId ? null : session?.deletedAt ? null : activeId;
+  // Whether the open chat is gone (trashed or missing), tagged with the id it
+  // answers for: across an id change the hook still returns the previous
+  // chat's answer, which must never decide for the new one.
+  const check = useLiveQuery(async () => {
+    if (!activeId) return null;
+    const s = await getSession(activeId);
+    return { id: activeId, gone: !s || s.deletedAt != null };
+  }, [activeId]);
+  const gone = !!activeId && check?.id === activeId && check.gone;
+  // Never render a gone chat; step off it to a neighbor. Until the check
+  // settles, keep the id so switching chats doesn't flash empty.
+  const openId = gone ? null : activeId;
+  useEffect(() => {
+    if (gone && activeId) void leaveChat(activeId);
+  }, [gone, activeId]);
   // With no chat open, fall back to a blank chat bound to the active preset (so
   // its model/tune show and a sent message starts a chat there). The bare "Relay"
   // page is only for a fresh load or when there are no presets at all.

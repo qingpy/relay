@@ -12,13 +12,14 @@ Data is one JSON file on disk; the network is model calls and optional WebDAV.
 Docker:
 
 ```bash
-docker run -d --name relay -p 8787:8787 -v relay-data:/data \
+docker run -d --name relay -p 127.0.0.1:8787:8787 -v relay-data:/data \
   ghcr.io/qingpy/relay:latest
 ```
 
 http://localhost:8787. Data, keys, and backups are in the `relay-data` volume
-(`-v /path/on/host:/data` to put them on disk). No HTTP auth. Bind to a
-network you trust.
+(`-v /path/on/host:/data` to put them on disk). No HTTP auth: Relay is
+reachable from this machine only. To use it from other devices, publish
+`-p 8787:8787` (Docker) or set `HOST=0.0.0.0`, on a network you trust.
 
 Zip (Node 20+): download `relay-x.y.z.zip` from the
 [latest release](https://github.com/qingpy/relay/releases/latest), unzip,
@@ -54,6 +55,7 @@ All optional.
 | `RELAY_DATA_FILE` | `./data/relay.json` |
 | `RELAY_SECRETS_FILE` | `%APPDATA%\Relay\secrets.json` or `~/.config/relay/secrets.json` |
 | `API_PORT` | `8787` |
+| `HOST` | `127.0.0.1` (this machine only; `0.0.0.0` serves the network; Docker sets it) |
 | `RELAY_BACKUP_DIR` | `./backups` |
 | `OPENROUTER_KEY` / `OPENAI_KEY` | fallback key for OpenAI-style connections |
 | `GOOGLE_VERTEX_CREDENTIALS` / `_FILE` | fallback Vertex service account |

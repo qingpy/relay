@@ -106,18 +106,24 @@ export function Composer({
 
   const submit = async () => {
     const text = value.trim();
-    const sid = sessionId ?? (await startNewSession()).id;
-    if (asideMode) {
-      if (!text || asideBusy) return;
-      setValue('');
-      await useChatStore.getState().sendAside(sid, text);
+    // Guard before creating a chat: an empty Ctrl+Enter must not spawn one.
+    if (asideMode ? !text || asideBusy : (!text && files.length === 0) || streaming) {
       return;
     }
-    if ((!text && files.length === 0) || streaming) return;
+    const draft = value;
     const sending = files;
     setValue('');
-    setFiles([]);
-    await useChatStore.getState().send(sid, text, sending);
+    if (!asideMode) setFiles([]);
+    try {
+      const sid = sessionId ?? (await startNewSession()).id;
+      if (asideMode) await useChatStore.getState().sendAside(sid, text);
+      else await useChatStore.getState().send(sid, text, sending);
+    } catch (e) {
+      // Nothing was sent: hand the draft back instead of losing it.
+      setValue(draft);
+      if (!asideMode) setFiles(sending);
+      console.error('Send failed', e);
+    }
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

@@ -40,7 +40,13 @@ const cache = new Map<string, { token: string; exp: number }>();
 /** Mint (and cache) a GCP access token from the service account via signed JWT. */
 export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  const hit = cache.get(sa.client_email);
+  // Keyed by the key itself too: a wrong key pasted for a known account must
+  // not ride an earlier key's token (a Test would pass, chats fail later).
+  const cacheKey = `${sa.client_email}:${crypto
+    .createHash('sha256')
+    .update(sa.private_key)
+    .digest('hex')}`;
+  const hit = cache.get(cacheKey);
   if (hit && hit.exp - 60 > now) return hit.token;
 
   // Private keys pasted/transported as JSON keep literal "\n"; restore them.
@@ -73,6 +79,6 @@ export async function getAccessToken(sa: ServiceAccount): Promise<string> {
   }
   const json = (await res.json()) as { access_token: string; expires_in?: number };
   const token = json.access_token;
-  cache.set(sa.client_email, { token, exp: now + (json.expires_in ?? 3600) });
+  cache.set(cacheKey, { token, exp: now + (json.expires_in ?? 3600) });
   return token;
 }

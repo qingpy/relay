@@ -12,7 +12,7 @@ export function Sidebar() {
   const setTrashOpen = useUiStore((s) => s.setTrashOpen);
 
   return (
-    <aside className="flex h-full w-[300px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-6 text-sidebar-foreground max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40">
+    <aside data-pane="sidebar" className="flex h-full w-[300px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar py-6 text-sidebar-foreground max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-40">
       <div className="flex items-center justify-between px-8 pb-6">
         <span className="label-mono text-primary">Relay</span>
         <button
@@ -25,7 +25,7 @@ export function Sidebar() {
         </button>
       </div>
 
-      <div className="flex items-center gap-3 px-8 pb-8">
+      <div className="flex items-center gap-2.5 px-8 pb-8">
         <Marginalia onClick={() => void startNewSession()}>New chat</Marginalia>
         <span className="text-muted-foreground/30">·</span>
         <Marginalia onClick={() => void createFolder()}>New preset</Marginalia>

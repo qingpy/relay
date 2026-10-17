@@ -1,4 +1,4 @@
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { mkdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 /** Shared helpers for the proxy routes: JSON responses, upstream-URL
@@ -60,8 +60,15 @@ export function atomicWrite(file: string, body: string): Promise<void> {
   const run = tail.then(async () => {
     await mkdir(dirname(file), { recursive: true });
     const tmp = `${file}.${++tmpSeq}.tmp`;
-    await withRetry(() => writeFile(tmp, body, 'utf-8'));
-    await withRetry(() => rename(tmp, file));
+    try {
+      await withRetry(() => writeFile(tmp, body, 'utf-8'));
+      await withRetry(() => rename(tmp, file));
+    } catch (e) {
+      // A failed attempt must not leave a full-size temp file behind; the
+      // client retries on its own clock and would pile them up.
+      await unlink(tmp).catch(() => undefined);
+      throw e;
+    }
   });
   writeQueues.set(
     file,

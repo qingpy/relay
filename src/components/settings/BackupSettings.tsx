@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { getAppConfig, updateAppConfig } from '@/db/db';
+import { persistLocalStore } from '@/lib/localstore';
 import {
   downloadBackup,
   exportForBackup,
@@ -82,6 +83,7 @@ export function BackupSettings() {
       });
       if (!ok) return;
       await importAll(parsed);
+      await persistLocalStore();
       location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -97,6 +99,7 @@ export function BackupSettings() {
     if (!ok) return;
     try {
       await restoreServerBackup(name);
+      await persistLocalStore();
       location.reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

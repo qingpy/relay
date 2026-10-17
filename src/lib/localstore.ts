@@ -49,6 +49,9 @@ let dirty = false;
 let rev = 0;
 let writeTimer: ReturnType<typeof setTimeout> | null = null;
 let writing = false;
+let current: Promise<void> | null = null; // the upload in flight, if any
+/** A hung PUT (dropped share, stuck proxy) must surface as UNSAVED and retry. */
+const WRITE_TIMEOUT_MS = 120_000;
 let retryDelay = RETRY_BASE_MS; // backoff for failed flushes; reset on success
 
 const setDataStatus = (s: 'saved' | 'saving' | 'error', error = '') =>
@@ -72,6 +75,7 @@ async function writeSnapshot(): Promise<void> {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(snap),
+    signal: AbortSignal.timeout(WRITE_TIMEOUT_MS),
   });
   if (!res.ok) {
     const detail = await res
@@ -94,6 +98,11 @@ export async function flushLocalStore(): Promise<void> {
   writing = true;
   dirty = false;
   setDataStatus('saving');
+  current = upload();
+  await current;
+}
+
+async function upload(): Promise<void> {
   try {
     await writeSnapshot();
     retryDelay = RETRY_BASE_MS;
@@ -121,6 +130,25 @@ export async function flushLocalStore(): Promise<void> {
     retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
   } finally {
     writing = false;
+    current = null;
+  }
+}
+
+/** Save now and resolve only once the data file holds every change, else
+ *  throw. For actions that reload the page right after (restores), which
+ *  would otherwise race the debounced write and lose what they imported. */
+export async function persistLocalStore(): Promise<void> {
+  if (!USE_LOCAL_STORE || !initialized) return;
+  // Changes can keep landing (a streaming reply); give them a few passes.
+  for (let i = 0; i < 3 && (dirty || writing); i++) {
+    await current; // an upload already running
+    await flushLocalStore(); // whatever is still pending
+    if (useUiStore.getState().dataStatus === 'error') break;
+  }
+  if (dirty || writing) {
+    throw new Error(
+      useUiStore.getState().dataError || "Couldn't save to the data file.",
+    );
   }
 }
 
@@ -158,30 +186,34 @@ async function loadIntoMemory(data: BackupFile): Promise<void> {
  * `/api/secrets/*`; the connection ids match the records just loaded into the
  * in-memory DB, so the proxy can resolve them by id afterwards.
  */
-async function handoffPersistentSecrets(persistent: RelayDB): Promise<void> {
+async function handoffPersistentSecrets(persistent: RelayDB): Promise<boolean> {
+  let ok = true;
   for (const conn of await persistent.connections.toArray()) {
     const legacy = conn as Connection & { apiKey?: string; privateKey?: string };
     const patch: { apiKey?: string; privateKey?: string } = {};
     if (legacy.apiKey) patch.apiKey = legacy.apiKey;
     if (legacy.privateKey) patch.privateKey = legacy.privateKey;
     if (patch.apiKey || patch.privateKey) {
-      await fetch(`/api/secrets/connection/${conn.id}`, {
+      const res = await fetch(`/api/secrets/connection/${conn.id}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch),
-      });
+      }).catch(() => null);
+      if (!res?.ok) ok = false;
     }
   }
   const cfg = (await persistent.appConfig.get('singleton')) as
     | { webdav?: { pass?: string } }
     | undefined;
   if (cfg?.webdav?.pass) {
-    await fetch('/api/secrets/webdav', {
+    const res = await fetch('/api/secrets/webdav', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ pass: cfg.webdav.pass }),
-    });
+    }).catch(() => null);
+    if (!res?.ok) ok = false;
   }
+  return ok;
 }
 
 /**
@@ -202,6 +234,7 @@ async function migrateFromPersistent(): Promise<boolean> {
   if (!names.includes('relay')) return false;
 
   const persistent = openPersistentRelayDB();
+  let keysMoved = true;
   try {
     await persistent.open();
     const hasData =
@@ -216,12 +249,17 @@ async function migrateFromPersistent(): Promise<boolean> {
       // The dump/file are secret-free (exportAll strips them); move the old
       // store's keys straight into the proxy's secret store, keyed by the same
       // connection ids the in-memory DB now holds.
-      await handoffPersistentSecrets(persistent);
+      keysMoved = await handoffPersistentSecrets(persistent);
     }
   } finally {
     persistent.close();
   }
 
+  // The old store is the only copy of any key the proxy refused: keep it.
+  if (!keysMoved) {
+    console.warn('Relay: some saved keys did not reach the key store; the old browser store is kept.');
+    return true;
+  }
   // Free the on-disk copy (migrated, or an empty leftover) — the file is the
   // source of truth now.
   await new Promise<void>((resolve) => {

@@ -19,6 +19,8 @@ export function measuredContextTokens(
 ): number | undefined {
   const window = activeWindow(activePath(messages, leafId));
   for (let i = window.length - 1; i >= 0; i--) {
+    // A deleted turn keeps its old usage but is no longer sent.
+    if (window[i].deletedAt) continue;
     const u = window[i].usage;
     if (!u) continue;
     if (u.totalTokens != null) return u.totalTokens;

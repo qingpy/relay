@@ -46,8 +46,6 @@ export function geminiPayload({
   if (settings.temperature != null)
     generationConfig.temperature = settings.temperature;
   if (settings.topP != null) generationConfig.topP = settings.topP;
-  if (settings.maxTokens != null)
-    generationConfig.maxOutputTokens = settings.maxTokens;
   if (settings.reasoningEffort) {
     generationConfig.thinkingConfig = {
       thinkingLevel: settings.reasoningEffort,

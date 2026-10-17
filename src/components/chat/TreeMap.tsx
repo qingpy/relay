@@ -100,7 +100,10 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   const [expanded, setExpanded] = useState<Record<string, true>>({});
   const [selectMode, setSelectMode] = useState(false);
   const [sel, setSel] = useState<Record<string, true>>({});
-  const selCount = Object.keys(sel).length;
+  // Only ids still on the map count (deleted turns drop out of `sel`'s view).
+  const selIds = useMemo(() => messageIds.filter((id) => sel[id]), [messageIds, sel]);
+  const selCount = selIds.length;
+  const deleting = useRef(false);
   const allChecked = messageIds.length > 0 && selCount === messageIds.length;
   const anchorRef = useRef<string | null>(null);
 
@@ -137,6 +140,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
       return next;
     });
 
+  const allExpanded = canExpand.every((id) => expanded[id]);
   const expandAll = () =>
     setExpanded(Object.fromEntries(canExpand.map((id) => [id, true])));
   const collapseAll = () => setExpanded({});
@@ -158,15 +162,20 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
   };
 
   const deleteSelected = async () => {
-    const ids = Object.keys(sel);
-    if (ids.length === 0) return;
-    if (!(await confirmMessageDelete(ids.length))) return;
-    for (const id of ids) {
-      const m = all.find((x) => x.id === id);
-      if (m?.role === 'divider' && !canDeleteDivider(all, m)) continue;
-      await spliceMessage(id);
+    const ids = selIds;
+    if (ids.length === 0 || deleting.current) return;
+    deleting.current = true;
+    try {
+      if (!(await confirmMessageDelete(ids.length))) return;
+      for (const id of ids) {
+        const m = all.find((x) => x.id === id);
+        if (m?.role === 'divider' && !canDeleteDivider(all, m)) continue;
+        await spliceMessage(id);
+      }
+      setSel({});
+    } finally {
+      deleting.current = false;
     }
-    setSel({});
   };
 
   return (
@@ -195,18 +204,8 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
             <div className="ml-auto flex items-center gap-3">
               {canExpand.length > 0 && (
                 <>
-                  <Marginalia
-                    onClick={expandAll}
-                    disabled={canExpand.every((id) => expanded[id])}
-                  >
-                    Expand all
-                  </Marginalia>
-                  <span className="text-muted-foreground/30">·</span>
-                  <Marginalia
-                    onClick={collapseAll}
-                    disabled={Object.keys(expanded).length === 0}
-                  >
-                    Collapse all
+                  <Marginalia onClick={allExpanded ? collapseAll : expandAll}>
+                    {allExpanded ? 'Collapse all' : 'Expand all'}
                   </Marginalia>
                   <span className="text-muted-foreground/30">·</span>
                 </>
@@ -224,6 +223,7 @@ export function TreeMap({ sessionId }: { sessionId: string }) {
                   >
                     {allChecked ? 'None' : 'All'}
                   </Marginalia>
+                  <span className="text-muted-foreground/30">·</span>
                   <Marginalia
                     disabled={selCount === 0}
                     onClick={() => void deleteSelected()}
