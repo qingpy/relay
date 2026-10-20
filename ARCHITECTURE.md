@@ -159,8 +159,9 @@ snapshots on boot.
    never seeds a blank snapshot; anything ambiguous pauses as a visible
    conflict, resolved in Settings → Sync (Keep this device / Keep server).
    A server copy older than the cursor (folder reset, re-seeded elsewhere)
-   counts as ambiguous too. Pull on open, scheduled push (interval in hours),
-   flush on hide; one reconcile runs at a time. The sync cursor (`rev`,
+   counts as ambiguous too. Pull on open, scheduled push (interval in hours);
+   a push whose content (minus backup timestamps) matches the server copy
+   uploads nothing; one reconcile runs at a time. The sync cursor (`rev`,
    `lastSyncAt`, `pending`) lives in the proxy's `.sync` sidecar so every
    browser on the machine shares it; `pending` marks unsynced local edits
    durably (set on the first edit after a sync), so they still win after a

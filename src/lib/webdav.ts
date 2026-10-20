@@ -9,8 +9,9 @@ import { useUiStore } from '@/store/ui';
  * WebDAV sync. Relay is local-first; this opportunistically mirrors the whole
  * DB to a single snapshot file on the user's WebDAV server (through the local
  * proxy, see `server/sync.ts`) so other devices can pick it up. It runs on a
- * schedule while the app is open (plus once on open, and on tab-hide), never
- * on every keystroke. Single user, so conflicts are last-write-wins — but no
+ * schedule while the app is open (plus once on open), never on every
+ * keystroke, and only uploads when the content actually differs from the
+ * server copy. Single user, so conflicts are last-write-wins — but no
  * *automatic* sync may ever destroy data, so:
  *   - the cloud is auto-adopted only onto a genuinely pristine device (nothing
  *     to lose); a device with real content conflicts instead (asks the user);
@@ -237,12 +238,29 @@ function exportForWebdav(c: WebDavConfig): Promise<BackupFile> {
   return exportAll(db, { includeFiles: c.includeFiles !== false });
 }
 
-async function push(c: WebDavConfig, baseRev: number): Promise<void> {
+/** The snapshot's content with per-device bookkeeping (backup timestamps)
+ *  left out — two snapshots with equal content need no upload between them. */
+function contentOf(b: BackupFile): string {
+  const appConfig = b.data.appConfig.map((cfg) => ({
+    ...cfg,
+    backup: cfg.backup && { ...cfg.backup, lastBackupAt: undefined },
+    webdav: cfg.webdav && { ...cfg.webdav, lastWebdavBackupAt: undefined },
+  }));
+  return JSON.stringify({ ...b.data, appConfig });
+}
+
+/** Upload local data as `baseRev + 1` — or, when it matches the server copy
+ *  `remote` already holds, just adopt that rev and upload nothing. */
+async function push(c: WebDavConfig, baseRev: number, remote?: Snapshot | null): Promise<void> {
   dirty = false; // clear up-front; writes during the upload re-flag it
   // (persisted with the new rev below; a failure re-persists `pending`)
   let data: BackupFile;
   try {
     data = await exportForWebdav(c);
+    if (remote?.data?.data && contentOf(remote.data) === contentOf(data)) {
+      setRev(remote.rev);
+      return;
+    }
     const snap: Snapshot = { rev: baseRev + 1, savedAt: Date.now(), data };
     const res = await fetch('/api/sync', {
       method: 'PUT',
@@ -439,7 +457,7 @@ async function runReconcile(): Promise<void> {
       if (!(await localHasContent())) {
         await applyRemote(remote); // pristine device → adopt the cloud copy
       } else if (!snapshotHasContent(remote)) {
-        await push(cfg, remote.rev); // local has data, cloud is blank → local wins
+        await push(cfg, remote.rev, remote); // local has data, cloud is blank → local wins
       } else {
         throw new ConflictError(
           'This device and the server both have data — sync is paused so nothing is overwritten. Use Restore to adopt a server backup.',
@@ -452,7 +470,7 @@ async function runReconcile(): Promise<void> {
         'The server copy is older than this device last synced — sync is paused so nothing is overwritten. Choose which copy to keep.',
       );
     } else if (dirty) {
-      await push(cfg, remote.rev); // local edits win
+      await push(cfg, remote.rev, remote); // local edits win
     } else if (remote.rev > getRev()) {
       // Cloud advanced elsewhere → take it, unless it's a blank snapshot that
       // would wipe real local data (e.g. an accidental/transient empty push).
@@ -489,7 +507,7 @@ export async function resolveKeepLocal(): Promise<void> {
   conflicted = false;
   try {
     const remote = await pull(cfg);
-    await push(cfg, remote?.rev ?? getRev());
+    await push(cfg, remote?.rev ?? getRev(), remote);
     setLastSync(Date.now());
     setStatus('synced');
   } catch (e) {
@@ -545,9 +563,6 @@ export async function initWebdavSync(): Promise<void> {
   if (initialized) return;
   initialized = true;
   attachHooks();
-  window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden' && dirty) void reconcile();
-  });
   const cfg = (await getAppConfig()).webdav;
   if (!configured(cfg)) {
     setStatus('off');
